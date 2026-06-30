@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -20,7 +20,7 @@ import {
 import {
   Plus, Search, Users, TrendingUp, UserCheck, UserX, Pencil, Trash2,
   Phone, Mail, GripVertical, LayoutGrid, List, Eye, Settings2,
-  ChevronUp, ChevronDown, X,
+  ChevronUp, ChevronDown, X, ExternalLink, Scale, ClipboardList, FileText,
 } from 'lucide-react'
 import { fmtBRL } from '@/lib/format'
 import { ClientFormDialog, emptyClientForm, type ClientFormData } from '@/components/ClientForm'
@@ -176,6 +176,236 @@ function LeadCard({ lead, onClick, onStatusChange, stages }: {
   )
 }
 
+// ── Client View Dialog ────────────────────────────────────────────────────────
+interface ClientDetail extends Client {
+  processes?: { id: string; title: string; number: string | null; type: string | null; status: string }[]
+  tasks?: { id: string; title: string; priority: string | null; status: string }[]
+  finance?: { paid: number; pending: number; overdue: number }
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  ativo: 'bg-emerald-100 text-emerald-700',
+  inativo: 'bg-gray-100 text-gray-600',
+  prospecto: 'bg-blue-100 text-blue-700',
+}
+const PRIORITY_COLORS: Record<string, string> = {
+  alta: 'bg-red-100 text-red-700',
+  media: 'bg-amber-100 text-amber-700',
+  baixa: 'bg-gray-100 text-gray-600',
+}
+const TASK_STATUS_COLORS: Record<string, string> = {
+  pendente: 'bg-amber-100 text-amber-700',
+  em_andamento: 'bg-blue-100 text-blue-700',
+  concluida: 'bg-emerald-100 text-emerald-700',
+  concluído: 'bg-emerald-100 text-emerald-700',
+}
+
+function fmtAddr(c: Client) {
+  const parts = [c.street, c.address_number, c.complement, c.neighborhood, c.city && c.state ? `${c.city}/${c.state}` : c.city ?? c.state, c.cep ? `CEP ${c.cep}` : null]
+  return parts.filter(Boolean).join(', ') || null
+}
+
+function InfoRow({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null
+  return (
+    <div className="flex gap-1 text-sm">
+      <span className="text-muted-foreground shrink-0">{label}:</span>
+      <span className="font-medium">{value}</span>
+    </div>
+  )
+}
+
+function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, onNewProcess }: {
+  client: Client | null
+  open: boolean
+  onClose: () => void
+  onEdit: () => void
+  onDelete: () => void
+  onNewTask: () => void
+  onNewProcess: () => void
+}) {
+  const [detail, setDetail] = useState<ClientDetail | null>(null)
+
+  useEffect(() => {
+    if (!client || !open) return
+    setDetail(null)
+    Promise.all([
+      supabase.from('processes').select('id, title, number, type, status').eq('client_id', client.id).order('created_at', { ascending: false }),
+      supabase.from('tasks').select('id, title, priority, status').eq('client_id', client.id).order('created_at', { ascending: false }),
+      supabase.from('finance').select('amount, paid, due_date').eq('client_id', client.id),
+    ]).then(([procs, tasks, fin]) => {
+      const now = new Date().toISOString().slice(0, 10)
+      const paid = (fin.data ?? []).filter(f => f.paid).reduce((s, f) => s + f.amount, 0)
+      const pending = (fin.data ?? []).filter(f => !f.paid && f.due_date >= now).reduce((s, f) => s + f.amount, 0)
+      const overdue = (fin.data ?? []).filter(f => !f.paid && f.due_date < now).reduce((s, f) => s + f.amount, 0)
+      setDetail({ ...client, processes: procs.data ?? [], tasks: tasks.data ?? [], finance: { paid, pending, overdue } })
+    })
+  }, [client, open])
+
+  if (!client) return null
+  const c = detail ?? client
+  const addr = fmtAddr(client)
+  const financeiro = detail?.finance
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
+      <DialogContent
+        className="max-w-[680px] w-[96vw] max-h-[90vh] overflow-y-auto p-0"
+        onInteractOutside={e => e.preventDefault()}
+        onPointerDownOutside={e => e.preventDefault()}
+        onFocusOutside={e => e.preventDefault()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-4 border-b">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-full flex items-center justify-center text-white text-base font-bold shrink-0"
+              style={{ backgroundColor: getAvatarColor(client.name) }}>
+              {getInitials(client.name)}
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold leading-tight">{client.name}</h2>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[client.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                  {client.status.toUpperCase()}
+                </span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  {client.type === 'pessoa_fisica' ? 'PF' : 'PJ'}
+                </span>
+                {client.responsible && (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{client.responsible}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 space-y-5">
+          {/* Cards financeiros */}
+          {financeiro && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl border p-3 text-center">
+                <p className="text-[10px] text-muted-foreground mb-1">Pago</p>
+                <p className="text-base font-bold text-emerald-600">{fmtBRL(financeiro.paid)}</p>
+              </div>
+              <div className="rounded-xl border p-3 text-center">
+                <p className="text-[10px] text-muted-foreground mb-1">A vencer</p>
+                <p className="text-base font-bold text-amber-600">{fmtBRL(financeiro.pending)}</p>
+              </div>
+              <div className="rounded-xl border p-3 text-center">
+                <p className="text-[10px] text-muted-foreground mb-1">Atrasado</p>
+                <p className={`text-base font-bold ${financeiro.overdue > 0 ? 'text-red-600' : 'text-muted-foreground'}`}>{fmtBRL(financeiro.overdue)}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Dados */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5">
+            <InfoRow label="CPF/CNPJ" value={client.cpf_cnpj} />
+            <InfoRow label="E-mail" value={client.email} />
+            <InfoRow label="Telefone" value={client.phone} />
+            <InfoRow label="Origem" value={client.origin} />
+            <InfoRow label="Área" value={client.area} />
+            <InfoRow label="Responsável" value={client.responsible} />
+            <InfoRow label="Nacionalidade" value={(client as any).nationality} />
+            <InfoRow label="Estado Civil" value={(client as any).marital_status} />
+            <InfoRow label="Profissão" value={(client as any).profession} />
+            <InfoRow label="Data de nascimento" value={client.birth_date ? new Date(client.birth_date + 'T00:00').toLocaleDateString('pt-BR') : null} />
+            {((client as any).rg_number) && (
+              <InfoRow label="RG" value={`${(client as any).rg_number}${(client as any).rg_issuer ? ` / ${(client as any).rg_issuer}` : ''}`} />
+            )}
+            <InfoRow label="Entrada" value={new Date(client.created_at).toLocaleDateString('pt-BR')} />
+            {client.potential_value && <InfoRow label="Potencial" value={fmtBRL(Number(client.potential_value))} />}
+          </div>
+
+          {addr && (
+            <div className="text-sm">
+              <span className="text-muted-foreground">Endereço: </span>
+              <span className="font-medium">{addr}</span>
+            </div>
+          )}
+
+          {client.notes && (
+            <div className="rounded-lg bg-muted/40 border px-4 py-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Observações</p>
+              <p className="text-sm whitespace-pre-wrap">{client.notes}</p>
+            </div>
+          )}
+
+          {/* Processos vinculados */}
+          {(detail?.processes?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                Processos Vinculados ({detail!.processes!.length})
+              </p>
+              <div className="space-y-1.5">
+                {detail!.processes!.map(p => (
+                  <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                    <p className="text-sm truncate flex-1">
+                      {p.title}{p.number ? ` (${p.number})` : ''}
+                    </p>
+                    <div className="flex gap-1 shrink-0">
+                      {p.type && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">{p.type.toUpperCase()}</span>}
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">{p.status.toUpperCase().replace('_', ' ')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Tarefas vinculadas */}
+          {(detail?.tasks?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                Tarefas Vinculadas ({detail!.tasks!.length})
+              </p>
+              <div className="space-y-1.5">
+                {detail!.tasks!.map(t => (
+                  <div key={t.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                    <p className="text-sm truncate flex-1">{t.title}</p>
+                    <div className="flex gap-1 shrink-0">
+                      {t.priority && <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${PRIORITY_COLORS[t.priority] ?? 'bg-gray-100 text-gray-600'}`}>{t.priority.toUpperCase()}</span>}
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${TASK_STATUS_COLORS[t.status] ?? 'bg-gray-100 text-gray-600'}`}>{t.status.toUpperCase().replace('_', ' ')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Ações rápidas */}
+          <div className="flex flex-wrap gap-2 pt-1">
+            {client.drive_url && (
+              <Button variant="outline" size="sm" onClick={() => window.open(client.drive_url!, '_blank')}>
+                <ExternalLink className="h-3.5 w-3.5 mr-1.5" />Pasta
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => { onClose(); onNewProcess() }}>
+              <Scale className="h-3.5 w-3.5 mr-1.5" />Criar Processo
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => { onClose(); onNewTask() }}>
+              <ClipboardList className="h-3.5 w-3.5 mr-1.5" />Nova Tarefa
+            </Button>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted/20">
+          <Button variant="destructive" size="sm" onClick={onDelete}>
+            <Trash2 className="h-3.5 w-3.5 mr-1.5" />Excluir
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+            <Button size="sm" onClick={onEdit}>
+              <Pencil className="h-3.5 w-3.5 mr-1.5" />Editar
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ── Client Card ──
 function ClientCard({ client, onEdit }: { client: Client; onEdit: () => void }) {
   const color = getAvatarColor(client.name)
@@ -217,6 +447,7 @@ export default function Clientes() {
   const [tab, setTab] = useState<'crm' | 'ativos' | 'encerrados'>('ativos')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
+  const [viewClient, setViewClient] = useState<Client | null>(null)
   const [dialogOpen, setDialogOpen] = useState(() => sessionStorage.getItem('srjur_client_dialog') === '1')
   const [leadDialogOpen, setLeadDialogOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
@@ -681,7 +912,7 @@ export default function Clientes() {
             </div>
           ) : (
             filteredClients.map(c => (
-              <ClientCard key={c.id} client={c} onEdit={() => openEditClient(c)} />
+              <ClientCard key={c.id} client={c} onEdit={() => setViewClient(c)} />
             ))
           )}
         </div>
@@ -712,7 +943,7 @@ export default function Clientes() {
                 </TableRow>
               ) : (
                 filteredClients.map(c => (
-                  <TableRow key={c.id}>
+                  <TableRow key={c.id} className="cursor-pointer" onClick={() => setViewClient(c)}>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <div className="h-7 w-7 rounded-full flex items-center justify-center text-white text-[10px] font-semibold shrink-0"
@@ -749,6 +980,17 @@ export default function Clientes() {
           </Table>
         </div>
       )}
+
+      {/* ── Client View Dialog ── */}
+      <ClientViewDialog
+        client={viewClient}
+        open={!!viewClient}
+        onClose={() => setViewClient(null)}
+        onEdit={() => { const c = viewClient; setViewClient(null); if (c) openEditClient(c) }}
+        onDelete={() => { if (viewClient) { deleteClient(viewClient.id); setViewClient(null) } }}
+        onNewTask={() => { /* TODO: abrir tarefas com cliente pré-selecionado */ }}
+        onNewProcess={() => { /* TODO: abrir processos com cliente pré-selecionado */ }}
+      />
 
       {/* ── Client Dialog ── */}
       <ClientFormDialog
