@@ -641,11 +641,23 @@ export default function Clientes() {
     if (dialogOpen) {
       sessionStorage.setItem('srjur_client_dialog', '1')
       sessionStorage.setItem('srjur_client_form', JSON.stringify(cf))
+      if (editingClient) sessionStorage.setItem('srjur_client_editing_id', editingClient.id)
+      else sessionStorage.removeItem('srjur_client_editing_id')
     } else {
       sessionStorage.removeItem('srjur_client_dialog')
       sessionStorage.removeItem('srjur_client_form')
+      sessionStorage.removeItem('srjur_client_editing_id')
     }
-  }, [dialogOpen, cf])
+  }, [dialogOpen, cf, editingClient])
+
+  // Restaura editingClient após reload (quando sessionStorage indicar edição em andamento)
+  useEffect(() => {
+    const savedId = sessionStorage.getItem('srjur_client_editing_id')
+    if (savedId && clients.length > 0 && !editingClient) {
+      const found = clients.find(c => c.id === savedId)
+      if (found) setEditingClient(found)
+    }
+  }, [clients])
 
   // ZapSign: check for signed contracts and auto-advance leads
   useEffect(() => {
