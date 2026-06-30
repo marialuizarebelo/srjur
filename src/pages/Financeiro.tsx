@@ -1048,17 +1048,17 @@ export default function Financeiro() {
 
       {/* ── Table ── */}
       <div className="rounded-lg border overflow-x-auto">
-        <Table className="w-full table-fixed">
+        <Table className="w-full table-auto">
           <TableHeader>
             <TableRow>
               <TableHead className="w-[80px]">Data</TableHead>
               <TableHead className="w-[70px]">Tipo</TableHead>
-              <TableHead className="min-w-[180px]">Descrição</TableHead>
-              <TableHead className="w-[130px]">Cliente</TableHead>
-              <TableHead className="w-[110px]">Categoria</TableHead>
-              <TableHead className="w-[110px]">Pagamento</TableHead>
-              <TableHead className="w-[100px] text-right">Valor</TableHead>
-              <TableHead className="w-[80px]">Status</TableHead>
+              <TableHead>Descrição</TableHead>
+              <TableHead className="hidden md:table-cell w-[130px]">Cliente</TableHead>
+              <TableHead className="hidden md:table-cell w-[110px]">Categoria</TableHead>
+              <TableHead className="hidden lg:table-cell w-[110px]">Pagamento</TableHead>
+              <TableHead className="w-[90px] text-right">Valor</TableHead>
+              <TableHead className="hidden sm:table-cell w-[80px]">Status</TableHead>
               <TableHead className="w-[70px]">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -1073,25 +1073,25 @@ export default function Financeiro() {
                   <TableCell className="text-sm whitespace-nowrap">{fmtDate(row.date)}</TableCell>
                   <TableCell>
                     <Badge variant={row.type === 'receita' ? 'default' : 'destructive'} className={`text-[10px] ${row.type === 'receita' ? 'bg-green-600' : ''}`}>
-                      {row.type === 'receita' ? 'ENTRADA' : 'SAÍDA'}
+                      {row.type === 'receita' ? 'ENT' : 'SAÍ'}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-sm max-w-[200px] truncate">
+                  <TableCell className="text-sm max-w-[140px] truncate">
                     {row.description}
                     {row.responsible && <span className="text-xs text-muted-foreground ml-1">@{row.responsible}</span>}
                   </TableCell>
-                  <TableCell className="text-sm">{getClientName(row.client_id)}</TableCell>
-                  <TableCell className="text-sm">{row.category ?? '—'}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="hidden md:table-cell text-sm">{getClientName(row.client_id)}</TableCell>
+                  <TableCell className="hidden md:table-cell text-sm">{row.category ?? '—'}</TableCell>
+                  <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
                     {row.payment_method ?? '—'}
                     {row.installments && row.installments > 1 && (
                       <span className="ml-1">({row.current_installment}/{row.installments})</span>
                     )}
                   </TableCell>
-                  <TableCell className={`text-sm text-right font-medium ${row.type === 'receita' ? 'text-green-600' : 'text-red-500'}`}>
+                  <TableCell className={`text-sm text-right font-medium whitespace-nowrap ${row.type === 'receita' ? 'text-green-600' : 'text-red-500'}`}>
                     {fmtBRL(Number(row.value))}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <span className={`text-xs font-medium ${row.paid ? 'text-green-600' : 'text-amber-500'}`}>
                       {row.paid ? 'Pago' : 'Pendente'}
                     </span>

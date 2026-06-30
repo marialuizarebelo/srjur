@@ -41,7 +41,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <main className="flex-1 overflow-auto min-w-0">
 
           {/* Topbar */}
-          <div className="flex items-center gap-2 border-b px-3 py-2 md:px-6 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
+          <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+          <div className="flex items-center gap-2 px-3 py-2 md:px-6">
             <SidebarTrigger className="shrink-0" />
 
             {/* Busca — expansível no mobile, sempre visível no desktop */}
@@ -95,6 +96,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 </div>
               </>
             )}
+          </div>
           </div>
 
           {/* Conteúdo da página */}
