@@ -7,6 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { supabase } from '@/integrations/supabase/client'
 import { GlobalSearch } from '@/components/GlobalSearch'
 import { NotificationsPanel } from '@/components/NotificationsPanel'
+import { usePushNotifications } from '@/hooks/usePushNotifications'
 
 function useDynamicFavicon() {
   useEffect(() => {
@@ -33,6 +34,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { theme, toggleTheme } = useTheme()
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   useDynamicFavicon()
+  usePushNotifications()
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
