@@ -487,13 +487,25 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
             </div>
           )}
 
+          {/* Pasta no Drive */}
+          {client.drive_folder_id && (
+            <div className="rounded-xl border border-border/60 overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Arquivos da Pasta</p>
+                {client.drive_url && (
+                  <button onClick={() => window.open(client.drive_url!, '_blank')} className="flex items-center gap-1 text-[11px] text-primary hover:underline">
+                    <ExternalLink className="h-3 w-3" />Abrir no Drive
+                  </button>
+                )}
+              </div>
+              <div className="p-3">
+                <DriveFileList folderId={client.drive_folder_id} />
+              </div>
+            </div>
+          )}
+
           {/* Ações rápidas */}
           <div className="flex flex-wrap gap-2 pt-1">
-            {client.drive_url && (
-              <Button variant="outline" size="sm" onClick={() => window.open(client.drive_url!, '_blank')}>
-                <ExternalLink className="h-3.5 w-3.5 mr-1.5" />Pasta
-              </Button>
-            )}
             <Button variant="outline" size="sm" onClick={() => { onClose(); onNewProcess() }}>
               <Scale className="h-3.5 w-3.5 mr-1.5" />Criar Processo
             </Button>
