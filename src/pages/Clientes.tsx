@@ -87,6 +87,8 @@ interface Lead {
   drive_folder_id: string | null
   drive_url: string | null
   client_id: string | null
+  referred_by: string | null
+  first_contact_at: string | null
   created_at: string
 }
 
@@ -596,6 +598,7 @@ export default function Clientes() {
     name: '', email: '', phone: '', cpf_cnpj: '', source: '',
     status: 'novo', potential_value: '', notes: '', responsible: '',
     next_followup: '', drive_folder_id: '', drive_url: '',
+    referred_by: '', first_contact_at: '',
   })
 
   const resetCf = () => {
@@ -606,7 +609,7 @@ export default function Clientes() {
   const resetLf = () => {
     setLf({ name: '', email: '', phone: '', cpf_cnpj: '', source: '',
       status: 'novo', potential_value: '', notes: '', responsible: '', next_followup: '',
-      drive_folder_id: '', drive_url: '' })
+      drive_folder_id: '', drive_url: '', referred_by: '', first_contact_at: '' })
     setEditingLead(null)
   }
 
@@ -781,6 +784,7 @@ export default function Clientes() {
       source: l.source ?? '', status: l.status, potential_value: l.potential_value ? String(l.potential_value) : '',
       notes: l.notes ?? '', responsible: l.responsible ?? '', next_followup: l.next_followup ?? '',
       drive_folder_id: l.drive_folder_id ?? '', drive_url: l.drive_url ?? '',
+      referred_by: l.referred_by ?? '', first_contact_at: l.first_contact_at ?? '',
     })
     setEditingLead(l)
     setLeadDialogOpen(true)
@@ -794,6 +798,7 @@ export default function Clientes() {
       notes: lf.notes || null, responsible: lf.responsible || null,
       next_followup: lf.next_followup || null,
       drive_folder_id: lf.drive_folder_id || null, drive_url: lf.drive_url || null,
+      referred_by: lf.referred_by || null, first_contact_at: lf.first_contact_at || null,
     }
     if (editingLead) {
       await supabase.from('leads').update(payload).eq('id', editingLead.id)
@@ -1246,6 +1251,18 @@ export default function Clientes() {
                 <Label>Valor potencial (R$)</Label>
                 <Input value={lf.potential_value} onChange={e => setLf(f => ({ ...f, potential_value: e.target.value }))} placeholder="0,00" className="h-10" />
               </div>
+            </div>
+
+            {lf.source === 'Indicação' && (
+              <div className="space-y-2">
+                <Label>Indicado por</Label>
+                <Input value={lf.referred_by} onChange={e => setLf(f => ({ ...f, referred_by: e.target.value }))} placeholder="Nome de quem indicou" className="h-10" />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Data do primeiro contato</Label>
+              <Input type="date" value={lf.first_contact_at} onChange={e => setLf(f => ({ ...f, first_contact_at: e.target.value }))} className="h-10" />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
