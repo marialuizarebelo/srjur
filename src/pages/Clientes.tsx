@@ -46,6 +46,28 @@ interface Client {
   address: string | null
   portal_visible: boolean
   created_at: string
+  // extra
+  referred_by: string | null
+  signed_at: string | null
+  first_contact_at: string | null
+  origin: string | null
+  potential_value: number | null
+  drive_url: string | null
+  drive_folder_id: string | null
+  nationality: string | null
+  marital_status: string | null
+  profession: string | null
+  rg_number: string | null
+  rg_issuer: string | null
+  gender: string | null
+  cep: string | null
+  street: string | null
+  address_number: string | null
+  complement: string | null
+  neighborhood: string | null
+  city: string | null
+  state: string | null
+  tags: string | null
 }
 
 interface Lead {
@@ -179,8 +201,10 @@ function LeadCard({ lead, onClick, onStatusChange, stages }: {
 // ── Client View Dialog ────────────────────────────────────────────────────────
 interface ClientDetail extends Client {
   processes?: { id: string; title: string; number: string | null; type: string | null; status: string }[]
-  tasks?: { id: string; title: string; priority: string | null; status: string }[]
+  tasks?: { id: string; title: string; priority: string | null; status: string; due_date: string | null }[]
   finance?: { paid: number; pending: number; overdue: number }
+  zapDocs?: { name: string; status: string; created_at: string }[]
+  leadCreatedAt?: string | null
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -231,14 +255,23 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
     setDetail(null)
     Promise.all([
       supabase.from('processes').select('id, title, number, type, status').eq('client_id', client.id).order('created_at', { ascending: false }),
-      supabase.from('tasks').select('id, title, priority, status').eq('client_id', client.id).order('created_at', { ascending: false }),
+      supabase.from('tasks').select('id, title, priority, status, due_date').eq('client_id', client.id).order('due_date', { ascending: true }),
       supabase.from('finance').select('amount, paid, due_date').eq('client_id', client.id),
-    ]).then(([procs, tasks, fin]) => {
+      supabase.from('leads').select('created_at').eq('client_id', client.id).limit(1).maybeSingle(),
+      isZapSignConfigured() ? findDocsByName(client.name) : Promise.resolve([]),
+    ]).then(([procs, tasks, fin, lead, zapDocs]) => {
       const now = new Date().toISOString().slice(0, 10)
       const paid = (fin.data ?? []).filter(f => f.paid).reduce((s, f) => s + f.amount, 0)
       const pending = (fin.data ?? []).filter(f => !f.paid && f.due_date >= now).reduce((s, f) => s + f.amount, 0)
       const overdue = (fin.data ?? []).filter(f => !f.paid && f.due_date < now).reduce((s, f) => s + f.amount, 0)
-      setDetail({ ...client, processes: procs.data ?? [], tasks: tasks.data ?? [], finance: { paid, pending, overdue } })
+      setDetail({
+        ...client,
+        processes: procs.data ?? [],
+        tasks: tasks.data ?? [],
+        finance: { paid, pending, overdue },
+        leadCreatedAt: lead.data?.created_at ?? null,
+        zapDocs: Array.isArray(zapDocs) ? (zapDocs as any[]).map(d => ({ name: d.name ?? d.original_file ?? '—', status: d.status, created_at: d.created_at ?? '' })) : [],
+      })
     })
   }, [client, open])
 
@@ -246,6 +279,22 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
   const c = detail ?? client
   const addr = fmtAddr(client)
   const financeiro = detail?.finance
+
+  // Tempo como cliente
+  const tempoCliente = (() => {
+    const dias = Math.floor((Date.now() - new Date(client.created_at).getTime()) / 86400000)
+    if (dias < 30) return `${dias} dias`
+    if (dias < 365) return `${Math.floor(dias / 30)} meses`
+    const anos = Math.floor(dias / 365)
+    const meses = Math.floor((dias % 365) / 30)
+    return meses > 0 ? `${anos} ano${anos > 1 ? 's' : ''} e ${meses} meses` : `${anos} ano${anos > 1 ? 's' : ''}`
+  })()
+
+  // Próxima tarefa pendente
+  const proximaTarefa = detail?.tasks?.find(t => t.status === 'pendente' || t.status === 'em_andamento')
+
+  // Data de primeiro contato (lead ou campo manual ou created_at)
+  const primeiroContato = client.first_contact_at ?? detail?.leadCreatedAt ?? null
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
@@ -298,23 +347,63 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
             </div>
           )}
 
+          {/* Linha de tempo rápida */}
+          <div className="flex flex-wrap gap-3">
+            <div className="flex-1 min-w-[120px] rounded-lg bg-muted/40 border px-3 py-2 text-center">
+              <p className="text-[10px] text-muted-foreground">Cliente há</p>
+              <p className="text-sm font-semibold">{tempoCliente}</p>
+            </div>
+            {primeiroContato && (
+              <div className="flex-1 min-w-[120px] rounded-lg bg-muted/40 border px-3 py-2 text-center">
+                <p className="text-[10px] text-muted-foreground">1º contato</p>
+                <p className="text-sm font-semibold">{new Date(primeiroContato).toLocaleDateString('pt-BR')}</p>
+              </div>
+            )}
+            {client.signed_at && (
+              <div className="flex-1 min-w-[120px] rounded-lg bg-muted/40 border px-3 py-2 text-center">
+                <p className="text-[10px] text-muted-foreground">Assinatura</p>
+                <p className="text-sm font-semibold">{new Date(client.signed_at + 'T00:00').toLocaleDateString('pt-BR')}</p>
+              </div>
+            )}
+            {client.portal_visible && (
+              <div className="flex-1 min-w-[120px] rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 px-3 py-2 text-center">
+                <p className="text-[10px] text-emerald-600">Portal</p>
+                <p className="text-sm font-semibold text-emerald-700">Ativo</p>
+              </div>
+            )}
+          </div>
+
+          {/* Próxima tarefa */}
+          {proximaTarefa && (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 px-3 py-2">
+              <ClipboardList className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] text-amber-600 font-semibold">Próxima tarefa</p>
+                <p className="text-sm truncate">{proximaTarefa.title}</p>
+              </div>
+              {proximaTarefa.due_date && (
+                <span className="text-[10px] text-amber-600 shrink-0">{new Date(proximaTarefa.due_date + 'T00:00').toLocaleDateString('pt-BR')}</span>
+              )}
+            </div>
+          )}
+
           {/* Dados */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5">
             <InfoRow label="CPF/CNPJ" value={client.cpf_cnpj} />
             <InfoRow label="E-mail" value={client.email} />
             <InfoRow label="Telefone" value={client.phone} />
-            <InfoRow label="Origem" value={client.origin} />
+            <InfoRow label="Origem" value={client.origin === 'Indicação' && client.referred_by ? `Indicação (${client.referred_by})` : client.origin} />
             <InfoRow label="Área" value={client.area} />
             <InfoRow label="Responsável" value={client.responsible} />
-            <InfoRow label="Nacionalidade" value={(client as any).nationality} />
-            <InfoRow label="Estado Civil" value={(client as any).marital_status} />
-            <InfoRow label="Profissão" value={(client as any).profession} />
-            <InfoRow label="Data de nascimento" value={client.birth_date ? new Date(client.birth_date + 'T00:00').toLocaleDateString('pt-BR') : null} />
-            {((client as any).rg_number) && (
-              <InfoRow label="RG" value={`${(client as any).rg_number}${(client as any).rg_issuer ? ` / ${(client as any).rg_issuer}` : ''}`} />
+            <InfoRow label="Nacionalidade" value={client.nationality} />
+            <InfoRow label="Estado Civil" value={client.marital_status} />
+            <InfoRow label="Profissão" value={client.profession} />
+            <InfoRow label="Nascimento" value={client.birth_date ? new Date(client.birth_date + 'T00:00').toLocaleDateString('pt-BR') : null} />
+            {client.rg_number && (
+              <InfoRow label="RG" value={`${client.rg_number}${client.rg_issuer ? ` / ${client.rg_issuer}` : ''}`} />
             )}
-            <InfoRow label="Entrada" value={new Date(client.created_at).toLocaleDateString('pt-BR')} />
             {client.potential_value && <InfoRow label="Potencial" value={fmtBRL(Number(client.potential_value))} />}
+            {client.tags && <InfoRow label="Tags" value={client.tags} />}
           </div>
 
           {addr && (
@@ -367,6 +456,29 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
                       {t.priority && <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${PRIORITY_COLORS[t.priority] ?? 'bg-gray-100 text-gray-600'}`}>{t.priority.toUpperCase()}</span>}
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${TASK_STATUS_COLORS[t.status] ?? 'bg-gray-100 text-gray-600'}`}>{t.status.toUpperCase().replace('_', ' ')}</span>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Documentos ZapSign */}
+          {(detail?.zapDocs?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                Documentos ZapSign ({detail!.zapDocs!.length})
+              </p>
+              <div className="space-y-1.5">
+                {detail!.zapDocs!.map((doc, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                    <p className="text-sm truncate flex-1">{doc.name}</p>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
+                      doc.status === 'signed' ? 'bg-emerald-100 text-emerald-700' :
+                      doc.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {doc.status === 'signed' ? '✓ ASSINADO' : doc.status === 'pending' ? 'AGUARDANDO' : doc.status.toUpperCase()}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -585,12 +697,12 @@ export default function Clientes() {
       cep: c.cep ?? '', street: c.street ?? '', address_number: c.address_number ?? '',
       complement: c.complement ?? '', neighborhood: c.neighborhood ?? '',
       city: c.city ?? '', state: c.state ?? '',
-      responsible: c.responsible ?? '', origin: c.origin ?? '',
+      responsible: c.responsible ?? '', origin: c.origin ?? '', referred_by: c.referred_by ?? '',
       area: c.area ?? '', areas_selected: c.area ? c.area.split(', ') : [],
       potential_value: c.potential_value ? String(c.potential_value) : '',
       drive_url: c.drive_url ?? '', drive_folder_id: c.drive_folder_id ?? '', tags: c.tags ?? '', notes: c.notes ?? '',
       status: c.status ?? 'ativo', portal_visible: c.portal_visible ?? false,
-      birth_date: c.birth_date ?? '',
+      birth_date: c.birth_date ?? '', signed_at: c.signed_at ?? '', first_contact_at: c.first_contact_at ?? '',
     })
     setEditingClient(c)
     setDialogOpen(true)
@@ -609,7 +721,8 @@ export default function Clientes() {
       cep: cf.cep || null, street: cf.street || null,
       address_number: cf.address_number || null, complement: cf.complement || null,
       neighborhood: cf.neighborhood || null, city: cf.city || null, state: cf.state || null,
-      origin: cf.origin || null,
+      origin: cf.origin || null, referred_by: cf.referred_by || null,
+      signed_at: cf.signed_at || null, first_contact_at: cf.first_contact_at || null,
       potential_value: cf.potential_value ? parseFloat(cf.potential_value.replace(',', '.')) : null,
       drive_url: cf.drive_url || null, drive_folder_id: cf.drive_folder_id || null, tags: cf.tags || null,
     }

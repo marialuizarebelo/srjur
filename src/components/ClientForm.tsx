@@ -138,9 +138,11 @@ export interface ClientFormData {
   rg_number: string; rg_issuer: string
   cep: string; street: string; address_number: string; complement: string
   neighborhood: string; city: string; state: string
-  responsible: string; origin: string; area: string; areas_selected: string[]
+  responsible: string; origin: string; referred_by: string
+  area: string; areas_selected: string[]
   potential_value: string; drive_url: string; drive_folder_id: string; tags: string; notes: string
   status: string; portal_visible: boolean; birth_date: string
+  signed_at: string; first_contact_at: string
 }
 
 export const emptyClientForm: ClientFormData = {
@@ -149,9 +151,10 @@ export const emptyClientForm: ClientFormData = {
   profession: '', rg_number: '', rg_issuer: '',
   cep: '', street: '', address_number: '', complement: '',
   neighborhood: '', city: '', state: '',
-  responsible: '', origin: '', area: '', areas_selected: [],
+  responsible: '', origin: '', referred_by: '', area: '', areas_selected: [],
   potential_value: '', drive_url: '', drive_folder_id: '', tags: '', notes: '',
   status: 'ativo', portal_visible: false, birth_date: '',
+  signed_at: '', first_contact_at: '',
 }
 
 const GENDERS = ['Masculino', 'Feminino', 'Outro', 'Não informado']
@@ -440,6 +443,25 @@ export function ClientFormDialog({
                     <SelectItem value="prospecto">Prospecto</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            {/* Campo de indicação — aparece só quando origem é Indicação */}
+            {form.origin === 'Indicação' && (
+              <div className="space-y-1.5">
+                <Label>Indicado por</Label>
+                <Input value={form.referred_by} onChange={e => setForm(f => ({ ...f, referred_by: e.target.value }))} placeholder="Nome de quem indicou" className="h-10" />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Data de assinatura do contrato</Label>
+                <Input type="date" value={form.signed_at} onChange={e => setForm(f => ({ ...f, signed_at: e.target.value }))} className="h-10" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Data do primeiro contato</Label>
+                <Input type="date" value={form.first_contact_at} onChange={e => setForm(f => ({ ...f, first_contact_at: e.target.value }))} className="h-10" />
               </div>
             </div>
 
