@@ -21,6 +21,8 @@ import {
   Clock, User, Calendar,
 } from 'lucide-react'
 import { fmtDate } from '@/lib/format'
+import { exportExcel, exportPDF, fmtDateBR } from '@/lib/exportData'
+import { ExportMenu } from '@/components/ExportMenu'
 import { searchDjen, stripHtml } from '@/lib/djen'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { DriveFileList } from '@/components/DriveFileList'
@@ -424,9 +426,59 @@ export default function Processos() {
             {totalAtivos} ativos · {totalConsultivos} consultivos · {totalContenciosos} contenciosos
           </p>
         </div>
-        <Button size="sm" onClick={() => { resetPf(); setDialogOpen(true) }}>
-          <Plus className="h-3 w-3 mr-1" />Novo Processo
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExportMenu
+            onExcelExport={() => {
+              const clientMap = Object.fromEntries(clients.map(c => [c.id, c.name]))
+              const rows = processes.map(p => ({
+                'Número': p.number ?? '',
+                'Título': p.title,
+                'Tipo': p.type,
+                'Área': p.area ?? '',
+                'Fase': p.phase,
+                'Status': p.status,
+                'Cliente': p.client_id ? (clientMap[p.client_id] ?? '') : '',
+                'Responsável': p.responsible ?? '',
+                'Tribunal/Vara': p.court ?? '',
+                'Sistema Eletrônico': p.electronic_system ?? '',
+                'Portal Visível': p.portal_visible ? 'Sim' : 'Não',
+                'Observações': p.notes ?? '',
+                'Cadastrado em': fmtDateBR(p.created_at),
+                'Atualizado em': fmtDateBR(p.updated_at),
+              }))
+              exportExcel(rows, `processos_${new Date().toISOString().slice(0,10)}`)
+            }}
+            onPdfExport={() => {
+              const clientMap = Object.fromEntries(clients.map(c => [c.id, c.name]))
+              exportPDF(
+                'Processos',
+                `${processes.length} processo${processes.length !== 1 ? 's' : ''}`,
+                [
+                  { header: 'Número', key: 'Número', width: 38 },
+                  { header: 'Título', key: 'Título', width: 55 },
+                  { header: 'Tipo', key: 'Tipo', width: 20 },
+                  { header: 'Fase', key: 'Fase', width: 20 },
+                  { header: 'Status', key: 'Status', width: 20 },
+                  { header: 'Cliente', key: 'Cliente', width: 35 },
+                  { header: 'Responsável', key: 'Responsável', width: 25 },
+                ],
+                processes.map(p => ({
+                  'Número': p.number ?? '—',
+                  'Título': p.title,
+                  'Tipo': p.type,
+                  'Fase': p.phase,
+                  'Status': p.status,
+                  'Cliente': p.client_id ? (clientMap[p.client_id] ?? '—') : '—',
+                  'Responsável': p.responsible ?? '—',
+                })),
+                `processos_${new Date().toISOString().slice(0,10)}`
+              )
+            }}
+          />
+          <Button size="sm" onClick={() => { resetPf(); setDialogOpen(true) }}>
+            <Plus className="h-3 w-3 mr-1" />Novo Processo
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

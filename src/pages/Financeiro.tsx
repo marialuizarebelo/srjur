@@ -30,6 +30,8 @@ import {
   Tooltip as RTooltip, ResponsiveContainer, LineChart, Line, Area, AreaChart,
 } from 'recharts'
 import { fmtBRL, fmtDate, getDaysDiff } from '@/lib/format'
+import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
+import { ExportMenu } from '@/components/ExportMenu'
 import { ImportExtrato } from '@/components/ImportExtrato'
 import { createAsaasCharge, syncAsaasCharges } from '@/lib/asaas'
 import { toast } from 'sonner'
@@ -715,8 +717,57 @@ export default function Financeiro() {
           <Button variant="outline" size="sm" onClick={() => { resetAf(); setAsaasOpen(true) }}>
             <Plus className="h-3 w-3 mr-1" />Cobrança Asaas
           </Button>
-          <Button variant="outline" size="sm"><Download className="h-3 w-3 mr-1" />Excel</Button>
-          <Button variant="outline" size="sm"><FileDown className="h-3 w-3 mr-1" />PDF</Button>
+          <ExportMenu
+            onExcelExport={() => {
+              const clientMap = Object.fromEntries(clients.map(c => [c.id, c.name]))
+              const exRows = rows.map(r => ({
+                'Tipo': r.type === 'receita' ? 'Receita' : 'Despesa',
+                'Descrição': r.description,
+                'Categoria': r.category ?? '',
+                'Valor (R$)': r.value,
+                'Data': fmtDateBR(r.date),
+                'Vencimento': fmtDateBR(r.due_date),
+                'Pago': r.paid ? 'Sim' : 'Não',
+                'Data Pagamento': fmtDateBR(r.payment_date),
+                'Cliente': r.client_id ? (clientMap[r.client_id] ?? '') : '',
+                'Forma de Pagamento': r.payment_method ?? '',
+                'Natureza': r.nature ?? '',
+                'Responsável': r.responsible ?? '',
+                'Recorrência': r.recurrence ?? '',
+                'Parcela': r.current_installment && r.installments ? `${r.current_installment}/${r.installments}` : '',
+                'Impacta Caixa': r.impacts_cash ? 'Sim' : 'Não',
+                'Portal Visível': r.portal_visible ? 'Sim' : 'Não',
+                'Observações': r.notes ?? '',
+              }))
+              exportExcel(exRows, `financeiro_${new Date().toISOString().slice(0,10)}`)
+            }}
+            onPdfExport={() => {
+              const clientMap = Object.fromEntries(clients.map(c => [c.id, c.name]))
+              exportPDF(
+                'Financeiro',
+                `${rows.length} lançamentos`,
+                [
+                  { header: 'Tipo', key: 'Tipo', width: 18 },
+                  { header: 'Descrição', key: 'Descrição', width: 55 },
+                  { header: 'Categoria', key: 'Categoria', width: 30 },
+                  { header: 'Valor', key: 'Valor', width: 28 },
+                  { header: 'Vencimento', key: 'Vencimento', width: 25 },
+                  { header: 'Pago', key: 'Pago', width: 14 },
+                  { header: 'Cliente', key: 'Cliente', width: 35 },
+                ],
+                rows.map(r => ({
+                  'Tipo': r.type === 'receita' ? 'Receita' : 'Despesa',
+                  'Descrição': r.description,
+                  'Categoria': r.category ?? '—',
+                  'Valor': fmtBRLStr(r.value),
+                  'Vencimento': fmtDateBR(r.due_date),
+                  'Pago': r.paid ? '✓' : '—',
+                  'Cliente': r.client_id ? (clientMap[r.client_id] ?? '—') : '—',
+                })),
+                `financeiro_${new Date().toISOString().slice(0,10)}`
+              )
+            }}
+          />
           <Dialog open={dialogOpen} onOpenChange={open => { setDialogOpen(open); if (!open) resetForm() }}>
             <DialogTrigger render={<Button size="sm" />}>
               <Plus className="h-3 w-3 mr-1" />Novo Lançamento

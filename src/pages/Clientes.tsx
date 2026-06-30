@@ -23,6 +23,8 @@ import {
   ChevronUp, ChevronDown, X, ExternalLink, Scale, ClipboardList, FileText,
 } from 'lucide-react'
 import { fmtBRL } from '@/lib/format'
+import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
+import { ExportMenu } from '@/components/ExportMenu'
 import { ClientFormDialog, emptyClientForm, type ClientFormData } from '@/components/ClientForm'
 import { findDocsByName, isZapSignConfigured, type ZapSignDoc } from '@/lib/zapsign'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
@@ -895,7 +897,71 @@ export default function Clientes() {
             {pipelineValue > 0 && ` · ${fmtBRL(pipelineValue)} potencial`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <ExportMenu
+            onExcelExport={() => {
+              const rows = clients.map(c => ({
+                'Nome': c.name,
+                'Tipo': c.type === 'pessoa_fisica' ? 'Pessoa Física' : 'Pessoa Jurídica',
+                'Status': c.status,
+                'CPF/CNPJ': c.cpf_cnpj ?? '',
+                'E-mail': c.email ?? '',
+                'Telefone': c.phone ?? '',
+                'Área': c.area ?? '',
+                'Responsável': c.responsible ?? '',
+                'Origem': c.origin ?? '',
+                'Indicado por': c.referred_by ?? '',
+                'Nascimento': fmtDateBR(c.birth_date),
+                'Gênero': c.gender ?? '',
+                'Estado Civil': c.marital_status ?? '',
+                'Nacionalidade': c.nationality ?? '',
+                'Profissão': c.profession ?? '',
+                'RG': c.rg_number ?? '',
+                'Órgão RG': c.rg_issuer ?? '',
+                'CEP': c.cep ?? '',
+                'Rua': c.street ?? '',
+                'Nº': c.address_number ?? '',
+                'Complemento': c.complement ?? '',
+                'Bairro': c.neighborhood ?? '',
+                'Cidade': c.city ?? '',
+                'UF': c.state ?? '',
+                'Potencial (R$)': c.potential_value ?? '',
+                'Primeiro Contato': fmtDateBR(c.first_contact_at),
+                'Assinatura': fmtDateBR(c.signed_at),
+                'Portal Ativo': c.portal_visible ? 'Sim' : 'Não',
+                'Drive': c.drive_url ?? '',
+                'Tags': c.tags ?? '',
+                'Observações': c.notes ?? '',
+                'Cadastrado em': fmtDateBR(c.created_at),
+              }))
+              exportExcel(rows, `clientes_${new Date().toISOString().slice(0,10)}`)
+            }}
+            onPdfExport={() => exportPDF(
+              'Clientes',
+              `${clients.filter(c=>c.status==='ativo').length} ativos`,
+              [
+                { header: 'Nome', key: 'Nome', width: 50 },
+                { header: 'Tipo', key: 'Tipo', width: 18 },
+                { header: 'Status', key: 'Status', width: 18 },
+                { header: 'Área', key: 'Área', width: 30 },
+                { header: 'Telefone', key: 'Telefone', width: 28 },
+                { header: 'E-mail', key: 'E-mail', width: 50 },
+                { header: 'Responsável', key: 'Responsável', width: 25 },
+                { header: 'Origem', key: 'Origem', width: 22 },
+              ],
+              clients.map(c => ({
+                'Nome': c.name,
+                'Tipo': c.type === 'pessoa_fisica' ? 'PF' : 'PJ',
+                'Status': c.status,
+                'Área': c.area ?? '—',
+                'Telefone': c.phone ?? '—',
+                'E-mail': c.email ?? '—',
+                'Responsável': c.responsible ?? '—',
+                'Origem': c.origin ?? '—',
+              })),
+              `clientes_${new Date().toISOString().slice(0,10)}`
+            )}
+          />
           {tab === 'crm' ? (
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => setStagesDialogOpen(true)}>
