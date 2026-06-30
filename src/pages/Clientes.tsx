@@ -305,11 +305,9 @@ export default function Clientes() {
   }, [clients, tab, search])
 
   const filteredLeads = useMemo(() => {
-    return leads.filter(l =>
-      l.status !== 'convertido' && l.status !== 'perdido'
-        ? true
-        : search ? l.name.toLowerCase().includes(search.toLowerCase()) : true
-    ).filter(l => !search || l.name.toLowerCase().includes(search.toLowerCase()))
+    return leads
+      .filter(l => l.status !== 'convertido' && l.status !== 'perdido')
+      .filter(l => !search || l.name.toLowerCase().includes(search.toLowerCase()))
   }, [leads, search])
 
   const leadsByStage = useMemo(() => {
@@ -325,7 +323,7 @@ export default function Clientes() {
 
   // ── Stats ──
   const totalAtivos = clients.filter(c => c.status === 'ativo').length
-  const totalLeads = leads.filter(l => l.status !== 'perdido' && !l.client_id).length
+  const totalLeads = leads.filter(l => l.status !== 'perdido' && l.status !== 'convertido' && !l.client_id).length
   const pipelineValue = leads
     .filter(l => l.status !== 'perdido' && !l.client_id)
     .reduce((s, l) => s + (l.potential_value ?? 0), 0)
