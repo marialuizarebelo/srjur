@@ -12,12 +12,13 @@ import {
 } from '@/components/ui/select'
 import {
   Building2, Users, Shield, Palette, Plus, Pencil, Trash2,
-  Save, Eye, EyeOff, Link2, KeyRound, CalendarDays, Unlink,
+  Save, Eye, EyeOff, Link2, KeyRound, CalendarDays, Unlink, Bell, BellOff, BellRing,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ImageUploadCrop } from '@/components/ImageUploadCrop'
 import { connectGoogle, disconnectGoogle } from '@/lib/googleCalendar'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
+import { subscribeToPush, getNotificationStatus } from '@/hooks/usePushNotifications'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 interface OfficeSettings {
@@ -49,8 +50,25 @@ const TABS = [
 ] as const
 
 export default function Configuracoes() {
-  const { profile, user, refreshProfile } = useAuth()
+  const { profile, user, session, refreshProfile } = useAuth()
   const [tab, setTab] = useState<typeof TABS[number]['key']>('escritorio')
+  const [notifStatus, setNotifStatus] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('default')
+  const [enablingNotif, setEnablingNotif] = useState(false)
+
+  useEffect(() => {
+    getNotificationStatus().then(setNotifStatus)
+  }, [])
+
+  async function handleEnableNotif() {
+    if (!session?.user?.id) return
+    setEnablingNotif(true)
+    const result = await subscribeToPush(session.user.id)
+    setNotifStatus(result === 'granted' ? 'granted' : result === 'denied' ? 'denied' : 'default')
+    if (result === 'granted') toast.success('Notificações ativadas!')
+    else if (result === 'denied') toast.error('Permissão negada. Habilite nas configurações do navegador/celular.')
+    else toast.error('Não foi possível ativar as notificações.')
+    setEnablingNotif(false)
+  }
 
   // Office
   const [office, setOffice] = useState<OfficeSettings | null>(null)
@@ -364,11 +382,63 @@ export default function Configuracoes() {
 
       {/* ── Aparência ── */}
       {tab === 'aparencia' && (
-        <div className="rounded-2xl border border-border/60 bg-card shadow-sm p-6 space-y-4">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Tema</p>
-          <p className="text-sm text-muted-foreground">
-            O tema claro/escuro pode ser alterado a qualquer momento pelo ícone no topo da tela.
-          </p>
+        <div className="space-y-4">
+          {/* Tema */}
+          <div className="rounded-2xl border border-border/60 bg-card shadow-sm p-6 space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Tema</p>
+            <p className="text-sm text-muted-foreground">
+              O tema claro/escuro pode ser alterado a qualquer momento pelo ícone no topo da tela.
+            </p>
+          </div>
+
+          {/* Notificações */}
+          <div className="rounded-2xl border border-border/60 bg-card shadow-sm p-6 space-y-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Notificações push</p>
+
+            {notifStatus === 'unsupported' && (
+              <div className="flex items-start gap-3">
+                <BellOff className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium">Não suportado</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Este dispositivo ou navegador não suporta notificações push. Use o app instalado na tela inicial.</p>
+                </div>
+              </div>
+            )}
+
+            {notifStatus === 'granted' && (
+              <div className="flex items-start gap-3">
+                <BellRing className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-green-600">Notificações ativas</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Você receberá avisos de compromissos com horário e pagamentos recebidos.</p>
+                </div>
+              </div>
+            )}
+
+            {notifStatus === 'denied' && (
+              <div className="flex items-start gap-3">
+                <BellOff className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-red-600">Permissão negada</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Para ativar, vá nas configurações do celular → Aplicativos → Navegador → Notificações e permita para app.srjur.com.</p>
+                </div>
+              </div>
+            )}
+
+            {(notifStatus === 'default') && (
+              <div className="flex items-start gap-3">
+                <Bell className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Notificações desativadas</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 mb-3">Ative para receber lembretes de compromissos e avisos de pagamentos recebidos.</p>
+                  <Button size="sm" onClick={handleEnableNotif} disabled={enablingNotif} className="rounded-xl">
+                    <Bell className="h-3.5 w-3.5 mr-2" />
+                    {enablingNotif ? 'Ativando...' : 'Ativar notificações'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

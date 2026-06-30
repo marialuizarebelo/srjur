@@ -1,6 +1,4 @@
-import { useEffect } from 'react'
 import { supabase } from '@/integrations/supabase/client'
-import { useAuth } from '@/contexts/AuthContext'
 
 const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC_KEY as string
 
@@ -11,39 +9,37 @@ function urlBase64ToUint8Array(base64String: string) {
   return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)))
 }
 
-export function usePushNotifications() {
-  const { session } = useAuth()
+export async function subscribeToPush(userId: string): Promise<'granted' | 'denied' | 'unsupported' | 'error'> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported'
 
-  useEffect(() => {
-    if (!session || !('serviceWorker' in navigator) || !('PushManager' in window)) return
+  try {
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') return 'denied'
 
-    async function subscribe() {
-      try {
-        const permission = await Notification.requestPermission()
-        if (permission !== 'granted') return
+    const reg = await navigator.serviceWorker.ready
+    const existing = await reg.pushManager.getSubscription()
+    const sub = existing ?? await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
+    })
 
-        const reg = await navigator.serviceWorker.ready
-        const existing = await reg.pushManager.getSubscription()
-        const sub = existing ?? await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
-        })
+    const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } }
 
-        const { endpoint, keys } = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } }
+    await supabase.from('push_subscriptions').upsert({
+      user_id: userId,
+      endpoint: json.endpoint,
+      p256dh: json.keys.p256dh,
+      auth: json.keys.auth,
+    }, { onConflict: 'endpoint' })
 
-        await supabase.from('push_subscriptions').upsert({
-          user_id: session.user.id,
-          endpoint,
-          p256dh: keys.p256dh,
-          auth: keys.auth,
-        }, { onConflict: 'endpoint' })
-      } catch (e) {
-        console.warn('Push subscription failed:', e)
-      }
-    }
+    return 'granted'
+  } catch (e) {
+    console.warn('Push subscription failed:', e)
+    return 'error'
+  }
+}
 
-    // Delay for 3s so it doesn't pop immediately on login
-    const t = setTimeout(subscribe, 3000)
-    return () => clearTimeout(t)
-  }, [session])
+export async function getNotificationStatus(): Promise<'granted' | 'denied' | 'default' | 'unsupported'> {
+  if (!('Notification' in window)) return 'unsupported'
+  return Notification.permission as 'granted' | 'denied' | 'default'
 }
