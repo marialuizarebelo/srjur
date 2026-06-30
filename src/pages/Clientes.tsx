@@ -351,10 +351,6 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
 
           {/* Linha de tempo rápida */}
           <div className="flex flex-wrap gap-3">
-            <div className="flex-1 min-w-[120px] rounded-lg bg-muted/40 border px-3 py-2 text-center">
-              <p className="text-[10px] text-muted-foreground">Cliente há</p>
-              <p className="text-sm font-semibold">{tempoCliente}</p>
-            </div>
             {primeiroContato && (
               <div className="flex-1 min-w-[120px] rounded-lg bg-muted/40 border px-3 py-2 text-center">
                 <p className="text-[10px] text-muted-foreground">1º contato</p>
