@@ -143,15 +143,12 @@ export function GlobalSearch({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="p-0 gap-0 max-w-[600px] w-[95vw] overflow-hidden rounded-2xl shadow-2xl">
         <Command shouldFilter={false} className="rounded-2xl">
-          <div className="flex items-center border-b px-4 py-1">
-            <Search className="h-4 w-4 text-muted-foreground shrink-0 mr-3" />
-            <CommandInput
-              placeholder="Buscar clientes, processos, tarefas, lançamentos..."
-              value={query}
-              onValueChange={setQuery}
-              className="border-0 focus:ring-0 h-12 text-base bg-transparent"
-            />
-          </div>
+          <CommandInput
+            placeholder="Buscar clientes, processos, tarefas, lançamentos..."
+            value={query}
+            onValueChange={setQuery}
+            className="h-12 text-base border-b"
+          />
 
           <CommandList className="max-h-[420px]">
             {query.length < 2 && (
