@@ -46,7 +46,7 @@ const TABS = [
   { key: 'escritorio', label: 'Escritório', icon: Building2 },
   { key: 'usuarios', label: 'Usuários', icon: Users },
   { key: 'seguranca', label: 'Segurança', icon: Shield },
-  { key: 'aparencia', label: 'Aparência', icon: Palette },
+  { key: 'aparencia', label: 'Preferências', icon: Palette },
 ] as const
 
 export default function Configuracoes() {
