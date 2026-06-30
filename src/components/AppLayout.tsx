@@ -1,12 +1,11 @@
 import { useState, useEffect, type ReactNode } from 'react'
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/AppSidebar'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Bell, Search, X } from 'lucide-react'
+import { Bell, Search, Moon, Sun } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
-import { Moon, Sun } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
+import { GlobalSearch } from '@/components/GlobalSearch'
 
 function useDynamicFavicon() {
   useEffect(() => {
@@ -31,8 +30,19 @@ function useDynamicFavicon() {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { theme, toggleTheme } = useTheme()
-  const [searchOpen, setSearchOpen] = useState(false)
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   useDynamicFavicon()
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setGlobalSearchOpen(v => !v)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   return (
     <SidebarProvider>
@@ -45,57 +55,34 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-2 px-3 py-2 md:px-6">
             <SidebarTrigger className="shrink-0" />
 
-            {/* Busca — expansível no mobile, sempre visível no desktop */}
-            {searchOpen ? (
-              /* Mobile: busca em tela cheia */
-              <div className="flex flex-1 items-center gap-2 md:hidden">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    autoFocus
-                    placeholder="Buscar..."
-                    className="pl-9 h-9 bg-muted/50 border-0"
-                  />
-                </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setSearchOpen(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <>
-                {/* Desktop: barra de busca central */}
-                <div className="hidden md:flex flex-1 justify-center max-w-xl mx-auto">
-                  <div className="relative w-full">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar..."
-                      className="pl-9 h-9 bg-muted/50 border-0"
-                    />
-                  </div>
-                </div>
+            {/* Busca global — botão no mobile, barra clicável no desktop */}
+            {/* Desktop: barra de busca central clicável */}
+            <button
+              onClick={() => setGlobalSearchOpen(true)}
+              className="hidden md:flex flex-1 max-w-sm mx-auto items-center gap-2 h-9 px-3 rounded-xl bg-muted/60 hover:bg-muted transition-colors text-sm text-muted-foreground border border-transparent hover:border-border/50"
+            >
+              <Search className="h-3.5 w-3.5 shrink-0" />
+              <span className="flex-1 text-left">Buscar no sistema...</span>
+              <kbd className="text-[10px] bg-background/80 border rounded px-1.5 py-0.5 font-mono hidden lg:inline">Ctrl K</kbd>
+            </button>
 
-                {/* Spacer no mobile para empurrar ícones à direita */}
-                <div className="flex-1 md:hidden" />
+            {/* Spacer mobile */}
+            <div className="flex-1 md:hidden" />
 
-                <div className="flex items-center gap-1 shrink-0">
-                  {/* Ícone de busca só no mobile */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 md:hidden"
-                    onClick={() => setSearchOpen(true)}
-                  >
-                    <Search className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Bell className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleTheme}>
-                    {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </>
-            )}
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Ícone de busca no mobile */}
+              <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => setGlobalSearchOpen(true)}>
+                <Search className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Bell className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleTheme}>
+                {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+              </Button>
+            </div>
+
+            <GlobalSearch open={globalSearchOpen} onOpenChange={setGlobalSearchOpen} />
           </div>
           </div>
 
