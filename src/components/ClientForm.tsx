@@ -173,7 +173,7 @@ export function ClientFormDialog({
           {/* ── Dados pessoais ── */}
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Dados Pessoais</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Nome completo</Label>
                 <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="h-10" />
@@ -190,7 +190,7 @@ export function ClientFormDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div className="space-y-2">
                 <Label>{form.type === 'pessoa_fisica' ? 'CPF' : 'CNPJ'}</Label>
                 <Input
@@ -211,7 +211,7 @@ export function ClientFormDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div className="space-y-2">
                 <Label>E-mail</Label>
                 <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="h-10" />
@@ -222,7 +222,7 @@ export function ClientFormDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div className="space-y-2">
                 <Label>Gênero</Label>
                 <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v }))}>
@@ -243,7 +243,7 @@ export function ClientFormDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 mt-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-4">
               <div className="space-y-2">
                 <Label>Nacionalidade</Label>
                 <Input value={form.nationality} onChange={e => setForm(f => ({ ...f, nationality: e.target.value }))} className="h-10" />
@@ -317,7 +317,7 @@ export function ClientFormDialog({
           {/* ── Jurídico / Comercial ── */}
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Jurídico / Comercial</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Responsável</Label>
                 <Select value={form.responsible} onValueChange={v => setForm(f => ({ ...f, responsible: v }))}>
@@ -356,7 +356,7 @@ export function ClientFormDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div className="space-y-2">
                 <Label>Potencial financeiro (R$)</Label>
                 <Input value={form.potential_value} onChange={e => setForm(f => ({ ...f, potential_value: e.target.value }))} placeholder="0,00" className="h-10" />

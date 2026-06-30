@@ -573,7 +573,7 @@ export default function Calendario() {
       {loading ? (
         <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">Carregando eventos...</div>
       ) : (
-        <div className={hasSidebar ? 'grid gap-4' : ''} style={hasSidebar ? {gridTemplateColumns:'1fr 196px'} : {}}>
+        <div className={hasSidebar ? 'grid gap-4 grid-cols-1 md:[grid-template-columns:1fr_196px]' : ''}>
           <div>
             {view === 'mes'    && <MonthView />}
             {view === 'semana' && <WeekView />}
@@ -592,7 +592,7 @@ export default function Calendario() {
             )}
           </div>
           {hasSidebar && (
-            <div className="space-y-3">
+            <div className="hidden md:block space-y-3">
               <MiniMonth />
               <Legend />
             </div>

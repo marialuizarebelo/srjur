@@ -460,11 +460,11 @@ export default function Processos() {
 
       {/* Kanban */}
       {viewMode === 'kanban' && (
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex flex-col md:flex-row gap-4 md:overflow-x-auto pb-4">
           {PHASES.filter(ph => ph.value !== 'encerrado' || statusFilter === 'todos').map(phase => {
             const phaseProcesses = byPhase.get(phase.value) ?? []
             return (
-              <div key={phase.value} className="min-w-[280px] w-[280px] shrink-0">
+              <div key={phase.value} className="w-full md:min-w-[220px] md:w-[220px] shrink-0">
                 <div className="flex items-center gap-2 mb-1">
                   <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: phase.color }} />
                   <span className="text-sm font-semibold">{phase.label}</span>
@@ -556,7 +556,7 @@ export default function Processos() {
             <DialogTitle className="text-lg">{editing ? 'Editar' : 'Novo'} Processo</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-2">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Cliente</Label>
                 <Select value={pf.client_id} onValueChange={v => setPf(f => ({ ...f, client_id: v }))}>
@@ -573,7 +573,7 @@ export default function Processos() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Tipo</Label>
                 <Select value={pf.type} onValueChange={v => setPf(f => ({ ...f, type: v }))}>
@@ -596,7 +596,7 @@ export default function Processos() {
               <Input value={pf.title} onChange={e => setPf(f => ({ ...f, title: e.target.value }))} className="h-10" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Área do Direito</Label>
                 <Select value={pf.area} onValueChange={v => setPf(f => ({ ...f, area: v }))}>
@@ -617,7 +617,7 @@ export default function Processos() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Responsável</Label>
                 <Select value={pf.responsible} onValueChange={v => setPf(f => ({ ...f, responsible: v }))}>
@@ -640,7 +640,7 @@ export default function Processos() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Valor da causa (R$)</Label>
                 <Input value={pf.cause_value} onChange={e => setPf(f => ({ ...f, cause_value: e.target.value }))} placeholder="0,00" className="h-10" />
@@ -700,7 +700,7 @@ export default function Processos() {
               <Input value={pf.tags} onChange={e => setPf(f => ({ ...f, tags: e.target.value }))} placeholder="urgente, família" className="h-10" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Status</Label>
                 <Select value={pf.status} onValueChange={v => setPf(f => ({ ...f, status: v }))}>

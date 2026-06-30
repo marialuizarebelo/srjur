@@ -382,7 +382,7 @@ export default function Tarefas() {
               <Input value={tf.title} onChange={e => setTf(f => ({ ...f, title: e.target.value }))} className="h-10" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Tipo</Label>
                 <Select value={tf.type} onValueChange={v => setTf(f => ({ ...f, type: v }))}>
@@ -403,7 +403,7 @@ export default function Tarefas() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Data</Label>
                 <Input type="date" value={tf.due_date} onChange={e => setTf(f => ({ ...f, due_date: e.target.value }))} className="h-10" />
@@ -422,7 +422,7 @@ export default function Tarefas() {
               </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Recorrência</Label>
                 <Select value={tf.recurrence} onValueChange={v => setTf(f => ({ ...f, recurrence: v }))}>

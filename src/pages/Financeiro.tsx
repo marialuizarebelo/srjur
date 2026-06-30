@@ -555,7 +555,7 @@ export default function Financeiro() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Categoria</Label>
                 <Select value={af.category} onValueChange={v => setAf(f => ({ ...f, category: v }))}>
@@ -591,7 +591,7 @@ export default function Financeiro() {
                 placeholder="Ex: Honorários — Ação de Indenização" className="h-10" />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>{af.charge_mode === 'recorrente' ? 'Valor de cada cobrança (R$)' : 'Valor total (R$)'}</Label>
                 <Input value={af.value} onChange={e => setAf(f => ({ ...f, value: maskBRL(e.target.value) }))}
@@ -603,7 +603,7 @@ export default function Financeiro() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Forma de pagamento</Label>
                 <Select value={af.billing_type} onValueChange={v => setAf(f => ({ ...f, billing_type: v as any }))}>
@@ -658,7 +658,7 @@ export default function Financeiro() {
                 {showJurosMulta ? '− Ocultar' : '+ Configurar'} juros, multa e desconto (opcional)
               </button>
               {showJurosMulta && (
-                <div className="grid grid-cols-2 gap-3 mt-3 p-3 rounded-xl bg-muted/30">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 p-3 rounded-xl bg-muted/30">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Juros ao mês (%)</Label>
                     <Input value={af.interest_percent} onChange={e => setAf(f => ({ ...f, interest_percent: e.target.value }))}
@@ -704,7 +704,7 @@ export default function Financeiro() {
           <h1 className="text-2xl font-semibold">Financeiro</h1>
           <p className="text-sm text-muted-foreground">{filtered.length} lançamentos no período</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
             <Upload className="h-3 w-3 mr-1" />Importar Extrato
           </Button>
@@ -727,7 +727,7 @@ export default function Financeiro() {
               </DialogHeader>
               <div className="space-y-6 pt-4">
                 {/* Type */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Button
                     variant={form.type === 'receita' ? 'default' : 'outline'}
                     size="lg"
@@ -747,7 +747,7 @@ export default function Financeiro() {
                   <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="h-10" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Valor (R$)</Label>
                     <Input value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} placeholder="0,00" className="h-10" />
@@ -765,7 +765,7 @@ export default function Financeiro() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Data</Label>
                     <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className="h-10" />
@@ -776,7 +776,7 @@ export default function Financeiro() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Forma de pagamento</Label>
                     <Select value={form.payment_method} onValueChange={v => setForm(f => ({ ...f, payment_method: v }))}>
@@ -802,7 +802,7 @@ export default function Financeiro() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Recorrência</Label>
                     <Select value={form.recurrence} onValueChange={v => setForm(f => ({ ...f, recurrence: v }))}>
@@ -825,7 +825,7 @@ export default function Financeiro() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Responsável</Label>
                     <Input value={form.responsible} onChange={e => setForm(f => ({ ...f, responsible: e.target.value }))} placeholder="@nome" className="h-10" />

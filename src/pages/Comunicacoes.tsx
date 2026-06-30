@@ -454,9 +454,9 @@ export default function Comunicacoes() {
   }
 
   return (
-    <div className="flex gap-6">
+    <div className="flex flex-col md:flex-row gap-6">
       {/* ── Sidebar: Labels ── */}
-      <aside className="w-52 shrink-0 space-y-3">
+      <aside className="w-full md:w-52 shrink-0 space-y-3">
         <div className="rounded-2xl border border-border/60 bg-card shadow-sm p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold flex items-center gap-1.5">

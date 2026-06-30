@@ -176,7 +176,7 @@ export default function Configuracoes() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 bg-muted rounded-xl p-1 w-fit">
+      <div className="flex items-center gap-1 bg-muted rounded-xl p-1 overflow-x-auto w-full md:w-fit">
         {TABS.map(t => {
           const Icon = t.icon
           return (
