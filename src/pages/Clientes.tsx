@@ -217,7 +217,7 @@ export default function Clientes() {
   const [tab, setTab] = useState<'crm' | 'ativos' | 'encerrados'>('ativos')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
-  const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(() => sessionStorage.getItem('srjur_client_dialog') === '1')
   const [leadDialogOpen, setLeadDialogOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [editingLead, setEditingLead] = useState<Lead | null>(null)
@@ -230,8 +230,13 @@ export default function Clientes() {
   const [newStageLabel, setNewStageLabel] = useState('')
   const [newStageColor, setNewStageColor] = useState('#8B5CF6')
 
-  // Client form
-  const [cf, setCf] = useState<ClientFormData>({ ...emptyClientForm })
+  // Client form — persiste no sessionStorage para sobreviver reload do PWA
+  const [cf, setCf] = useState<ClientFormData>(() => {
+    try {
+      const saved = sessionStorage.getItem('srjur_client_form')
+      return saved ? { ...emptyClientForm, ...JSON.parse(saved) } : { ...emptyClientForm }
+    } catch { return { ...emptyClientForm } }
+  })
 
   // Lead form
   const [lf, setLf] = useState({
@@ -273,6 +278,17 @@ export default function Clientes() {
       setDriveRootFolderId(data?.drive_root_folder_id ?? null)
     })
   }, [])
+
+  // Persiste form e estado do dialog no sessionStorage
+  useEffect(() => {
+    if (dialogOpen) {
+      sessionStorage.setItem('srjur_client_dialog', '1')
+      sessionStorage.setItem('srjur_client_form', JSON.stringify(cf))
+    } else {
+      sessionStorage.removeItem('srjur_client_dialog')
+      sessionStorage.removeItem('srjur_client_form')
+    }
+  }, [dialogOpen, cf])
 
   // ZapSign: check for signed contracts and auto-advance leads
   useEffect(() => {

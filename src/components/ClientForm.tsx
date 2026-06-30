@@ -265,6 +265,7 @@ export function ClientFormDialog({
         // Não fecha ao clicar fora nem ao trocar de janela
         onInteractOutside={e => e.preventDefault()}
         onPointerDownOutside={e => e.preventDefault()}
+        onFocusOutside={e => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle className="text-lg">{isEditing ? 'Editar' : 'Novo'} Cliente</DialogTitle>
