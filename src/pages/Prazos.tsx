@@ -16,7 +16,7 @@ import {
 import {
   Plus, Search, Bell, AlertTriangle, Clock, CheckCircle2,
   Circle, Calendar, Scale, LayoutGrid, List, Settings2, SlidersHorizontal,
-  GripVertical, Pencil, Trash2, X,
+  GripVertical, Pencil, Trash2, X, ChevronUp, ChevronDown,
 } from 'lucide-react'
 import { fmtDate, getDaysDiff } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
@@ -82,6 +82,15 @@ export default function Prazos() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'pendente' | 'cumprido' | 'perdido' | 'todos'>('pendente')
   const [viewMode, setViewMode] = useState<'lista' | 'kanban'>('lista')
+  const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set())
+  const toggleStageCollapsed = (id: string) => {
+    setCollapsedStages(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Deadline | null>(null)
   const [stagesOpen, setStagesOpen] = useState(false)
@@ -415,43 +424,53 @@ export default function Prazos() {
   function KanbanView() {
     const unassigned = filtered.filter(d => !d.stage_id)
     return (
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto pb-4">
         {/* Sem etapa column */}
-        {unassigned.length > 0 && (
-          <div className="flex-shrink-0 w-72">
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40" />
-              <span className="text-sm font-semibold">Sem etapa</span>
-              <Badge variant="secondary" className="text-[10px] ml-auto">{unassigned.length}</Badge>
+        {unassigned.length > 0 && (() => {
+          const collapsed = collapsedStages.has('__unassigned__')
+          return (
+            <div className="w-full md:flex-shrink-0 md:w-72">
+              <button className="flex items-center gap-2 mb-3 px-1 w-full md:cursor-default" onClick={() => toggleStageCollapsed('__unassigned__')}>
+                <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40 shrink-0" />
+                <span className="text-sm font-semibold">Sem etapa</span>
+                <Badge variant="secondary" className="text-[10px] ml-auto">{unassigned.length}</Badge>
+                {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+              </button>
+              {!collapsed && (
+                <div className="space-y-2">
+                  {unassigned.map(d => <KanbanCard key={d.id} deadline={d} />)}
+                </div>
+              )}
             </div>
-            <div className="space-y-2">
-              {unassigned.map(d => <KanbanCard key={d.id} deadline={d} />)}
-            </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* Stage columns */}
         {stages.map(stage => {
           const items = filtered.filter(d => d.stage_id === stage.id)
+          const collapsed = collapsedStages.has(stage.id)
           return (
-            <div key={stage.id} className="flex-shrink-0 w-72">
-              <div className="flex items-center gap-2 mb-3 px-1">
-                <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: stage.color }} />
+            <div key={stage.id} className="w-full md:flex-shrink-0 md:w-72">
+              <button className="flex items-center gap-2 mb-3 px-1 w-full md:cursor-default" onClick={() => toggleStageCollapsed(stage.id)}>
+                <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
                 <span className="text-sm font-semibold">{stage.name}</span>
                 <Badge variant="secondary" className="text-[10px] ml-auto">{items.length}</Badge>
-              </div>
-              <div className="space-y-2 min-h-[60px] rounded-xl bg-muted/30 p-2">
-                {items.map(d => <KanbanCard key={d.id} deadline={d} />)}
-                {items.length === 0 && (
-                  <p className="text-[11px] text-muted-foreground text-center py-4">Nenhum prazo</p>
-                )}
-              </div>
+                {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+              </button>
+              {!collapsed && (
+                <div className="space-y-2 min-h-[60px] rounded-xl bg-muted/30 p-2">
+                  {items.map(d => <KanbanCard key={d.id} deadline={d} />)}
+                  {items.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground text-center py-4">Nenhum prazo</p>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
 
         {/* Add stage shortcut */}
-        <div className="flex-shrink-0 w-56 flex items-start pt-1">
+        <div className="w-full md:flex-shrink-0 md:w-56 flex items-start pt-1">
           <button
             onClick={() => { setStagesOpen(true); openNewStage() }}
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors px-2 py-1.5 rounded-lg hover:bg-muted"

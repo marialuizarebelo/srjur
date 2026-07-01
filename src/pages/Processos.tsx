@@ -117,6 +117,15 @@ export default function Processos() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
+  const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set())
+  const togglePhaseCollapsed = (value: string) => {
+    setCollapsedPhases(prev => {
+      const next = new Set(prev)
+      if (next.has(value)) next.delete(value)
+      else next.add(value)
+      return next
+    })
+  }
   const [statusFilter, setStatusFilter] = useState<'todos' | 'em_andamento' | 'concluido' | 'arquivado' | 'suspenso'>('em_andamento')
 
   // Process form
@@ -515,14 +524,17 @@ export default function Processos() {
         <div className="flex flex-col md:flex-row gap-4 md:overflow-x-auto pb-4">
           {PHASES.filter(ph => ph.value !== 'encerrado' || statusFilter === 'todos').map(phase => {
             const phaseProcesses = byPhase.get(phase.value) ?? []
+            const collapsed = collapsedPhases.has(phase.value)
             return (
               <div key={phase.value} className="w-full md:min-w-[220px] md:w-[220px] shrink-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: phase.color }} />
+                <button className="flex items-center gap-2 mb-1 w-full md:cursor-default" onClick={() => togglePhaseCollapsed(phase.value)}>
+                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: phase.color }} />
                   <span className="text-sm font-semibold">{phase.label}</span>
                   <Badge variant="secondary" className="text-[10px] ml-auto">{phaseProcesses.length}</Badge>
-                </div>
+                  {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+                </button>
                 <div className="mb-3" />
+                {!collapsed && (
                 <div className="space-y-2">
                   {phaseProcesses.map(proc => (
                     <div key={proc.id} className="p-3 rounded-lg border bg-background hover:shadow-md transition-shadow cursor-pointer"
@@ -549,6 +561,7 @@ export default function Processos() {
                     </div>
                   )}
                 </div>
+                )}
               </div>
             )
           })}
@@ -566,35 +579,39 @@ export default function Processos() {
           ) : (
             filtered.map(proc => (
               <div key={proc.id}
-                className="flex items-center gap-4 p-4 rounded-lg border hover:shadow-sm transition-shadow cursor-pointer"
+                className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 p-3 sm:p-4 rounded-lg border hover:shadow-sm transition-shadow cursor-pointer"
                 onClick={() => openDetail(proc)}>
-                <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: PHASES.find(p => p.value === proc.phase)?.color }} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium truncate">{proc.title}</p>
-                    {proc.number && <span className="text-xs text-muted-foreground font-mono shrink-0">{proc.number}</span>}
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-muted-foreground">{getClientName(proc.client_id)}</span>
-                    {proc.area && <span className="text-xs text-muted-foreground">· {proc.area}</span>}
+                <div className="flex items-start gap-2 sm:contents">
+                  <div className="h-2.5 w-2.5 rounded-full shrink-0 mt-1.5 sm:mt-0" style={{ backgroundColor: PHASES.find(p => p.value === proc.phase)?.color }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium truncate">{proc.title}</p>
+                      {proc.number && <span className="text-xs text-muted-foreground font-mono shrink-0">{proc.number}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className="text-xs text-muted-foreground">{getClientName(proc.client_id)}</span>
+                      {proc.area && <span className="text-xs text-muted-foreground">· {proc.area}</span>}
+                    </div>
                   </div>
                 </div>
-                <Badge variant="outline" className="text-[10px] shrink-0">
-                  {PHASES.find(p => p.value === proc.phase)?.label}
-                </Badge>
-                <Badge style={{ backgroundColor: STATUS_MAP[proc.status]?.color + '20', color: STATUS_MAP[proc.status]?.color }}
-                  className="text-[10px] shrink-0">
-                  {STATUS_MAP[proc.status]?.label}
-                </Badge>
-                {proc.responsible && (
-                  <Badge variant="outline" className="text-[10px] shrink-0"
-                    style={{ borderColor: RESPONSIBLE_COLORS[proc.responsible], color: RESPONSIBLE_COLORS[proc.responsible] }}>
-                    {proc.responsible}
+                <div className="flex items-center gap-1.5 flex-wrap pl-[18px] sm:pl-0">
+                  <Badge variant="outline" className="text-[10px] shrink-0">
+                    {PHASES.find(p => p.value === proc.phase)?.label}
                   </Badge>
-                )}
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={e => { e.stopPropagation(); openEdit(proc) }}>
-                  <Pencil className="h-3 w-3" />
-                </Button>
+                  <Badge style={{ backgroundColor: STATUS_MAP[proc.status]?.color + '20', color: STATUS_MAP[proc.status]?.color }}
+                    className="text-[10px] shrink-0">
+                    {STATUS_MAP[proc.status]?.label}
+                  </Badge>
+                  {proc.responsible && (
+                    <Badge variant="outline" className="text-[10px] shrink-0"
+                      style={{ borderColor: RESPONSIBLE_COLORS[proc.responsible], color: RESPONSIBLE_COLORS[proc.responsible] }}>
+                      {proc.responsible}
+                    </Badge>
+                  )}
+                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 ml-auto sm:ml-0" onClick={e => { e.stopPropagation(); openEdit(proc) }}>
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
             ))
           )}
