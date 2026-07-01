@@ -423,6 +423,8 @@ export default function Financeiro() {
   const [viewMode, setViewMode] = useState<'mes' | 'ano' | 'custom'>('mes')
   const [activeCard, setActiveCard] = useState<string | null>(null)
   const [typeFilter, setTypeFilter] = useState<'todos' | 'receita' | 'despesa'>('todos')
+  const [clientFilter, setClientFilter] = useState<string>('todos')
+  const [responsibleFilter, setResponsibleFilter] = useState<string>('todos')
   const [projectionMonths, setProjectionMonths] = useState(3)
 
   // Form
@@ -538,9 +540,17 @@ export default function Financeiro() {
   useEffect(() => { loadData() }, [])
 
   // ── Filtered data ──
+  const responsibleOptions = useMemo(() => {
+    const set = new Set<string>()
+    rows.forEach(r => { if (r.responsible) set.add(r.responsible) })
+    return Array.from(set).sort()
+  }, [rows])
+
   const filtered = useMemo(() => {
     return rows.filter(r => {
       if (typeFilter !== 'todos' && r.type !== typeFilter) return false
+      if (clientFilter !== 'todos' && r.client_id !== clientFilter) return false
+      if (responsibleFilter !== 'todos' && r.responsible !== responsibleFilter) return false
       const d = new Date(r.date)
       if (viewMode === 'mes') {
         return d.getMonth() === viewMonth && d.getFullYear() === viewYear
@@ -549,7 +559,7 @@ export default function Financeiro() {
       }
       return true
     })
-  }, [rows, typeFilter, viewMode, viewMonth, viewYear])
+  }, [rows, typeFilter, clientFilter, responsibleFilter, viewMode, viewMonth, viewYear])
 
   // ── Calculations ──
   const today = new Date().toISOString().slice(0, 10)
@@ -1291,6 +1301,24 @@ export default function Financeiro() {
         {viewMode !== 'custom' && (
           <MonthNavigator month={viewMonth} year={viewYear} onChange={(m, y) => { setViewMonth(m); setViewYear(y) }} />
         )}
+        <Select value={clientFilter} onValueChange={setClientFilter}>
+          <SelectTrigger className="h-7 text-xs w-[140px]">
+            <SelectValue>{clientFilter === 'todos' ? 'Cliente' : (clients.find(c => c.id === clientFilter)?.name ?? 'Cliente')}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os clientes</SelectItem>
+            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={responsibleFilter} onValueChange={setResponsibleFilter}>
+          <SelectTrigger className="h-7 text-xs w-[140px]">
+            <SelectValue>{responsibleFilter === 'todos' ? 'Responsável' : responsibleFilter}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os responsáveis</SelectItem>
+            {responsibleOptions.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <div className="flex items-center gap-1 ml-auto bg-muted rounded-lg p-0.5">
           {(['todos', 'receita', 'despesa'] as const).map(t => (
             <Button

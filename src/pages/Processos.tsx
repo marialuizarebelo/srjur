@@ -132,6 +132,8 @@ export default function Processos() {
     })
   }
   const [statusFilter, setStatusFilter] = useState<'todos' | 'em_andamento' | 'concluido' | 'arquivado' | 'suspenso'>('em_andamento')
+  const [responsibleFilter, setResponsibleFilter] = useState('todos')
+  const [clientFilter, setClientFilter] = useState('todos')
 
   // Process form
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -196,9 +198,11 @@ export default function Processos() {
   const filtered = useMemo(() => {
     return processes
       .filter(p => statusFilter === 'todos' || p.status === statusFilter)
+      .filter(p => responsibleFilter === 'todos' || p.responsible === responsibleFilter)
+      .filter(p => clientFilter === 'todos' || p.client_id === clientFilter)
       .filter(p => !search || p.title.toLowerCase().includes(search.toLowerCase()) ||
         p.number?.toLowerCase().includes(search.toLowerCase()))
-  }, [processes, statusFilter, search])
+  }, [processes, statusFilter, responsibleFilter, clientFilter, search])
 
   const byPhase = useMemo(() => {
     const map = new Map<string, Process[]>()
@@ -521,6 +525,24 @@ export default function Processos() {
             <Input placeholder="Buscar por título ou número..." value={search}
               onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
           </div>
+          <Select value={responsibleFilter} onValueChange={setResponsibleFilter}>
+            <SelectTrigger className="w-32 h-9">
+              <SelectValue>{responsibleFilter === 'todos' ? 'Responsável' : responsibleFilter}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              {Object.keys(RESPONSIBLE_COLORS).map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={clientFilter} onValueChange={setClientFilter}>
+            <SelectTrigger className="w-36 h-9">
+              <SelectValue>{clientFilter === 'todos' ? 'Cliente' : (clients.find(c => c.id === clientFilter)?.name ?? 'Cliente')}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
             <Button variant={viewMode === 'kanban' ? 'default' : 'ghost'} size="icon" className="h-8 w-8"
               onClick={() => setViewMode('kanban')}>

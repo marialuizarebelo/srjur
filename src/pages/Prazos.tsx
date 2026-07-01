@@ -46,7 +46,8 @@ interface DeadlineStage {
   position: number
 }
 
-interface ProcessOption { id: string; title: string; number: string | null }
+interface ProcessOption { id: string; title: string; number: string | null; client_id: string | null }
+interface ClientOption { id: string; name: string }
 
 const SOURCES = ['Manual', 'Intimação', 'Despacho', 'Sentença', 'Acordo', 'Outro']
 
@@ -185,6 +186,9 @@ export default function Prazos() {
   const [deadlines, setDeadlines] = useState<Deadline[]>([])
   const [stages, setStages] = useState<DeadlineStage[]>([])
   const [processes, setProcesses] = useState<ProcessOption[]>([])
+  const [clients, setClients] = useState<ClientOption[]>([])
+  const [responsibleFilter, setResponsibleFilter] = useState('todos')
+  const [clientFilter, setClientFilter] = useState('todos')
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'pendente' | 'cumprido' | 'perdido' | 'todos'>('pendente')
@@ -228,14 +232,16 @@ export default function Prazos() {
 
   const loadData = async () => {
     setLoading(true)
-    const [{ data: d }, { data: p }, { data: s }] = await Promise.all([
+    const [{ data: d }, { data: p }, { data: s }, { data: c }] = await Promise.all([
       supabase.from('deadlines').select('*').order('due_date', { ascending: true }),
-      supabase.from('processes').select('id, title, number').eq('status', 'em_andamento').order('title'),
+      supabase.from('processes').select('id, title, number, client_id').eq('status', 'em_andamento').order('title'),
       supabase.from('deadline_stages').select('*').order('position'),
+      supabase.from('clients').select('id, name').order('name'),
     ])
     setDeadlines((d as Deadline[]) ?? [])
     setProcesses((p as ProcessOption[]) ?? [])
     setStages((s as DeadlineStage[]) ?? [])
+    setClients((c as ClientOption[]) ?? [])
     setLoading(false)
   }
 
@@ -249,8 +255,14 @@ export default function Prazos() {
   const filtered = useMemo(() => {
     return deadlines
       .filter(d => statusFilter === 'todos' || d.status === statusFilter)
+      .filter(d => responsibleFilter === 'todos' || (d.responsible_ids ?? []).includes(responsibleFilter))
+      .filter(d => {
+        if (clientFilter === 'todos') return true
+        const proc = processes.find(p => p.id === d.process_id)
+        return proc?.client_id === clientFilter
+      })
       .filter(d => !search || d.title.toLowerCase().includes(search.toLowerCase()))
-  }, [deadlines, statusFilter, search])
+  }, [deadlines, statusFilter, responsibleFilter, clientFilter, processes, search])
 
   const totalPendentes = deadlines.filter(d => d.status === 'pendente').length
   const totalVencidos = deadlines.filter(d => d.status === 'pendente' && getDaysDiff(d.due_date) < 0).length
@@ -674,6 +686,26 @@ export default function Prazos() {
             </Button>
           ))}
         </div>
+        <Select value={responsibleFilter} onValueChange={setResponsibleFilter}>
+          <SelectTrigger className="w-36 h-8">
+            <SelectValue>{responsibleFilter === 'todos' ? 'Responsável' : (profilesMap[responsibleFilter]?.display_name ?? 'Responsável')}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            {Object.values(profilesMap).map(p => (
+              <SelectItem key={p.id} value={p.id}>{p.display_name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={clientFilter} onValueChange={setClientFilter}>
+          <SelectTrigger className="w-36 h-8">
+            <SelectValue>{clientFilter === 'todos' ? 'Cliente' : (clients.find(c => c.id === clientFilter)?.name ?? 'Cliente')}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar prazo..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-8" />

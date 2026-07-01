@@ -218,6 +218,7 @@ export default function Tarefas() {
   const [statusFilter, setStatusFilter] = useState<'pendente' | 'concluida' | 'todas'>('pendente')
   const [typeFilter, setTypeFilter] = useState('todos')
   const [responsibleFilter, setResponsibleFilter] = useState('todos')
+  const [clientFilter, setClientFilter] = useState('todos')
 
   const profilesMap = useProfilesMap()
 
@@ -268,8 +269,9 @@ export default function Tarefas() {
       .filter(t => statusFilter === 'todas' || t.status === statusFilter)
       .filter(t => typeFilter === 'todos' || t.type === typeFilter)
       .filter(t => responsibleFilter === 'todos' || (t.responsible_ids ?? []).includes(responsibleFilter))
+      .filter(t => clientFilter === 'todos' || t.client_id === clientFilter)
       .filter(t => !search || t.title.toLowerCase().includes(search.toLowerCase()))
-  }, [tasks, statusFilter, typeFilter, responsibleFilter, search])
+  }, [tasks, statusFilter, typeFilter, responsibleFilter, clientFilter, search])
 
   // ── Groups for board view ──
   const overdue = filtered.filter(t => t.status === 'pendente' && t.due_date && getDaysDiff(t.due_date) < 0)
@@ -484,6 +486,16 @@ export default function Tarefas() {
             {Object.values(profilesMap).map(p => (
               <SelectItem key={p.id} value={p.id}>{p.display_name}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={clientFilter} onValueChange={setClientFilter}>
+          <SelectTrigger className="w-36 h-8">
+            <SelectValue>{clientFilter === 'todos' ? 'Cliente' : (clients.find(c => c.id === clientFilter)?.name ?? 'Cliente')}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
 
