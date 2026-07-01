@@ -102,24 +102,46 @@ function MonthNavigator({ month, year, onChange }: {
 }
 
 // ── Clickable summary card ──
-function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClick }: {
+function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClick, highlight, muted }: {
   title: string; value: string; subtitle?: string
   icon: React.ElementType; color: string
   active?: boolean; onClick?: () => void
+  highlight?: boolean  // fundo colorido invertido
+  muted?: boolean      // esmaecido
 }) {
+  if (highlight) {
+    return (
+      <Card
+        className={`p-4 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${active ? 'ring-2 ring-white/60' : ''}`}
+        style={{ backgroundColor: color, border: 'none' }}
+        onClick={onClick}
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs font-medium text-white/80">{title}</p>
+            {subtitle && <p className="text-[10px] text-white/60">{subtitle}</p>}
+            <p className="text-xl font-bold mt-1.5 text-white">{value}</p>
+          </div>
+          <div className="h-9 w-9 rounded-xl flex items-center justify-center bg-white/20">
+            <Icon className="h-4 w-4 text-white" />
+          </div>
+        </div>
+      </Card>
+    )
+  }
   return (
     <Card
-      className={`p-4 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${active ? 'ring-2 ring-primary' : ''}`}
+      className={`p-4 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${active ? 'ring-2 ring-primary' : ''} ${muted ? 'opacity-60' : ''}`}
       onClick={onClick}
     >
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs text-muted-foreground font-medium">{title}</p>
           {subtitle && <p className="text-[10px] text-muted-foreground/60">{subtitle}</p>}
-          <p className="text-xl font-bold mt-1.5" style={{ color }}>{value}</p>
+          <p className="text-xl font-bold mt-1.5" style={{ color: muted ? undefined : color }}>{value}</p>
         </div>
         <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
-          <Icon className="h-4 w-4" style={{ color }} />
+          <Icon className="h-4 w-4" style={{ color: muted ? undefined : color }} />
         </div>
       </div>
     </Card>
@@ -993,8 +1015,8 @@ export default function Financeiro() {
 
       {/* ── Summary Cards (clickable) ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
-        <SummaryCard title="Receitas" subtitle="total" value={fmtBRL(totalReceitas)} icon={ArrowUpCircle} color="#16a34a" active={activeCard === 'receitas'} onClick={() => setActiveCard(activeCard === 'receitas' ? null : 'receitas')} />
-        <SummaryCard title="Recebido" subtitle="pago" value={fmtBRL(receitasPagas)} icon={TrendingUp} color="#22c55e" active={activeCard === 'receitas-pagas'} onClick={() => setActiveCard(activeCard === 'receitas-pagas' ? null : 'receitas-pagas')} />
+        <SummaryCard title="Receitas" subtitle="total" value={fmtBRL(totalReceitas)} icon={ArrowUpCircle} color="#16a34a" muted active={activeCard === 'receitas'} onClick={() => setActiveCard(activeCard === 'receitas' ? null : 'receitas')} />
+        <SummaryCard title="Recebido" subtitle="pago" value={fmtBRL(receitasPagas)} icon={TrendingUp} color="#22c55e" highlight active={activeCard === 'receitas-pagas'} onClick={() => setActiveCard(activeCard === 'receitas-pagas' ? null : 'receitas-pagas')} />
         <SummaryCard title="A receber" subtitle="pendente" value={fmtBRL(receitasPendentes)} icon={Clock} color="#f59e0b" active={activeCard === 'receitas-pendentes'} onClick={() => setActiveCard(activeCard === 'receitas-pendentes' ? null : 'receitas-pendentes')} />
         <SummaryCard title="Despesas" subtitle="total" value={fmtBRL(totalDespesas)} icon={ArrowDownCircle} color="#ef4444" active={activeCard === 'despesas'} onClick={() => setActiveCard(activeCard === 'despesas' ? null : 'despesas')} />
         <SummaryCard title="Pago" subtitle="despesas pagas" value={fmtBRL(despesasPagas)} icon={TrendingDown} color="#dc2626" active={activeCard === 'despesas-pagas'} onClick={() => setActiveCard(activeCard === 'despesas-pagas' ? null : 'despesas-pagas')} />
