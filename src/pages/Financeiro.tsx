@@ -64,6 +64,14 @@ interface FinanceRow {
 
 interface ClientOption { id: string; name: string }
 
+interface FinancePayment {
+  id: string
+  finance_id: string
+  amount: number
+  payment_date: string
+  notes: string | null
+}
+
 // ── Constants ──
 const CATEGORIES_RECEITA = ['Honorários Iniciais', 'Mensalidade', 'Acordo', 'Consultoria', 'Êxito', 'Outros']
 const CATEGORIES_DESPESA = ['Operacional', 'Pessoal', 'Impostos', 'Software', 'Marketing', 'Aluguel', 'Outros']
@@ -151,35 +159,53 @@ function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClic
 // ── Row status helpers ──
 const todayStr = new Date().toISOString().slice(0, 10)
 
-function rowStatus(row: FinanceRow) {
-  if (row.paid) return 'pago'
+function paidAmount(row: FinanceRow, paymentsMap: Record<string, FinancePayment[]>) {
+  const payments = paymentsMap[row.id]
+  if (payments && payments.length > 0) {
+    return payments.reduce((s, p) => s + Number(p.amount), 0)
+  }
+  return row.paid ? Number(row.value) : 0
+}
+
+function rowStatus(row: FinanceRow, paymentsMap: Record<string, FinancePayment[]> = {}) {
+  const paid = paidAmount(row, paymentsMap)
+  if (paid >= Number(row.value)) return 'pago'
+  if (paid > 0) return 'parcial'
   if (row.due_date && row.due_date < todayStr) return 'atrasado'
   return 'pendente'
 }
 
-function RowBadge({ row }: { row: FinanceRow }) {
-  const status = rowStatus(row)
+function RowBadge({ row, paymentsMap }: { row: FinanceRow; paymentsMap: Record<string, FinancePayment[]> }) {
+  const status = rowStatus(row, paymentsMap)
   if (row.type === 'despesa') {
-    return row.paid
+    return status === 'pago'
       ? <Badge className="text-[10px] bg-slate-500 text-white">SAÍ</Badge>
+      : status === 'parcial'
+      ? <Badge className="text-[10px] bg-blue-400 text-white">PARC</Badge>
       : <Badge className="text-[10px] bg-slate-300 text-slate-700">PRV</Badge>
   }
   if (status === 'pago')     return <Badge className="text-[10px] bg-green-600 text-white">ENT</Badge>
+  if (status === 'parcial')  return <Badge className="text-[10px] bg-blue-400 text-white">PARC</Badge>
   if (status === 'atrasado') return <Badge className="text-[10px] bg-red-500 text-white">ATR</Badge>
   return <Badge className="text-[10px] bg-amber-400 text-white">PRV</Badge>
 }
 
-function StatusLabel({ row }: { row: FinanceRow }) {
-  const status = rowStatus(row)
+function StatusLabel({ row, paymentsMap }: { row: FinanceRow; paymentsMap: Record<string, FinancePayment[]> }) {
+  const status = rowStatus(row, paymentsMap)
   if (status === 'pago')     return <span className="text-xs font-medium text-green-600">Pago</span>
+  if (status === 'parcial') {
+    const paid = paidAmount(row, paymentsMap)
+    return <span className="text-xs font-medium text-blue-500">Parcial ({fmtBRL(paid)}/{fmtBRL(Number(row.value))})</span>
+  }
   if (status === 'atrasado') return <span className="text-xs font-medium text-red-500">Atrasado</span>
   return <span className="text-xs font-medium text-amber-500">Pendente</span>
 }
 
 // ── Detail Drawer ──
-function DetailDrawer({ title, rows, onClose, clients, onEdit }: {
+function DetailDrawer({ title, rows, onClose, clients, onEdit, paymentsMap }: {
   title: string; rows: FinanceRow[]; onClose: () => void; clients: ClientOption[]
   onEdit: (row: FinanceRow) => void
+  paymentsMap: Record<string, FinancePayment[]>
 }) {
   const getClientName = (id: string | null) => clients.find(c => c.id === id)?.name ?? '—'
   const total = rows.reduce((s, r) => s + Number(r.value), 0)
@@ -210,10 +236,15 @@ function DetailDrawer({ title, rows, onClose, clients, onEdit }: {
                 </div>
               </div>
               <div className="text-right shrink-0 ml-3">
-                <p className={`text-sm font-semibold ${row.type === 'receita' ? (row.paid ? 'text-green-600' : rowStatus(row) === 'atrasado' ? 'text-red-500' : 'text-amber-500') : 'text-slate-500'}`}>
+                <p className={`text-sm font-semibold ${
+                  row.type === 'despesa' ? 'text-slate-500' :
+                  rowStatus(row, paymentsMap) === 'pago' ? 'text-green-600' :
+                  rowStatus(row, paymentsMap) === 'parcial' ? 'text-blue-500' :
+                  rowStatus(row, paymentsMap) === 'atrasado' ? 'text-red-500' : 'text-amber-500'
+                }`}>
                   {row.type === 'receita' ? '+' : '-'}{fmtBRL(Number(row.value))}
                 </p>
-                <StatusLabel row={row} />
+                <StatusLabel row={row} paymentsMap={paymentsMap} />
               </div>
             </div>
           ))}
@@ -227,6 +258,9 @@ function DetailDrawer({ title, rows, onClose, clients, onEdit }: {
 export default function Financeiro() {
   const [rows, setRows] = useState<FinanceRow[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
+  const [paymentsMap, setPaymentsMap] = useState<Record<string, FinancePayment[]>>({})
+  const [newPayAmount, setNewPayAmount] = useState('')
+  const [newPayDate, setNewPayDate] = useState(new Date().toISOString().slice(0, 10))
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -364,6 +398,13 @@ export default function Financeiro() {
     setRows((data as FinanceRow[]) ?? [])
     const { data: cl } = await supabase.from('clients').select('id, name').eq('status', 'ativo').order('name')
     setClients((cl as ClientOption[]) ?? [])
+    const { data: pays } = await supabase.from('finance_payments').select('*').order('payment_date', { ascending: true })
+    const map: Record<string, FinancePayment[]> = {}
+    for (const p of (pays as FinancePayment[]) ?? []) {
+      if (!map[p.finance_id]) map[p.finance_id] = []
+      map[p.finance_id].push(p)
+    }
+    setPaymentsMap(map)
     setLoading(false)
   }
 
@@ -389,14 +430,14 @@ export default function Financeiro() {
   const despesas = filtered.filter(r => r.type === 'despesa')
   const totalReceitas = receitas.reduce((s, r) => s + Number(r.value), 0)
   const totalDespesas = despesas.reduce((s, r) => s + Number(r.value), 0)
-  const receitasPagas = receitas.filter(r => r.paid).reduce((s, r) => s + Number(r.value), 0)
-  const receitasPendentes = receitas.filter(r => !r.paid).reduce((s, r) => s + Number(r.value), 0)
-  const despesasPagas = despesas.filter(r => r.paid).reduce((s, r) => s + Number(r.value), 0)
-  const despesasPendentes = despesas.filter(r => !r.paid).reduce((s, r) => s + Number(r.value), 0)
+  const receitasPagas = receitas.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
+  const receitasPendentes = receitas.reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
+  const despesasPagas = despesas.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
+  const despesasPendentes = despesas.reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
   const saldo = receitasPagas - despesasPagas
   const inadimplencia = receitas
-    .filter(r => !r.paid && r.due_date && r.due_date < today)
-    .reduce((s, r) => s + Number(r.value), 0)
+    .filter(r => rowStatus(r, paymentsMap) !== 'pago' && r.due_date && r.due_date < today)
+    .reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
   const proximosVencimentos = rows
     .filter(r => !r.paid && r.due_date && r.due_date >= today)
     .sort((a, b) => (a.due_date! > b.due_date! ? 1 : -1))
@@ -528,17 +569,66 @@ export default function Financeiro() {
 
   const handleQuickPay = async (row: FinanceRow, e: React.MouseEvent) => {
     e.stopPropagation()
+    const status = rowStatus(row, paymentsMap)
+    if (status === 'parcial') {
+      toast.error('Este lançamento tem pagamento parcial. Edite para gerenciar os pagamentos.')
+      return
+    }
     const today = new Date().toISOString().slice(0, 10)
-    const nowPaid = !row.paid
+    const nowPaid = status !== 'pago'
     const { error } = await supabase.from('finance')
       .update({ paid: nowPaid, payment_date: nowPaid ? today : null })
       .eq('id', row.id)
+    if (nowPaid === false) {
+      await supabase.from('finance_payments').delete().eq('finance_id', row.id)
+    }
     if (error) {
       toast.error('Erro: ' + error.message)
     } else {
       toast.success(nowPaid ? 'Marcado como pago!' : 'Revertido para pendente')
       loadData()
     }
+  }
+
+  const handleAddPartialPayment = async () => {
+    if (!editingId) return
+    const val = parseFloat(newPayAmount.replace(',', '.'))
+    if (isNaN(val) || val <= 0) { toast.error('Valor inválido'); return }
+    const { error } = await supabase.from('finance_payments').insert({
+      finance_id: editingId, amount: val, payment_date: newPayDate,
+    })
+    if (error) { toast.error('Erro: ' + error.message); return }
+
+    const currentRow = rows.find(r => r.id === editingId)
+    if (currentRow) {
+      const existing = paymentsMap[editingId] ?? []
+      const total = existing.reduce((s, p) => s + Number(p.amount), 0) + val
+      const fullyPaid = total >= Number(currentRow.value)
+      await supabase.from('finance')
+        .update({ paid: fullyPaid, payment_date: fullyPaid ? newPayDate : null })
+        .eq('id', editingId)
+    }
+    toast.success('Pagamento registrado!')
+    setNewPayAmount('')
+    setNewPayDate(new Date().toISOString().slice(0, 10))
+    loadData()
+  }
+
+  const handleDeletePartialPayment = async (paymentId: string) => {
+    if (!editingId) return
+    const { error } = await supabase.from('finance_payments').delete().eq('id', paymentId)
+    if (error) { toast.error('Erro: ' + error.message); return }
+
+    const currentRow = rows.find(r => r.id === editingId)
+    if (currentRow) {
+      const remaining = (paymentsMap[editingId] ?? []).filter(p => p.id !== paymentId)
+      const total = remaining.reduce((s, p) => s + Number(p.amount), 0)
+      const fullyPaid = total >= Number(currentRow.value)
+      await supabase.from('finance')
+        .update({ paid: fullyPaid, payment_date: fullyPaid ? (remaining[remaining.length - 1]?.payment_date ?? null) : null })
+        .eq('id', editingId)
+    }
+    loadData()
   }
 
   const handleEdit = (row: FinanceRow) => {
@@ -611,6 +701,7 @@ export default function Financeiro() {
           onClose={() => setActiveCard(null)}
           clients={clients}
           onEdit={handleEdit}
+          paymentsMap={paymentsMap}
         />
       )}
 
@@ -1000,6 +1091,40 @@ export default function Financeiro() {
                     <Label>Visível no portal</Label>
                   </div>
                 </div>
+
+                {editingId && (
+                  <div className="pt-4 border-t space-y-3">
+                    <Label className="text-sm font-semibold">Pagamentos parciais</Label>
+                    {(paymentsMap[editingId] ?? []).length > 0 && (
+                      <div className="space-y-1.5">
+                        {(paymentsMap[editingId] ?? []).map(p => (
+                          <div key={p.id} className="flex items-center justify-between text-sm bg-muted/40 rounded-lg px-3 py-2">
+                            <span>{fmtDate(p.payment_date)}</span>
+                            <span className="font-medium text-green-600">{fmtBRL(Number(p.amount))}</span>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDeletePartialPayment(p.id)}>
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </div>
+                        ))}
+                        <p className="text-xs text-muted-foreground pt-1">
+                          Recebido: {fmtBRL(paidAmount(rows.find(r => r.id === editingId)!, paymentsMap))} de {fmtBRL(parseFloat(form.value.replace(',', '.')) || 0)}
+                          {' · '}Falta: {fmtBRL(Math.max((parseFloat(form.value.replace(',', '.')) || 0) - paidAmount(rows.find(r => r.id === editingId)!, paymentsMap), 0))}
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex items-end gap-2">
+                      <div className="space-y-1.5 flex-1">
+                        <Label className="text-xs">Valor recebido (R$)</Label>
+                        <Input value={newPayAmount} onChange={e => setNewPayAmount(e.target.value)} placeholder="0,00" className="h-9" />
+                      </div>
+                      <div className="space-y-1.5 flex-1">
+                        <Label className="text-xs">Data</Label>
+                        <Input type="date" value={newPayDate} onChange={e => setNewPayDate(e.target.value)} className="h-9" />
+                      </div>
+                      <Button size="sm" className="h-9" onClick={handleAddPartialPayment}>Registrar</Button>
+                    </div>
+                  </div>
+                )}
               </div>
               <DialogFooter className="pt-4">
                 <DialogClose render={<Button variant="outline" size="lg" />}>Cancelar</DialogClose>
@@ -1205,7 +1330,7 @@ export default function Financeiro() {
               filtered.map(row => (
                 <TableRow key={row.id} className="cursor-pointer hover:bg-muted/30" onClick={() => handleEdit(row)}>
                   <TableCell className="text-sm whitespace-nowrap">{fmtDate(row.date)}</TableCell>
-                  <TableCell><RowBadge row={row} /></TableCell>
+                  <TableCell><RowBadge row={row} paymentsMap={paymentsMap} /></TableCell>
                   <TableCell className="text-sm max-w-[140px] truncate">
                     {row.description}
                     {row.responsible && <span className="text-xs text-muted-foreground ml-1">@{row.responsible}</span>}
@@ -1218,12 +1343,17 @@ export default function Financeiro() {
                       <span className="ml-1">({row.current_installment}/{row.installments})</span>
                     )}
                   </TableCell>
-                  <TableCell className={`text-sm text-right font-medium whitespace-nowrap ${row.type === 'receita' ? (row.paid ? 'text-green-600' : rowStatus(row) === 'atrasado' ? 'text-red-500' : 'text-amber-500') : 'text-slate-500'}`}>
+                  <TableCell className={`text-sm text-right font-medium whitespace-nowrap ${
+                    row.type === 'despesa' ? 'text-slate-500' :
+                    rowStatus(row, paymentsMap) === 'pago' ? 'text-green-600' :
+                    rowStatus(row, paymentsMap) === 'parcial' ? 'text-blue-500' :
+                    rowStatus(row, paymentsMap) === 'atrasado' ? 'text-red-500' : 'text-amber-500'
+                  }`}>
                     {fmtBRL(Number(row.value))}
                   </TableCell>
                   <TableCell className="hidden sm:table-cell" onClick={e => handleQuickPay(row, e)}>
-                    <span className="cursor-pointer hover:opacity-70 transition-opacity" title={row.paid ? 'Clique para reverter' : 'Clique para marcar como pago'}>
-                      <StatusLabel row={row} />
+                    <span className="cursor-pointer hover:opacity-70 transition-opacity" title={rowStatus(row, paymentsMap) === 'parcial' ? 'Pagamento parcial — edite para gerenciar' : row.paid ? 'Clique para reverter' : 'Clique para marcar como pago'}>
+                      <StatusLabel row={row} paymentsMap={paymentsMap} />
                     </span>
                     {row.payment_link && (
                       <a href={row.payment_link} target="_blank" rel="noopener noreferrer" className="ml-1" onClick={e => e.stopPropagation()}>

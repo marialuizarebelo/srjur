@@ -19,19 +19,24 @@ CREATE OR REPLACE FUNCTION notify_payment_received()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.paid = true AND (OLD.paid = false OR OLD.paid IS NULL) AND NEW.type = 'receita' THEN
-    PERFORM net.http_post(
-      url := current_setting('app.supabase_url') || '/functions/v1/send-push',
-      headers := jsonb_build_object(
-        'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || current_setting('app.service_role_key')
-      ),
-      body := jsonb_build_object(
-        'event', 'payment_received',
-        'title', '💰 Pagamento recebido',
-        'body', COALESCE(NEW.description, 'Um pagamento foi marcado como recebido'),
-        'url', '/financeiro'
-      )
-    );
+    BEGIN
+      PERFORM net.http_post(
+        url := current_setting('app.supabase_url') || '/functions/v1/send-push',
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', 'Bearer ' || current_setting('app.service_role_key')
+        ),
+        body := jsonb_build_object(
+          'event', 'payment_received',
+          'title', '💰 Pagamento recebido',
+          'body', COALESCE(NEW.description, 'Um pagamento foi marcado como recebido'),
+          'url', '/financeiro'
+        )
+      );
+    EXCEPTION WHEN OTHERS THEN
+      -- Nunca deixa falha de notificação bloquear o save do pagamento
+      RAISE WARNING 'notify_payment_received: %', SQLERRM;
+    END;
   END IF;
   RETURN NEW;
 END;
