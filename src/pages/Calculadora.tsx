@@ -200,7 +200,7 @@ export default function Calculadora() {
       <div className="rounded-2xl border border-border/60 bg-card shadow-sm p-6 space-y-6">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">1. Análise do caso</p>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Área do direito</Label>
             <Select value={area} onValueChange={setArea}>
@@ -247,7 +247,7 @@ export default function Calculadora() {
       <div className="rounded-2xl border border-border/60 bg-card shadow-sm p-6 space-y-5">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">2. Custo e tempo estimados</p>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Horas estimadas no caso</Label>
             <Input value={horasEstimadas} onChange={e => setHorasEstimadas(e.target.value)}
@@ -299,7 +299,7 @@ export default function Calculadora() {
       <div className="rounded-2xl border border-border/60 bg-card shadow-sm p-6 space-y-5">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">3. Estrutura da proposta</p>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Modalidade de cobrança</Label>
             <Select value={modalidade} onValueChange={setModalidade}>
@@ -356,7 +356,7 @@ export default function Calculadora() {
           </div>
 
           {/* Three tiers */}
-          <div className="grid grid-cols-3 divide-x divide-border/40 px-0">
+          <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border/40 px-0">
             {[
               { label: 'Conservador', value: calc.conservadora, note: 'Mínimo aceitável', muted: true },
               { label: 'Recomendado', value: calc.recomendada,  note: 'Valor equilibrado', highlight: true },

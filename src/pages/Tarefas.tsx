@@ -191,60 +191,64 @@ export default function Tarefas() {
     const isOverdue = days !== null && days < 0 && task.status === 'pendente'
 
     return (
-      <div className={`flex items-center gap-3 p-3 rounded-lg border transition-colors hover:shadow-sm ${
+      <div className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-lg border transition-colors hover:shadow-sm ${
         task.status === 'concluida' ? 'opacity-50' : ''
       } ${isOverdue ? 'border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20' : ''}`}>
-        <button onClick={() => toggleComplete(task)} className="shrink-0">
-          {task.status === 'concluida'
-            ? <CheckCircle2 className="h-5 w-5 text-green-500" />
-            : <Circle className="h-5 w-5 text-muted-foreground hover:text-primary" />
-          }
-        </button>
+        <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+          <button onClick={() => toggleComplete(task)} className="shrink-0 mt-0.5 sm:mt-0">
+            {task.status === 'concluida'
+              ? <CheckCircle2 className="h-5 w-5 text-green-500" />
+              : <Circle className="h-5 w-5 text-muted-foreground hover:text-primary" />
+            }
+          </button>
 
-        <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: typeInfo.color }} />
+          <div className="h-2 w-2 rounded-full shrink-0 mt-2 sm:mt-0" style={{ backgroundColor: typeInfo.color }} />
 
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(task)}>
-          <div className="flex items-center gap-2">
-            <p className={`text-sm font-medium truncate ${task.status === 'concluida' ? 'line-through' : ''}`}>
-              {task.title}
-            </p>
-            {task.priority === 'alta' || task.priority === 'urgente' ? (
-              <Badge className="text-[9px] shrink-0" style={{ backgroundColor: priorityInfo.color, color: '#fff' }}>
-                {priorityInfo.label}
+          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(task)}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className={`text-sm font-medium truncate ${task.status === 'concluida' ? 'line-through' : ''}`}>
+                {task.title}
+              </p>
+              {task.priority === 'alta' || task.priority === 'urgente' ? (
+                <Badge className="text-[9px] shrink-0" style={{ backgroundColor: priorityInfo.color, color: '#fff' }}>
+                  {priorityInfo.label}
+                </Badge>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <Badge variant="outline" className="text-[9px]" style={{ borderColor: typeInfo.color, color: typeInfo.color }}>
+                {typeInfo.label}
               </Badge>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <Badge variant="outline" className="text-[9px]" style={{ borderColor: typeInfo.color, color: typeInfo.color }}>
-              {typeInfo.label}
-            </Badge>
-            {getClientName(task.client_id) && (
-              <span className="text-[10px] text-muted-foreground">{getClientName(task.client_id)}</span>
-            )}
-            {getProcessTitle(task.process_id) && (
-              <span className="text-[10px] text-muted-foreground">· {getProcessTitle(task.process_id)}</span>
-            )}
+              {getClientName(task.client_id) && (
+                <span className="text-[10px] text-muted-foreground">{getClientName(task.client_id)}</span>
+              )}
+              {getProcessTitle(task.process_id) && (
+                <span className="text-[10px] text-muted-foreground">· {getProcessTitle(task.process_id)}</span>
+              )}
+            </div>
           </div>
         </div>
 
-        <ResponsibleAvatars ids={task.responsible_ids} profilesMap={profilesMap} />
+        <div className="flex items-center gap-2 pl-8 sm:pl-0 shrink-0">
+          <ResponsibleAvatars ids={task.responsible_ids} profilesMap={profilesMap} />
 
-        {task.due_date && (
-          <span className={`text-xs shrink-0 whitespace-nowrap ${
-            isOverdue ? 'text-red-500 font-semibold' :
-            days === 0 ? 'text-blue-600 font-medium' :
-            'text-muted-foreground'
-          }`}>
-            {isOverdue ? `${Math.abs(days!)}d atrás` :
-             days === 0 ? 'Hoje' :
-             days === 1 ? 'Amanhã' :
-             fmtDate(task.due_date)}
-          </span>
-        )}
+          {task.due_date && (
+            <span className={`text-xs shrink-0 whitespace-nowrap ${
+              isOverdue ? 'text-red-500 font-semibold' :
+              days === 0 ? 'text-blue-600 font-medium' :
+              'text-muted-foreground'
+            }`}>
+              {isOverdue ? `${Math.abs(days!)}d atrás` :
+               days === 0 ? 'Hoje' :
+               days === 1 ? 'Amanhã' :
+               fmtDate(task.due_date)}
+            </span>
+          )}
 
-        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => openEdit(task)}>
-          <Pencil className="h-3 w-3" />
-        </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 ml-auto sm:ml-0" onClick={() => openEdit(task)}>
+            <Pencil className="h-3 w-3" />
+          </Button>
+        </div>
       </div>
     )
   }
