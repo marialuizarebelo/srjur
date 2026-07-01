@@ -24,6 +24,7 @@ import {
   CreditCard, Wallet, ChevronLeft, ChevronRight, Eye,
   ArrowUpCircle, ArrowDownCircle, Clock, Ban, Link2,
   Repeat, BarChart3, PieChart as PieIcon, X, RefreshCw,
+  ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react'
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
@@ -176,6 +177,20 @@ function rowStatus(row: FinanceRow, paymentsMap: Record<string, FinancePayment[]
   if (paid > 0) return 'parcial'
   if (row.due_date && row.due_date < todayStr) return 'atrasado'
   return 'pendente'
+}
+
+// ── Cabeçalho de tabela clicável para ordenar (estilo Google Drive) ──
+function SortableHead({ label, column, active, dir, onClick, className = '' }: {
+  label: string; column: string; active: boolean; dir: 'asc' | 'desc'; onClick: () => void; className?: string
+}) {
+  return (
+    <TableHead className={`select-none cursor-pointer hover:text-foreground transition-colors ${className}`} onClick={onClick}>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+      </span>
+    </TableHead>
+  )
 }
 
 function RowBadge({ row, paymentsMap }: { row: FinanceRow; paymentsMap: Record<string, FinancePayment[]> }) {
@@ -425,6 +440,19 @@ export default function Financeiro() {
   const [typeFilter, setTypeFilter] = useState<'todos' | 'receita' | 'despesa'>('todos')
   const [clientFilter, setClientFilter] = useState<string>('todos')
   const [responsibleFilter, setResponsibleFilter] = useState<string>('todos')
+  const [categoryFilter, setCategoryFilter] = useState<string>('todos')
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('todos')
+  const [sortColumn, setSortColumn] = useState<'date' | 'description' | 'client' | 'category' | 'payment' | 'value' | 'status' | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  function toggleSort(col: typeof sortColumn) {
+    if (sortColumn === col) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortColumn(col)
+      setSortDir('asc')
+    }
+  }
   const [projectionMonths, setProjectionMonths] = useState(3)
 
   // Form
@@ -546,11 +574,25 @@ export default function Financeiro() {
     return Array.from(set).sort()
   }, [rows])
 
+  const categoryOptions = useMemo(() => {
+    const set = new Set<string>()
+    rows.forEach(r => { if (r.category) set.add(r.category) })
+    return Array.from(set).sort()
+  }, [rows])
+
+  const paymentMethodOptions = useMemo(() => {
+    const set = new Set<string>()
+    rows.forEach(r => { if (r.payment_method) set.add(r.payment_method) })
+    return Array.from(set).sort()
+  }, [rows])
+
   const filtered = useMemo(() => {
     return rows.filter(r => {
       if (typeFilter !== 'todos' && r.type !== typeFilter) return false
       if (clientFilter !== 'todos' && r.client_id !== clientFilter) return false
       if (responsibleFilter !== 'todos' && r.responsible !== responsibleFilter) return false
+      if (categoryFilter !== 'todos' && r.category !== categoryFilter) return false
+      if (paymentMethodFilter !== 'todos' && r.payment_method !== paymentMethodFilter) return false
       const d = new Date(r.date)
       if (viewMode === 'mes') {
         return d.getMonth() === viewMonth && d.getFullYear() === viewYear
@@ -559,7 +601,25 @@ export default function Financeiro() {
       }
       return true
     })
-  }, [rows, typeFilter, clientFilter, responsibleFilter, viewMode, viewMonth, viewYear])
+  }, [rows, typeFilter, clientFilter, responsibleFilter, categoryFilter, paymentMethodFilter, viewMode, viewMonth, viewYear])
+
+  const sortedFiltered = useMemo(() => {
+    if (!sortColumn) return filtered
+    const dir = sortDir === 'asc' ? 1 : -1
+    const getClientName = (id: string | null) => clients.find(c => c.id === id)?.name ?? ''
+    return [...filtered].sort((a, b) => {
+      switch (sortColumn) {
+        case 'date': return a.date.localeCompare(b.date) * dir
+        case 'description': return a.description.localeCompare(b.description) * dir
+        case 'client': return getClientName(a.client_id).localeCompare(getClientName(b.client_id)) * dir
+        case 'category': return (a.category ?? '').localeCompare(b.category ?? '') * dir
+        case 'payment': return (a.payment_method ?? '').localeCompare(b.payment_method ?? '') * dir
+        case 'value': return (Number(a.value) - Number(b.value)) * dir
+        case 'status': return rowStatus(a, paymentsMap).localeCompare(rowStatus(b, paymentsMap)) * dir
+        default: return 0
+      }
+    })
+  }, [filtered, sortColumn, sortDir, clients, paymentsMap])
 
   // ── Calculations ──
   const today = new Date().toISOString().slice(0, 10)
@@ -1319,6 +1379,24 @@ export default function Financeiro() {
             {responsibleOptions.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="h-7 text-xs w-[140px]">
+            <SelectValue>{categoryFilter === 'todos' ? 'Categoria' : categoryFilter}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas as categorias</SelectItem>
+            {categoryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
+          <SelectTrigger className="h-7 text-xs w-[150px]">
+            <SelectValue>{paymentMethodFilter === 'todos' ? 'Forma de pagamento' : paymentMethodFilter}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas as formas</SelectItem>
+            {paymentMethodOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <div className="flex items-center gap-1 ml-auto bg-muted rounded-lg p-0.5">
           {(['todos', 'receita', 'despesa'] as const).map(t => (
             <Button
@@ -1475,10 +1553,10 @@ export default function Financeiro() {
       <div className="md:hidden space-y-2">
         {loading ? (
           <p className="text-center py-8 text-sm text-muted-foreground">Carregando...</p>
-        ) : filtered.length === 0 ? (
+        ) : sortedFiltered.length === 0 ? (
           <p className="text-center py-8 text-sm text-muted-foreground">Nenhum lançamento no período</p>
         ) : (
-          filtered.map(row => {
+          sortedFiltered.map(row => {
             const status = rowStatus(row, paymentsMap)
             const valueColor =
               row.type === 'despesa' ? 'text-slate-500' :
@@ -1531,24 +1609,24 @@ export default function Financeiro() {
         <Table className="w-full table-auto">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[80px]">Data</TableHead>
+              <SortableHead label="Data" column="date" active={sortColumn === 'date'} dir={sortDir} onClick={() => toggleSort('date')} className="w-[80px]" />
               <TableHead className="w-[70px]">Tipo</TableHead>
-              <TableHead>Descrição</TableHead>
-              <TableHead className="w-[130px]">Cliente</TableHead>
-              <TableHead className="w-[110px]">Categoria</TableHead>
-              <TableHead className="hidden lg:table-cell w-[110px]">Pagamento</TableHead>
-              <TableHead className="w-[90px] text-right">Valor</TableHead>
-              <TableHead className="w-[80px]">Status</TableHead>
+              <SortableHead label="Descrição" column="description" active={sortColumn === 'description'} dir={sortDir} onClick={() => toggleSort('description')} />
+              <SortableHead label="Cliente" column="client" active={sortColumn === 'client'} dir={sortDir} onClick={() => toggleSort('client')} className="w-[130px]" />
+              <SortableHead label="Categoria" column="category" active={sortColumn === 'category'} dir={sortDir} onClick={() => toggleSort('category')} className="w-[110px]" />
+              <SortableHead label="Pagamento" column="payment" active={sortColumn === 'payment'} dir={sortDir} onClick={() => toggleSort('payment')} className="hidden lg:table-cell w-[110px]" />
+              <SortableHead label="Valor" column="value" active={sortColumn === 'value'} dir={sortDir} onClick={() => toggleSort('value')} className="w-[90px] text-right" />
+              <SortableHead label="Status" column="status" active={sortColumn === 'status'} dir={sortDir} onClick={() => toggleSort('status')} className="w-[80px]" />
               <TableHead className="w-[70px]">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-            ) : filtered.length === 0 ? (
+            ) : sortedFiltered.length === 0 ? (
               <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum lançamento no período</TableCell></TableRow>
             ) : (
-              filtered.map(row => (
+              sortedFiltered.map(row => (
                 <TableRow key={row.id} className="cursor-pointer hover:bg-muted/30" onClick={() => setViewRow(row)}>
                   <TableCell className="text-sm whitespace-nowrap">{fmtDate(row.date)}</TableCell>
                   <TableCell><RowBadge row={row} paymentsMap={paymentsMap} /></TableCell>

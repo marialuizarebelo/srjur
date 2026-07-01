@@ -21,6 +21,7 @@ import {
   Plus, Search, Users, TrendingUp, UserCheck, UserX, Pencil, Trash2,
   Phone, Mail, GripVertical, LayoutGrid, List, Eye, Settings2,
   ChevronUp, ChevronDown, X, ExternalLink, Scale, ClipboardList, FileText,
+  ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react'
 import { fmtBRL } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
@@ -127,6 +128,20 @@ function getAvatarColor(name: string) {
   let hash = 0
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
   return colors[Math.abs(hash) % colors.length]
+}
+
+// ── Cabeçalho de tabela clicável para ordenar (estilo Google Drive) ──
+function SortableHead({ label, active, dir, onClick }: {
+  label: string; active: boolean; dir: 'asc' | 'desc'; onClick: () => void
+}) {
+  return (
+    <TableHead className="select-none cursor-pointer hover:text-foreground transition-colors" onClick={onClick}>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+      </span>
+    </TableHead>
+  )
 }
 
 // ── Lead Card (Kanban) ──
@@ -664,6 +679,12 @@ export default function Clientes() {
   const [tab, setTab] = useState<'crm' | 'ativos' | 'encerrados'>('ativos')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
+  const [tableSortColumn, setTableSortColumn] = useState<'name' | 'type' | 'area' | 'phone' | 'email' | 'responsible' | 'status' | null>(null)
+  const [tableSortDir, setTableSortDir] = useState<'asc' | 'desc'>('asc')
+  const toggleTableSort = (col: typeof tableSortColumn) => {
+    if (tableSortColumn === col) setTableSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setTableSortColumn(col); setTableSortDir('asc') }
+  }
   const pinnedView = usePinnedView('clientes_view', 'cards')
   useEffect(() => { if (pinnedView.loaded && pinnedView.isPinned) setViewMode(pinnedView.pinnedValue as any) }, [pinnedView.loaded])
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set())
@@ -804,10 +825,26 @@ export default function Clientes() {
   // ── Filtered data ──
   const filteredClients = useMemo(() => {
     const statusFilter = tab === 'ativos' ? 'ativo' : 'inativo'
-    return clients
+    let list = clients
       .filter(c => c.status === statusFilter)
       .filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()))
-  }, [clients, tab, search])
+    if (tableSortColumn) {
+      const dir = tableSortDir === 'asc' ? 1 : -1
+      list = [...list].sort((a, b) => {
+        switch (tableSortColumn) {
+          case 'name': return a.name.localeCompare(b.name) * dir
+          case 'type': return (a.type ?? '').localeCompare(b.type ?? '') * dir
+          case 'area': return (a.area ?? '').localeCompare(b.area ?? '') * dir
+          case 'phone': return (a.phone ?? '').localeCompare(b.phone ?? '') * dir
+          case 'email': return (a.email ?? '').localeCompare(b.email ?? '') * dir
+          case 'responsible': return (a.responsible ?? '').localeCompare(b.responsible ?? '') * dir
+          case 'status': return (a.status ?? '').localeCompare(b.status ?? '') * dir
+          default: return 0
+        }
+      })
+    }
+    return list
+  }, [clients, tab, search, tableSortColumn, tableSortDir])
 
   const filteredLeads = useMemo(() => {
     return leads
@@ -1266,13 +1303,13 @@ export default function Clientes() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Área</TableHead>
-                <TableHead>Telefone</TableHead>
-                <TableHead>E-mail</TableHead>
-                <TableHead>Responsável</TableHead>
-                <TableHead>Status</TableHead>
+                <SortableHead label="Nome" active={tableSortColumn === 'name'} dir={tableSortDir} onClick={() => toggleTableSort('name')} />
+                <SortableHead label="Tipo" active={tableSortColumn === 'type'} dir={tableSortDir} onClick={() => toggleTableSort('type')} />
+                <SortableHead label="Área" active={tableSortColumn === 'area'} dir={tableSortDir} onClick={() => toggleTableSort('area')} />
+                <SortableHead label="Telefone" active={tableSortColumn === 'phone'} dir={tableSortDir} onClick={() => toggleTableSort('phone')} />
+                <SortableHead label="E-mail" active={tableSortColumn === 'email'} dir={tableSortDir} onClick={() => toggleTableSort('email')} />
+                <SortableHead label="Responsável" active={tableSortColumn === 'responsible'} dir={tableSortDir} onClick={() => toggleTableSort('responsible')} />
+                <SortableHead label="Status" active={tableSortColumn === 'status'} dir={tableSortDir} onClick={() => toggleTableSort('status')} />
                 <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
