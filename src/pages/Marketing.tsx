@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select'
 import {
   Plus, Camera, Share2, Globe, FileText, Calendar,
-  Image as ImageIcon, Trash2, LayoutGrid, List,
+  Image as ImageIcon, Trash2, LayoutGrid, List, ChevronUp, ChevronDown,
 } from 'lucide-react'
 import { fmtDate } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
@@ -56,6 +56,15 @@ export default function Marketing() {
   const [items, setItems] = useState<MarketingItem[]>([])
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
+  const [collapsedStatuses, setCollapsedStatuses] = useState<Set<string>>(new Set())
+  const toggleStatusCollapsed = (value: string) => {
+    setCollapsedStatuses(prev => {
+      const next = new Set(prev)
+      if (next.has(value)) next.delete(value)
+      else next.add(value)
+      return next
+    })
+  }
   const [platformFilter, setPlatformFilter] = useState('todas')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<MarketingItem | null>(null)
@@ -216,18 +225,24 @@ export default function Marketing() {
 
       {viewMode === 'kanban' ? (
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          {STATUSES.map(s => (
-            <div key={s.value} className="space-y-2">
-              <div className="flex items-center gap-2 px-1">
-                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
-                <span className="text-xs font-semibold">{s.label}</span>
-                <Badge variant="secondary" className="text-[9px] ml-auto">{byStatus.get(s.value)?.length ?? 0}</Badge>
+          {STATUSES.map(s => {
+            const collapsed = collapsedStatuses.has(s.value)
+            return (
+              <div key={s.value} className="space-y-2">
+                <button className="flex items-center gap-2 px-1 w-full md:cursor-default" onClick={() => toggleStatusCollapsed(s.value)}>
+                  <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                  <span className="text-xs font-semibold">{s.label}</span>
+                  <Badge variant="secondary" className="text-[9px] ml-auto">{byStatus.get(s.value)?.length ?? 0}</Badge>
+                  {collapsed ? <ChevronDown className="h-3.5 w-3.5 md:hidden" /> : <ChevronUp className="h-3.5 w-3.5 md:hidden" />}
+                </button>
+                {!collapsed && (
+                  <div className="space-y-2 min-h-[80px] rounded-xl bg-muted/20 p-2">
+                    {(byStatus.get(s.value) ?? []).map(item => <ContentCard key={item.id} item={item} />)}
+                  </div>
+                )}
               </div>
-              <div className="space-y-2 min-h-[80px] rounded-xl bg-muted/20 p-2">
-                {(byStatus.get(s.value) ?? []).map(item => <ContentCard key={item.id} item={item} />)}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       ) : (
         <div className="space-y-2">

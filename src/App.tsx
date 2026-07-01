@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import { PrivacyProvider } from '@/contexts/PrivacyContext'
 import { ClientProvider } from '@/contexts/ClientContext'
 import { AppLayout } from '@/components/AppLayout'
 import { PortalLayout } from '@/components/PortalLayout'
@@ -112,14 +113,16 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <TooltipProvider>
-          <Toaster />
-          <AuthProvider>
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
-          </AuthProvider>
-        </TooltipProvider>
+        <PrivacyProvider>
+          <TooltipProvider>
+            <Toaster />
+            <AuthProvider>
+              <BrowserRouter>
+                <AppRoutes />
+              </BrowserRouter>
+            </AuthProvider>
+          </TooltipProvider>
+        </PrivacyProvider>
       </ThemeProvider>
     </QueryClientProvider>
   )

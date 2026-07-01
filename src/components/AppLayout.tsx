@@ -2,8 +2,9 @@ import { useState, useEffect, type ReactNode } from 'react'
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/AppSidebar'
 import { Button } from '@/components/ui/button'
-import { Search, Moon, Sun } from 'lucide-react'
+import { Search, Moon, Sun, Eye, EyeOff } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import { usePrivacy } from '@/contexts/PrivacyContext'
 import { supabase } from '@/integrations/supabase/client'
 import { GlobalSearch } from '@/components/GlobalSearch'
 import { NotificationsPanel } from '@/components/NotificationsPanel'
@@ -31,6 +32,7 @@ function useDynamicFavicon() {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { theme, toggleTheme } = useTheme()
+  const { hidden, toggleHidden } = usePrivacy()
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   useDynamicFavicon()
 
@@ -74,6 +76,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
               {/* Ícone de busca no mobile */}
               <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => setGlobalSearchOpen(true)}>
                 <Search className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleHidden} title={hidden ? 'Mostrar valores' : 'Ocultar valores'}>
+                {hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </Button>
               <NotificationsPanel />
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleTheme}>

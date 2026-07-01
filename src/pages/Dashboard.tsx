@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/integrations/supabase/client'
 import { Card } from '@/components/ui/card'
+import { Sensitive } from '@/components/Sensitive'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -688,7 +689,7 @@ export default function Dashboard() {
                   <p className="text-xs text-muted-foreground">{label}</p>
                   {bell && <Bell className="h-3 w-3 text-muted-foreground" />}
                 </div>
-                <p className={`text-lg font-bold ${color}`}>{value}</p>
+                <p className={`text-lg font-bold ${color}`}><Sensitive>{value}</Sensitive></p>
                 <p className="text-[10px] text-muted-foreground/60 mt-0.5">Ver financeiro →</p>
               </Card>
             ))}

@@ -35,6 +35,7 @@ import { ExportMenu } from '@/components/ExportMenu'
 import { ImportExtrato } from '@/components/ImportExtrato'
 import { createAsaasCharge, syncAsaasCharges } from '@/lib/asaas'
 import { toast } from 'sonner'
+import { usePrivacy } from '@/contexts/PrivacyContext'
 
 // ── Types ──
 interface FinanceRow {
@@ -117,20 +118,22 @@ function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClic
   highlight?: boolean  // fundo colorido invertido
   muted?: boolean      // esmaecido
 }) {
+  const { hidden } = usePrivacy()
+  const valueClass = hidden ? 'blur-sm select-none' : ''
   if (highlight) {
     return (
       <Card
-        className={`p-4 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${active ? 'ring-2 ring-white/60' : ''}`}
+        className={`p-3 sm:p-4 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${active ? 'ring-2 ring-white/60' : ''}`}
         style={{ backgroundColor: color, border: 'none' }}
         onClick={onClick}
       >
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs font-medium text-white/80">{title}</p>
-            {subtitle && <p className="text-[10px] text-white/60">{subtitle}</p>}
-            <p className="text-xl font-bold mt-1.5 text-white">{value}</p>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-white/80 truncate">{title}</p>
+            {subtitle && <p className="text-[10px] text-white/60 truncate">{subtitle}</p>}
+            <p className={`text-lg sm:text-xl font-bold mt-1.5 text-white truncate ${valueClass}`}>{value}</p>
           </div>
-          <div className="h-9 w-9 rounded-xl flex items-center justify-center bg-white/20">
+          <div className="h-9 w-9 rounded-xl flex items-center justify-center bg-white/20 shrink-0">
             <Icon className="h-4 w-4 text-white" />
           </div>
         </div>
@@ -139,16 +142,16 @@ function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClic
   }
   return (
     <Card
-      className={`p-4 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${active ? 'ring-2 ring-primary' : ''} ${muted ? 'opacity-60' : ''}`}
+      className={`p-3 sm:p-4 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${active ? 'ring-2 ring-primary' : ''} ${muted ? 'opacity-60' : ''}`}
       onClick={onClick}
     >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs text-muted-foreground font-medium">{title}</p>
-          {subtitle && <p className="text-[10px] text-muted-foreground/60">{subtitle}</p>}
-          <p className="text-xl font-bold mt-1.5" style={{ color: muted ? undefined : color }}>{value}</p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground font-medium truncate">{title}</p>
+          {subtitle && <p className="text-[10px] text-muted-foreground/60 truncate">{subtitle}</p>}
+          <p className={`text-lg sm:text-xl font-bold mt-1.5 truncate ${valueClass}`} style={{ color: muted ? undefined : color }}>{value}</p>
         </div>
-        <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
+        <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}15` }}>
           <Icon className="h-4 w-4" style={{ color: muted ? undefined : color }} />
         </div>
       </div>
@@ -1073,7 +1076,7 @@ export default function Financeiro() {
                   <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
                 </div>
 
-                <div className="flex items-center gap-8 pt-3 border-t">
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-3 border-t">
                   <div className="flex items-center gap-2">
                     <Switch checked={form.paid} onCheckedChange={v => setForm(f => ({
                       ...f,
@@ -1112,7 +1115,7 @@ export default function Financeiro() {
                         </p>
                       </div>
                     )}
-                    <div className="flex items-end gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-end gap-2">
                       <div className="space-y-1.5 flex-1">
                         <Label className="text-xs">Valor recebido (R$)</Label>
                         <Input value={newPayAmount} onChange={e => setNewPayAmount(e.target.value)} placeholder="0,00" className="h-9" />
@@ -1121,7 +1124,7 @@ export default function Financeiro() {
                         <Label className="text-xs">Data</Label>
                         <Input type="date" value={newPayDate} onChange={e => setNewPayDate(e.target.value)} className="h-9" />
                       </div>
-                      <Button size="sm" className="h-9" onClick={handleAddPartialPayment}>Registrar</Button>
+                      <Button size="sm" className="h-9 w-full sm:w-auto" onClick={handleAddPartialPayment}>Registrar</Button>
                     </div>
                   </div>
                 )}
@@ -1169,7 +1172,7 @@ export default function Financeiro() {
       </div>
 
       {/* ── Summary Cards (clickable) ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-3">
         <SummaryCard title="Receitas" subtitle="total" value={fmtBRL(totalReceitas)} icon={ArrowUpCircle} color="#16a34a" muted active={activeCard === 'receitas'} onClick={() => setActiveCard(activeCard === 'receitas' ? null : 'receitas')} />
         <SummaryCard title="Recebido" subtitle="pago" value={fmtBRL(receitasPagas)} icon={TrendingUp} color="#22c55e" highlight active={activeCard === 'receitas-pagas'} onClick={() => setActiveCard(activeCard === 'receitas-pagas' ? null : 'receitas-pagas')} />
         <SummaryCard title="A receber" subtitle="pendente" value={fmtBRL(receitasPendentes)} icon={Clock} color="#f59e0b" active={activeCard === 'receitas-pendentes'} onClick={() => setActiveCard(activeCard === 'receitas-pendentes' ? null : 'receitas-pendentes')} />
@@ -1305,19 +1308,74 @@ export default function Financeiro() {
         </Card>
       )}
 
-      {/* ── Table ── */}
-      <div className="rounded-lg border overflow-x-auto">
+      {/* ── Lista mobile (cards) ── */}
+      <div className="md:hidden space-y-2">
+        {loading ? (
+          <p className="text-center py-8 text-sm text-muted-foreground">Carregando...</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-center py-8 text-sm text-muted-foreground">Nenhum lançamento no período</p>
+        ) : (
+          filtered.map(row => {
+            const status = rowStatus(row, paymentsMap)
+            const valueColor =
+              row.type === 'despesa' ? 'text-slate-500' :
+              status === 'pago' ? 'text-green-600' :
+              status === 'parcial' ? 'text-blue-500' :
+              status === 'atrasado' ? 'text-red-500' : 'text-amber-500'
+            return (
+              <Card key={row.id} className="p-3 active:bg-muted/40" onClick={() => handleEdit(row)}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <RowBadge row={row} paymentsMap={paymentsMap} />
+                      <span className="text-xs text-muted-foreground">{fmtDate(row.date)}</span>
+                    </div>
+                    <p className="text-sm font-medium truncate">{row.description}</p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-xs text-muted-foreground">
+                      {row.client_id && <span className="truncate">{getClientName(row.client_id)}</span>}
+                      {row.category && <span>· {row.category}</span>}
+                      {row.responsible && <span>· @{row.responsible}</span>}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0" onClick={e => e.stopPropagation()}>
+                    <p className={`text-sm font-semibold whitespace-nowrap ${valueColor}`}>{fmtBRL(Number(row.value))}</p>
+                    <div onClick={e => handleQuickPay(row, e)} className="mt-0.5 cursor-pointer">
+                      <StatusLabel row={row} paymentsMap={paymentsMap} />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t" onClick={e => e.stopPropagation()}>
+                  {row.payment_link && (
+                    <a href={row.payment_link} target="_blank" rel="noopener noreferrer" className="mr-auto">
+                      <Link2 className="h-3.5 w-3.5 text-primary" />
+                    </a>
+                  )}
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(row)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(row.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </Card>
+            )
+          })
+        )}
+      </div>
+
+      {/* ── Table (desktop/tablet) ── */}
+      <div className="hidden md:block rounded-lg border overflow-x-auto">
         <Table className="w-full table-auto">
           <TableHeader>
             <TableRow>
               <TableHead className="w-[80px]">Data</TableHead>
               <TableHead className="w-[70px]">Tipo</TableHead>
               <TableHead>Descrição</TableHead>
-              <TableHead className="hidden md:table-cell w-[130px]">Cliente</TableHead>
-              <TableHead className="hidden md:table-cell w-[110px]">Categoria</TableHead>
+              <TableHead className="w-[130px]">Cliente</TableHead>
+              <TableHead className="w-[110px]">Categoria</TableHead>
               <TableHead className="hidden lg:table-cell w-[110px]">Pagamento</TableHead>
               <TableHead className="w-[90px] text-right">Valor</TableHead>
-              <TableHead className="hidden sm:table-cell w-[80px]">Status</TableHead>
+              <TableHead className="w-[80px]">Status</TableHead>
               <TableHead className="w-[70px]">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -1335,8 +1393,8 @@ export default function Financeiro() {
                     {row.description}
                     {row.responsible && <span className="text-xs text-muted-foreground ml-1">@{row.responsible}</span>}
                   </TableCell>
-                  <TableCell className="hidden md:table-cell text-sm">{getClientName(row.client_id)}</TableCell>
-                  <TableCell className="hidden md:table-cell text-sm">{row.category ?? '—'}</TableCell>
+                  <TableCell className="text-sm">{getClientName(row.client_id)}</TableCell>
+                  <TableCell className="text-sm">{row.category ?? '—'}</TableCell>
                   <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
                     {row.payment_method ?? '—'}
                     {row.installments && row.installments > 1 && (
@@ -1351,7 +1409,7 @@ export default function Financeiro() {
                   }`}>
                     {fmtBRL(Number(row.value))}
                   </TableCell>
-                  <TableCell className="hidden sm:table-cell" onClick={e => handleQuickPay(row, e)}>
+                  <TableCell onClick={e => handleQuickPay(row, e)}>
                     <span className="cursor-pointer hover:opacity-70 transition-opacity" title={rowStatus(row, paymentsMap) === 'parcial' ? 'Pagamento parcial — edite para gerenciar' : row.paid ? 'Clique para reverter' : 'Clique para marcar como pago'}>
                       <StatusLabel row={row} paymentsMap={paymentsMap} />
                     </span>

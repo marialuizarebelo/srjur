@@ -573,6 +573,15 @@ export default function Clientes() {
   const [tab, setTab] = useState<'crm' | 'ativos' | 'encerrados'>('ativos')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
+  const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set())
+  const toggleStageCollapsed = (stageValue: string) => {
+    setCollapsedStages(prev => {
+      const next = new Set(prev)
+      if (next.has(stageValue)) next.delete(stageValue)
+      else next.add(stageValue)
+      return next
+    })
+  }
   const [viewClient, setViewClient] = useState<Client | null>(null)
   const [dialogOpen, setDialogOpen] = useState(() => sessionStorage.getItem('srjur_client_dialog') === '1')
   const [leadDialogOpen, setLeadDialogOpen] = useState(false)
@@ -1081,29 +1090,36 @@ export default function Clientes() {
         </div>
       )}
       {tab === 'crm' && (
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto pb-4">
           {stages.filter(s => s.show_in_kanban).map(stage => {
             const stageLeads = leadsByStage.get(stage.value) ?? []
+            const collapsed = collapsedStages.has(stage.value)
             return (
-              <div key={stage.value} className="min-w-[260px] w-[260px] shrink-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: stage.color }} />
+              <div key={stage.value} className="md:min-w-[260px] md:w-[260px] md:shrink-0 rounded-lg border md:border-none p-2 md:p-0">
+                <button
+                  className="flex items-center gap-2 mb-1 w-full md:cursor-default"
+                  onClick={() => toggleStageCollapsed(stage.value)}
+                >
+                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
                   <span className="text-sm font-semibold">{stage.label}</span>
                   <Badge variant="secondary" className="text-[10px] ml-auto">{stageLeads.length}</Badge>
-                </div>
+                  {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+                </button>
                 <p className="text-xs text-green-600 font-medium mb-3 pl-[18px]">
                   {fmtBRL(stageLeads.reduce((s, l) => s + (l.potential_value ?? 0), 0))}
                 </p>
-                <div className="space-y-2">
-                  {stageLeads.map(lead => (
-                    <LeadCard key={lead.id} lead={lead} onClick={() => openEditLead(lead)} onStatusChange={updateLeadStatus} stages={stages} />
-                  ))}
-                  {stageLeads.length === 0 && (
-                    <div className="p-4 rounded-lg border border-dashed text-center">
-                      <p className="text-xs text-muted-foreground">Nenhum lead</p>
-                    </div>
-                  )}
-                </div>
+                {!collapsed && (
+                  <div className="space-y-2">
+                    {stageLeads.map(lead => (
+                      <LeadCard key={lead.id} lead={lead} onClick={() => openEditLead(lead)} onStatusChange={updateLeadStatus} stages={stages} />
+                    ))}
+                    {stageLeads.length === 0 && (
+                      <div className="p-4 rounded-lg border border-dashed text-center">
+                        <p className="text-xs text-muted-foreground">Nenhum lead</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
