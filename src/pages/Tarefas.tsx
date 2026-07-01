@@ -17,6 +17,7 @@ import {
 import {
   Plus, Search, ClipboardList, LayoutGrid, List, Pencil, Trash2,
   CheckCircle2, Circle, Clock, AlertTriangle, Calendar, Filter,
+  Columns3, ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
 } from 'lucide-react'
 import { fmtDate, getDaysDiff, humanize } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
@@ -37,11 +38,20 @@ interface Task {
   process_id: string | null
   recurrence: string | null
   portal_visible: boolean
+  workflow_stage: string | null
   created_at: string
 }
 
 interface ClientOption { id: string; name: string }
 interface ProcessOption { id: string; title: string }
+
+const WORKFLOW_STAGES = [
+  { value: 'backlog', label: 'Backlog', color: '#6B7280' },
+  { value: 'a_fazer', label: 'A Fazer', color: '#3B82F6' },
+  { value: 'fazendo', label: 'Fazendo', color: '#F59E0B' },
+  { value: 'aguardando', label: 'Aguardando', color: '#8B5CF6' },
+  { value: 'concluido', label: 'Concluído', color: '#10B981' },
+]
 
 // ── Constants ──
 const TYPES = [
@@ -64,13 +74,14 @@ const PRIORITIES = [
 const RECURRENCES = ['Única', 'Diária', 'Semanal', 'Quinzenal', 'Mensal', 'Trimestral']
 
 // ── View Dialog ──
-function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplete, clients, processes, profilesMap }: {
+function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplete, onMoveStage, clients, processes, profilesMap }: {
   task: Task | null
   open: boolean
   onClose: () => void
   onEdit: () => void
   onDelete: () => void
   onToggleComplete: () => void
+  onMoveStage: (stage: string) => void
   clients: ClientOption[]
   processes: ProcessOption[]
   profilesMap: Record<string, { display_name: string | null; color: string | null }>
@@ -82,6 +93,9 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
   const processTitle = processes.find(p => p.id === task.process_id)?.title
   const days = task.due_date ? getDaysDiff(task.due_date) : null
   const isOverdue = days !== null && days < 0 && task.status === 'pendente'
+  const stageInfo = WORKFLOW_STAGES.find(s => s.value === (task.workflow_stage ?? 'a_fazer')) ?? WORKFLOW_STAGES[1]
+  const stageIdx = WORKFLOW_STAGES.findIndex(s => s.value === stageInfo.value)
+  const nextStage = stageIdx < WORKFLOW_STAGES.length - 1 ? WORKFLOW_STAGES[stageIdx + 1] : null
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
@@ -94,6 +108,9 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
               </Badge>
               <Badge className="text-[10px]" style={{ backgroundColor: priorityInfo.color, color: '#fff' }}>
                 {priorityInfo.label}
+              </Badge>
+              <Badge className="text-[10px]" style={{ backgroundColor: stageInfo.color, color: '#fff' }}>
+                {stageInfo.label}
               </Badge>
               {task.status === 'concluida' && <Badge className="text-[10px] bg-green-600 text-white">Concluída</Badge>}
               {isOverdue && <Badge className="text-[10px] bg-red-500 text-white">Atrasada</Badge>}
@@ -156,6 +173,11 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
 
         <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2">
           <Button variant="destructive" className="mr-auto" onClick={onDelete}>Excluir</Button>
+          {nextStage && (
+            <Button variant="outline" onClick={() => onMoveStage(nextStage.value)}>
+              Avançar → {nextStage.label}
+            </Button>
+          )}
           <Button variant="outline" onClick={onToggleComplete}>
             {task.status === 'concluida' ? 'Reabrir' : 'Concluir'}
           </Button>
@@ -173,10 +195,19 @@ export default function Tarefas() {
   const [processes, setProcesses] = useState<ProcessOption[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [viewMode, setViewMode] = useState<'board' | 'list'>('list')
+  const [viewMode, setViewMode] = useState<'board' | 'list' | 'execucao'>('list')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
   const [viewTask, setViewTask] = useState<Task | null>(null)
+  const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set())
+  const toggleStageCollapsed = (value: string) => {
+    setCollapsedStages(prev => {
+      const next = new Set(prev)
+      if (next.has(value)) next.delete(value)
+      else next.add(value)
+      return next
+    })
+  }
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<'pendente' | 'concluida' | 'todas'>('pendente')
@@ -190,12 +221,14 @@ export default function Tarefas() {
     title: '', description: '', type: 'tarefa', status: 'pendente',
     priority: 'media', due_date: '', due_time: '', responsible_ids: [] as string[],
     client_id: '', process_id: '', recurrence: 'Única', portal_visible: false,
+    workflow_stage: 'a_fazer',
   })
 
   const resetTf = () => {
     setTf({ title: '', description: '', type: 'tarefa', status: 'pendente',
       priority: 'media', due_date: '', due_time: '', responsible_ids: [],
-      client_id: '', process_id: '', recurrence: 'Única', portal_visible: false })
+      client_id: '', process_id: '', recurrence: 'Única', portal_visible: false,
+      workflow_stage: 'a_fazer' })
     setEditing(null)
   }
 
@@ -247,6 +280,14 @@ export default function Tarefas() {
     loadData()
   }
 
+  const moveWorkflowStage = async (task: Task, stage: string) => {
+    const payload: { workflow_stage: string; status?: string } = { workflow_stage: stage }
+    if (stage === 'concluido') payload.status = 'concluida'
+    else if (task.status === 'concluida') payload.status = 'pendente'
+    await supabase.from('tasks').update(payload).eq('id', task.id)
+    loadData()
+  }
+
   const openEdit = (t: Task) => {
     setTf({
       title: t.title, description: t.description ?? '', type: t.type,
@@ -254,6 +295,7 @@ export default function Tarefas() {
       due_time: t.due_time ?? '', responsible_ids: t.responsible_ids ?? [],
       client_id: t.client_id ?? '', process_id: t.process_id ?? '',
       recurrence: t.recurrence ?? 'Única', portal_visible: t.portal_visible,
+      workflow_stage: t.workflow_stage ?? 'a_fazer',
     })
     setEditing(t)
     setDialogOpen(true)
@@ -270,6 +312,7 @@ export default function Tarefas() {
       client_id: tf.client_id || null, process_id: tf.process_id || null,
       recurrence: tf.recurrence === 'Única' ? null : tf.recurrence,
       portal_visible: tf.portal_visible,
+      workflow_stage: tf.workflow_stage,
     }
     if (editing) {
       await supabase.from('tasks').update(payload).eq('id', editing.id)
@@ -443,6 +486,10 @@ export default function Tarefas() {
               onClick={() => setViewMode('list')}>
               <List className="h-3.5 w-3.5" />
             </Button>
+            <Button variant={viewMode === 'execucao' ? 'default' : 'ghost'} size="icon" className="h-8 w-8"
+              onClick={() => setViewMode('execucao')} title="Kanban de execução">
+              <Columns3 className="h-3.5 w-3.5" />
+            </Button>
           </div>
         </div>
       </div>
@@ -478,6 +525,74 @@ export default function Tarefas() {
         </div>
       )}
 
+      {/* Execução (kanban Scrum) view */}
+      {viewMode === 'execucao' && (
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto pb-4">
+          {WORKFLOW_STAGES.map(stage => {
+            const stageTasks = filtered.filter(t => (t.workflow_stage ?? 'a_fazer') === stage.value)
+            const collapsed = collapsedStages.has(stage.value)
+            const stageIdx = WORKFLOW_STAGES.findIndex(s => s.value === stage.value)
+            const prevStage = stageIdx > 0 ? WORKFLOW_STAGES[stageIdx - 1] : null
+            const nextStage = stageIdx < WORKFLOW_STAGES.length - 1 ? WORKFLOW_STAGES[stageIdx + 1] : null
+            return (
+              <div key={stage.value} className="w-full md:min-w-[260px] md:w-[260px] md:shrink-0">
+                <button className="flex items-center gap-2 mb-2 w-full md:cursor-default" onClick={() => toggleStageCollapsed(stage.value)}>
+                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
+                  <span className="text-sm font-semibold">{stage.label}</span>
+                  <Badge variant="secondary" className="text-[10px] ml-auto">{stageTasks.length}</Badge>
+                  {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+                </button>
+                {!collapsed && (
+                  <div className="space-y-2">
+                    {stageTasks.map(task => (
+                      <div key={task.id} className="p-3 rounded-lg border bg-background hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => setViewTask(task)}>
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <p className="text-sm font-medium truncate flex-1">{task.title}</p>
+                          <ResponsibleAvatars ids={task.responsible_ids} profilesMap={profilesMap} size="xs" />
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                          <Badge variant="outline" className="text-[9px]" style={{ borderColor: getTypeInfo(task.type).color, color: getTypeInfo(task.type).color }}>
+                            {getTypeInfo(task.type).label}
+                          </Badge>
+                          {task.priority === 'alta' || task.priority === 'urgente' ? (
+                            <Badge className="text-[9px]" style={{ backgroundColor: getPriorityInfo(task.priority).color, color: '#fff' }}>
+                              {getPriorityInfo(task.priority).label}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        {task.due_date && (
+                          <p className="text-[10px] text-muted-foreground">{fmtDate(task.due_date)}</p>
+                        )}
+                        <div className="flex items-center gap-1 mt-2">
+                          {prevStage && (
+                            <Button variant="ghost" size="sm" className="flex-1 h-6 text-[10px] text-muted-foreground hover:text-foreground"
+                              onClick={e => { e.stopPropagation(); moveWorkflowStage(task, prevStage.value) }}>
+                              ← {prevStage.label}
+                            </Button>
+                          )}
+                          {nextStage && (
+                            <Button variant="ghost" size="sm" className="flex-1 h-6 text-[10px] text-muted-foreground hover:text-foreground"
+                              onClick={e => { e.stopPropagation(); moveWorkflowStage(task, nextStage.value) }}>
+                              {nextStage.label} →
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {stageTasks.length === 0 && (
+                      <div className="p-4 rounded-lg border border-dashed text-center">
+                        <p className="text-xs text-muted-foreground">Nada aqui</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {/* ── View Dialog ── */}
       <TaskViewDialog
         task={viewTask}
@@ -486,6 +601,7 @@ export default function Tarefas() {
         onEdit={() => { const t = viewTask; setViewTask(null); if (t) openEdit(t) }}
         onDelete={() => { if (viewTask) { deleteTask(viewTask.id); setViewTask(null) } }}
         onToggleComplete={() => { if (viewTask) { toggleComplete(viewTask); setViewTask(null) } }}
+        onMoveStage={stage => { if (viewTask) { moveWorkflowStage(viewTask, stage); setViewTask(null) } }}
         clients={clients}
         processes={processes}
         profilesMap={profilesMap}
@@ -503,7 +619,7 @@ export default function Tarefas() {
               <Input value={tf.title} onChange={e => setTf(f => ({ ...f, title: e.target.value }))} className="h-10" />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Tipo</Label>
                 <Select value={tf.type} onValueChange={v => setTf(f => ({ ...f, type: v }))}>
@@ -519,6 +635,15 @@ export default function Tarefas() {
                   <SelectTrigger className="h-10"><SelectValue>{getPriorityInfo(tf.priority).label}</SelectValue></SelectTrigger>
                   <SelectContent>
                     {PRIORITIES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Fase (kanban)</Label>
+                <Select value={tf.workflow_stage} onValueChange={v => setTf(f => ({ ...f, workflow_stage: v }))}>
+                  <SelectTrigger className="h-10"><SelectValue>{WORKFLOW_STAGES.find(s => s.value === tf.workflow_stage)?.label}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    {WORKFLOW_STAGES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
