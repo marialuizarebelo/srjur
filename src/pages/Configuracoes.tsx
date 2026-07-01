@@ -19,6 +19,7 @@ import { ImageUploadCrop } from '@/components/ImageUploadCrop'
 import { connectGoogle, disconnectGoogle } from '@/lib/googleCalendar'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { subscribeToPush, getNotificationStatus } from '@/hooks/usePushNotifications'
+import { applyThemeColor } from '@/lib/themeColor'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 interface OfficeSettings {
@@ -26,7 +27,19 @@ interface OfficeSettings {
   name: string
   logo_url: string | null
   whatsapp_url: string | null
+  primary_color: string | null
 }
+
+const THEME_COLORS = [
+  { label: 'Rosa (padrão)', value: '#C4478A' },
+  { label: 'Roxo', value: '#8B5CF6' },
+  { label: 'Azul', value: '#3B82F6' },
+  { label: 'Verde', value: '#10B981' },
+  { label: 'Âmbar', value: '#F59E0B' },
+  { label: 'Vermelho', value: '#EF4444' },
+  { label: 'Ciano', value: '#0EA5E9' },
+  { label: 'Grafite', value: '#475569' },
+]
 
 interface ProfileRow {
   id: string
@@ -72,7 +85,7 @@ export default function Configuracoes() {
 
   // Office
   const [office, setOffice] = useState<OfficeSettings | null>(null)
-  const [officeForm, setOfficeForm] = useState({ name: '', logo_url: '', whatsapp_url: '', drive_root_folder_id: '', drive_root_folder_name: '' })
+  const [officeForm, setOfficeForm] = useState({ name: '', logo_url: '', whatsapp_url: '', drive_root_folder_id: '', drive_root_folder_name: '', primary_color: '' })
   const [savingOffice, setSavingOffice] = useState(false)
 
   // Users
@@ -111,6 +124,7 @@ export default function Configuracoes() {
       setOfficeForm({
         name: os.name ?? '', logo_url: os.logo_url ?? '', whatsapp_url: os.whatsapp_url ?? '',
         drive_root_folder_id: os.drive_root_folder_id ?? '', drive_root_folder_name: os.drive_root_folder_name ?? '',
+        primary_color: os.primary_color ?? '',
       })
     }
     setUsers((us as ProfileRow[]) ?? [])
@@ -142,6 +156,18 @@ export default function Configuracoes() {
     } catch (e: any) {
       toast.error(e.message)
     }
+  }
+
+  async function updateThemeColor(color: string) {
+    setOfficeForm(f => ({ ...f, primary_color: color }))
+    applyThemeColor(color)
+    if (office) {
+      await supabase.from('office_settings').update({ primary_color: color }).eq('id', office.id)
+    } else {
+      await supabase.from('office_settings').insert({ ...officeForm, primary_color: color })
+    }
+    toast.success('Cor do sistema atualizada!')
+    loadData()
   }
 
   async function saveOffice() {
@@ -389,6 +415,43 @@ export default function Configuracoes() {
             <p className="text-sm text-muted-foreground">
               O tema claro/escuro pode ser alterado a qualquer momento pelo ícone no topo da tela.
             </p>
+          </div>
+
+          {/* Cor do sistema */}
+          <div className="rounded-2xl border border-border/60 bg-card shadow-sm p-6 space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Cor do sistema</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Escolha a cor de destaque usada em botões, links e na barra lateral em todo o sistema.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {THEME_COLORS.map(c => (
+                <button
+                  key={c.value}
+                  onClick={() => updateThemeColor(c.value)}
+                  title={c.label}
+                  className={`h-10 w-10 rounded-full transition-all hover:scale-110 ${
+                    officeForm.primary_color?.toLowerCase() === c.value.toLowerCase() || (!officeForm.primary_color && c.value === '#C4478A')
+                      ? 'ring-2 ring-offset-2 ring-offset-card ring-foreground'
+                      : ''
+                  }`}
+                  style={{ backgroundColor: c.value }}
+                />
+              ))}
+              <label
+                className="h-10 w-10 rounded-full border-2 border-dashed border-border flex items-center justify-center cursor-pointer overflow-hidden relative"
+                title="Cor personalizada"
+              >
+                <Palette className="h-4 w-4 text-muted-foreground" />
+                <input
+                  type="color"
+                  value={officeForm.primary_color || '#C4478A'}
+                  onChange={e => updateThemeColor(e.target.value)}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
+              </label>
+            </div>
           </div>
 
           {/* Notificações */}

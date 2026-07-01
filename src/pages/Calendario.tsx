@@ -315,41 +315,80 @@ export default function Calendario() {
     const ws = weekStart(cursor)
     const days = Array.from({length:7},(_,i) => { const d=new Date(ws); d.setDate(ws.getDate()+i); return d })
     return (
-      <div className="rounded-2xl border border-border/60 overflow-hidden shadow-sm">
-        <div className="grid grid-cols-7 bg-muted/30">
+      <>
+        {/* Mobile: lista vertical, um dia após o outro */}
+        <div className="md:hidden space-y-2">
           {days.map((d,i) => {
             const ymd = toYMD(d), isT = ymd===toYMD(today)
-            return (
-              <div key={i} onClick={() => { setSelDate(ymd); setView('dia') }}
-                className="py-4 text-center border-r border-border/40 last:border-r-0 cursor-pointer hover:bg-muted/30 transition-colors">
-                <p className="text-[11px] font-medium text-muted-foreground mb-1">{WEEKDAYS_FULL[d.getDay()]}</p>
-                <span className={`text-xl font-bold inline-flex h-10 w-10 items-center justify-center rounded-full mx-auto transition-colors
-                  ${isT ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
-                  {d.getDate()}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-        <div className="grid grid-cols-7 bg-background min-h-[360px]">
-          {days.map((d,i) => {
-            const ymd = toYMD(d)
             const evs = (byDate[ymd]??[]).sort((a,b)=>(a.time??'').localeCompare(b.time??''))
             return (
-              <div key={i} className="group relative border-r border-border/40 last:border-r-0 p-2 space-y-1 cursor-pointer hover:bg-muted/10 transition-colors min-h-[80px]"
-                onClick={() => { setSelDate(ymd); setView('dia') }}>
-                <button
-                  onClick={e => { e.stopPropagation(); openQuickCreate(ymd) }}
-                  className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 h-5 w-5 rounded-md hover:bg-primary hover:text-primary-foreground flex items-center justify-center transition-all text-muted-foreground"
-                  title="Criar evento">
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-                {evs.map(ev => <Pill key={ev.id} ev={ev} />)}
+              <div key={i} className="rounded-2xl border border-border/60 overflow-hidden shadow-sm">
+                <div
+                  onClick={() => { setSelDate(ymd); setView('dia') }}
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                >
+                  <span className={`text-base font-bold inline-flex h-9 w-9 items-center justify-center rounded-full shrink-0 transition-colors
+                    ${isT ? 'bg-primary text-primary-foreground' : ''}`}>
+                    {d.getDate()}
+                  </span>
+                  <span className="text-sm font-medium text-muted-foreground flex-1 text-left">{WEEKDAYS_FULL[d.getDay()]}</span>
+                  {evs.length > 0 && (
+                    <span className="text-[10px] font-semibold text-muted-foreground bg-background rounded-full px-2 py-0.5">{evs.length}</span>
+                  )}
+                  <button
+                    onClick={e => { e.stopPropagation(); openQuickCreate(ymd) }}
+                    className="h-6 w-6 rounded-md hover:bg-primary hover:text-primary-foreground flex items-center justify-center transition-all text-muted-foreground shrink-0"
+                    title="Criar evento">
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {evs.length > 0 && (
+                  <div className="p-2 space-y-1 bg-background">
+                    {evs.map(ev => <Pill key={ev.id} ev={ev} />)}
+                  </div>
+                )}
               </div>
             )
           })}
         </div>
-      </div>
+
+        {/* Desktop: grade de 7 colunas */}
+        <div className="hidden md:block rounded-2xl border border-border/60 overflow-hidden shadow-sm">
+          <div className="grid grid-cols-7 bg-muted/30">
+            {days.map((d,i) => {
+              const ymd = toYMD(d), isT = ymd===toYMD(today)
+              return (
+                <div key={i} onClick={() => { setSelDate(ymd); setView('dia') }}
+                  className="py-4 text-center border-r border-border/40 last:border-r-0 cursor-pointer hover:bg-muted/30 transition-colors">
+                  <p className="text-[11px] font-medium text-muted-foreground mb-1">{WEEKDAYS_FULL[d.getDay()]}</p>
+                  <span className={`text-xl font-bold inline-flex h-10 w-10 items-center justify-center rounded-full mx-auto transition-colors
+                    ${isT ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+                    {d.getDate()}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          <div className="grid grid-cols-7 bg-background min-h-[360px]">
+            {days.map((d,i) => {
+              const ymd = toYMD(d)
+              const evs = (byDate[ymd]??[]).sort((a,b)=>(a.time??'').localeCompare(b.time??''))
+              return (
+                <div key={i} className="group relative border-r border-border/40 last:border-r-0 p-2 space-y-1 cursor-pointer hover:bg-muted/10 transition-colors min-h-[80px]"
+                  onClick={() => { setSelDate(ymd); setView('dia') }}>
+                  <button
+                    onClick={e => { e.stopPropagation(); openQuickCreate(ymd) }}
+                    className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 h-5 w-5 rounded-md hover:bg-primary hover:text-primary-foreground flex items-center justify-center transition-all text-muted-foreground"
+                    title="Criar evento">
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                  {evs.map(ev => <Pill key={ev.id} ev={ev} />)}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </>
     )
   }
 

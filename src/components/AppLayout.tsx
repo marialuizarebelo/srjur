@@ -8,12 +8,13 @@ import { usePrivacy } from '@/contexts/PrivacyContext'
 import { supabase } from '@/integrations/supabase/client'
 import { GlobalSearch } from '@/components/GlobalSearch'
 import { NotificationsPanel } from '@/components/NotificationsPanel'
+import { applyThemeColor } from '@/lib/themeColor'
 
 function useDynamicFavicon() {
   useEffect(() => {
     supabase
       .from('office_settings')
-      .select('name, logo_url')
+      .select('name, logo_url, primary_color')
       .limit(1)
       .maybeSingle()
       .then(({ data }) => {
@@ -26,6 +27,7 @@ function useDynamicFavicon() {
           const apple = document.querySelector<HTMLLinkElement>("link[rel='apple-touch-icon']")
           if (apple) apple.href = data.logo_url
         }
+        applyThemeColor(data.primary_color)
       })
   }, [])
 }

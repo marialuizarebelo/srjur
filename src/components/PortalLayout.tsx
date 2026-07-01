@@ -7,6 +7,7 @@ import {
   LayoutDashboard, Scale, DollarSign, FileText, MessageSquare,
   CalendarDays, User, LogOut, Moon, Sun, Bell,
 } from 'lucide-react'
+import { applyThemeColor } from '@/lib/themeColor'
 
 const NAV = [
   { title: 'Início', url: '/portal', icon: LayoutDashboard },
@@ -26,8 +27,9 @@ export function PortalLayout({ children }: { children: ReactNode }) {
   const [unread, setUnread] = useState(0)
 
   useEffect(() => {
-    supabase.from('office_settings').select('name, logo_url').limit(1).maybeSingle().then(({ data }) => {
+    supabase.from('office_settings').select('name, logo_url, primary_color').limit(1).maybeSingle().then(({ data }) => {
       if (data) setOffice({ name: data.name ?? 'Escritório', logo_url: data.logo_url })
+      applyThemeColor(data?.primary_color)
     })
     loadUnread()
   }, [])
