@@ -21,7 +21,7 @@ import {
   Plus, Search, Users, TrendingUp, UserCheck, UserX, Pencil, Trash2,
   Phone, Mail, GripVertical, LayoutGrid, List, Eye, Settings2,
   ChevronUp, ChevronDown, X, ExternalLink, Scale, ClipboardList, FileText,
-  ArrowUp, ArrowDown, ArrowUpDown,
+  ArrowUp, ArrowDown, ArrowUpDown, Copy,
 } from 'lucide-react'
 import { fmtBRL } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
@@ -254,12 +254,20 @@ function fmtAddr(c: Client) {
   return parts.filter(Boolean).join(', ') || null
 }
 
-function InfoRow({ label, value }: { label: string; value?: string | null }) {
+function InfoRow({ label, value, copyable }: { label: string; value?: string | null; copyable?: boolean }) {
   if (!value) return null
   return (
-    <div className="flex gap-1 text-sm">
+    <div className="flex items-center gap-1 text-sm">
       <span className="text-muted-foreground shrink-0">{label}:</span>
       <span className="font-medium">{value}</span>
+      {copyable && (
+        <button
+          onClick={() => { navigator.clipboard.writeText(value); toast.success(`${label} copiado!`) }}
+          className="p-0.5 hover:bg-muted rounded shrink-0" title={`Copiar ${label}`}
+        >
+          <Copy className="h-3 w-3 text-muted-foreground" />
+        </button>
+      )}
     </div>
   )
 }
@@ -337,7 +345,12 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
               {getInitials(client.name)}
             </div>
             <div>
-              <h2 className="text-lg font-semibold leading-tight"><Sensitive>{client.name}</Sensitive></h2>
+              <h2 className="text-lg font-semibold leading-tight flex items-center gap-1.5">
+                <Sensitive>{client.name}</Sensitive>
+                <button onClick={() => { navigator.clipboard.writeText(client.name); toast.success('Nome copiado!') }} className="p-0.5 hover:bg-muted rounded shrink-0" title="Copiar nome">
+                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </h2>
               <div className="flex items-center gap-1.5 mt-1">
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[client.status] ?? 'bg-gray-100 text-gray-600'}`}>
                   {client.status.toUpperCase()}
@@ -410,9 +423,9 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
 
           {/* Dados */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5">
-            <InfoRow label="CPF/CNPJ" value={client.cpf_cnpj} />
-            <InfoRow label="E-mail" value={client.email} />
-            <InfoRow label="Telefone" value={client.phone} />
+            <InfoRow label="CPF/CNPJ" value={client.cpf_cnpj} copyable />
+            <InfoRow label="E-mail" value={client.email} copyable />
+            <InfoRow label="Telefone" value={client.phone} copyable />
             <InfoRow label="Origem" value={client.origin === 'Indicação' && client.referred_by ? `Indicação (${client.referred_by})` : client.origin} />
             <InfoRow label="Área" value={client.area} />
             <InfoRow label="Responsável" value={client.responsible} />

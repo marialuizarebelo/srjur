@@ -18,9 +18,10 @@ import {
 import {
   Plus, Search, Scale, LayoutGrid, List, Pencil, Trash2,
   FileText, ChevronDown, ChevronUp, ExternalLink, Send,
-  Clock, User, Calendar,
+  Clock, User, Calendar, Copy, ClipboardList, CircleDollarSign,
+  Mail, Phone, IdCard, FolderOpen,
 } from 'lucide-react'
-import { fmtDate } from '@/lib/format'
+import { fmtDate, fmtBRL } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { searchDjen, stripHtml } from '@/lib/djen'
@@ -59,7 +60,14 @@ interface ProcessUpdate {
   created_at: string
 }
 
-interface ClientOption { id: string; name: string; drive_folder_id: string | null }
+interface ClientOption {
+  id: string; name: string; drive_folder_id: string | null
+  cpf_cnpj: string | null; email: string | null; phone: string | null
+}
+
+interface ProcessTask {
+  id: string; title: string; status: string; priority: string; due_date: string | null
+}
 
 // ── Constants ──
 const PHASES = [
@@ -99,6 +107,21 @@ const ELECTRONIC_SYSTEMS = [
   { value: 'Projudi', label: 'Projudi' },
   { value: 'Outro', label: 'Outro' },
 ]
+
+// ── Campo com botão de copiar (usado no drawer de detalhe do processo) ──
+export function FieldWithCopy({ label, value, onCopy, className = '' }: { label: string; value: string; onCopy: () => void; className?: string }) {
+  return (
+    <div className={className}>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <div className="flex items-center gap-1.5">
+        <p className="font-medium truncate">{value}</p>
+        <button onClick={onCopy} className="p-1 hover:bg-muted rounded shrink-0" title={`Copiar ${label}`}>
+          <Copy className="h-3 w-3 text-muted-foreground" />
+        </button>
+      </div>
+    </div>
+  )
+}
 
 function formatLabel(value: string): string {
   if (STATUS_MAP[value]) return STATUS_MAP[value].label
@@ -151,6 +174,9 @@ export default function Processos() {
   const [newUpdate, setNewUpdate] = useState('')
   const [newUpdatePortal, setNewUpdatePortal] = useState(false)
   const [loadingUpdates, setLoadingUpdates] = useState(false)
+  const [processTasks, setProcessTasks] = useState<ProcessTask[]>([])
+  const [loadingTasks, setLoadingTasks] = useState(false)
+  const [detailTab, setDetailTab] = useState<'dados' | 'tarefas' | 'andamentos'>('dados')
 
   const resetPf = () => {
     setPf({ title: '', number: '', client_id: '', type: 'consultivo',
@@ -164,7 +190,7 @@ export default function Processos() {
     setLoading(true)
     const [{ data: p }, { data: c }] = await Promise.all([
       supabase.from('processes').select('*').order('updated_at', { ascending: false }),
-      supabase.from('clients').select('id, name, drive_folder_id').order('name'),
+      supabase.from('clients').select('id, name, drive_folder_id, cpf_cnpj, email, phone').order('name'),
     ])
     setProcesses((p as Process[]) ?? [])
     setClients((c as ClientOption[]) ?? [])
@@ -180,6 +206,22 @@ export default function Processos() {
       .order('created_at', { ascending: false })
     setUpdates((data as ProcessUpdate[]) ?? [])
     setLoadingUpdates(false)
+  }
+
+  const loadProcessTasks = async (processId: string) => {
+    setLoadingTasks(true)
+    const { data } = await supabase
+      .from('tasks')
+      .select('id, title, status, priority, due_date')
+      .eq('process_id', processId)
+      .order('due_date', { ascending: true })
+    setProcessTasks((data as ProcessTask[]) ?? [])
+    setLoadingTasks(false)
+  }
+
+  function copyToClipboard(value: string, label: string) {
+    navigator.clipboard.writeText(value)
+    toast.success(`${label} copiado!`)
   }
 
   useEffect(() => { loadData() }, [])
@@ -239,7 +281,9 @@ export default function Processos() {
 
   const openDetail = (p: Process) => {
     setDetailProcess(p)
+    setDetailTab('dados')
     loadUpdates(p.id)
+    loadProcessTasks(p.id)
   }
 
   const saveProcess = async () => {
@@ -347,7 +391,9 @@ export default function Processos() {
   return (
     <div className="space-y-6">
       {/* Detail drawer */}
-      {detailProcess && (
+      {detailProcess && (() => {
+        const dClient = clients.find(c => c.id === detailProcess.client_id)
+        return (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/40" onClick={() => setDetailProcess(null)} />
           <div className="relative w-full max-w-xl bg-background shadow-xl flex flex-col">
@@ -356,26 +402,13 @@ export default function Processos() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <h3 className="font-semibold text-lg">{detailProcess.title}</h3>
-                  {detailProcess.number && (
-                    <p className="text-sm text-muted-foreground font-mono mt-0.5">{detailProcess.number}</p>
-                  )}
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <Badge variant="outline">{detailProcess.type === 'contencioso' ? 'CONTENCIOSO' : 'CONSULTIVO'}</Badge>
                     <Badge style={{ backgroundColor: STATUS_MAP[detailProcess.status]?.color, color: '#fff' }}>
                       {STATUS_MAP[detailProcess.status]?.label}
                     </Badge>
                     <Badge variant="outline">{PHASES.find(p => p.value === detailProcess.phase)?.label}</Badge>
-                    {detailProcess.responsible && (
-                      <Badge variant="outline" style={{ borderColor: RESPONSIBLE_COLORS[detailProcess.responsible], color: RESPONSIBLE_COLORS[detailProcess.responsible] }}>
-                        {detailProcess.responsible}
-                      </Badge>
-                    )}
                   </div>
-                  {getClientName(detailProcess.client_id) && (
-                    <p className="text-sm text-muted-foreground mt-2">
-                      <User className="h-3 w-3 inline mr-1" />
-                      {getClientName(detailProcess.client_id)}
-                    </p>
-                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(detailProcess)}>
@@ -386,65 +419,194 @@ export default function Processos() {
                   </Button>
                 </div>
               </div>
-            </div>
 
-            {/* New update input */}
-            <div className="p-4 border-b">
-              <div className="flex gap-2">
-                <Textarea
-                  placeholder="Novo andamento..."
-                  value={newUpdate}
-                  onChange={e => setNewUpdate(e.target.value)}
-                  rows={2}
-                  className="flex-1 resize-none"
-                />
-                <div className="flex flex-col gap-1">
-                  <Button size="sm" onClick={addUpdate} disabled={!newUpdate.trim()} className="h-8">
-                    <Send className="h-3 w-3 mr-1" />Adicionar
-                  </Button>
-                  <div className="flex items-center gap-1">
-                    <Switch checked={newUpdatePortal} onCheckedChange={setNewUpdatePortal} />
-                    <span className="text-[10px] text-muted-foreground">Portal</span>
+              {/* Compact info bar */}
+              <div className="mt-3 p-3 rounded-lg bg-muted/40 text-xs space-y-1.5">
+                {detailProcess.number && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-muted-foreground">Nº:</span>
+                    <span className="font-mono">{detailProcess.number}</span>
+                    <button onClick={() => copyToClipboard(detailProcess.number!, 'Número do processo')} className="p-0.5 hover:bg-background rounded">
+                      <Copy className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                    {detailProcess.responsible && (
+                      <span className="text-muted-foreground ml-2">Resp.: <span className="text-foreground">{detailProcess.responsible}</span></span>
+                    )}
                   </div>
-                </div>
+                )}
+                {detailProcess.court && (
+                  <div className="text-muted-foreground">Vara: <span className="text-foreground">{detailProcess.court}</span></div>
+                )}
+                {detailProcess.electronic_system && (
+                  <div className="text-muted-foreground">Sistema: <span className="text-foreground">{detailProcess.electronic_system}</span></div>
+                )}
+              </div>
+
+              {/* Tabs */}
+              <div className="flex items-center gap-1 mt-3 bg-muted/40 rounded-lg p-0.5 w-fit">
+                {(['dados', 'tarefas', 'andamentos'] as const).map(t => (
+                  <button key={t} onClick={() => setDetailTab(t)}
+                    className={`px-3 h-8 rounded-md text-xs font-medium transition-all ${detailTab === t ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                    {t === 'dados' ? 'Dados' : t === 'tarefas' ? `Tarefas (${processTasks.length})` : `Andamentos (${updates.length})`}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Updates list */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Andamentos ({updates.length})
-              </p>
-              {loadingUpdates ? (
-                <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
-              ) : updates.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">Nenhum andamento registrado</p>
-              ) : (
-                updates.map(u => (
-                  <div key={u.id} className="p-3 rounded-lg border">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm whitespace-pre-wrap flex-1">{u.text}</p>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive" onClick={() => deleteUpdate(u.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+            {/* ── Dados tab ── */}
+            {detailTab === 'dados' && (
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  {detailProcess.number && (
+                    <FieldWithCopy label="Número" value={detailProcess.number} onCopy={() => copyToClipboard(detailProcess.number!, 'Número')} />
+                  )}
+                  {detailProcess.access_key && (
+                    <FieldWithCopy label="Chave de acesso (eProc)" value={detailProcess.access_key} onCopy={() => copyToClipboard(detailProcess.access_key!, 'Chave de acesso')} />
+                  )}
+                  {dClient && (
+                    <FieldWithCopy label="Cliente" value={dClient.name} onCopy={() => copyToClipboard(dClient.name, 'Nome do cliente')} />
+                  )}
+                  {dClient?.cpf_cnpj && (
+                    <FieldWithCopy label="CPF/CNPJ" value={dClient.cpf_cnpj} onCopy={() => copyToClipboard(dClient.cpf_cnpj!, 'CPF/CNPJ')} />
+                  )}
+                  {dClient?.phone && (
+                    <FieldWithCopy label="Telefone" value={dClient.phone} onCopy={() => copyToClipboard(dClient.phone!, 'Telefone')} />
+                  )}
+                  {dClient?.email && (
+                    <FieldWithCopy label="E-mail" value={dClient.email} onCopy={() => copyToClipboard(dClient.email!, 'E-mail')} />
+                  )}
+                  {detailProcess.responsible && (
+                    <div><p className="text-[11px] text-muted-foreground">Responsável</p><p className="font-medium">{detailProcess.responsible}</p></div>
+                  )}
+                  {detailProcess.court && (
+                    <div className="col-span-2"><p className="text-[11px] text-muted-foreground">Vara / Tribunal</p><p className="font-medium">{detailProcess.court}</p></div>
+                  )}
+                  {detailProcess.electronic_system && (
+                    <div><p className="text-[11px] text-muted-foreground">Sistema eletrônico</p><p className="font-medium">{detailProcess.electronic_system}</p></div>
+                  )}
+                  {detailProcess.area && (
+                    <div><p className="text-[11px] text-muted-foreground">Área</p><p className="font-medium">{detailProcess.area}</p></div>
+                  )}
+                  {detailProcess.cause_value != null && (
+                    <div><p className="text-[11px] text-muted-foreground">Valor da causa</p><p className="font-medium">{fmtBRL(detailProcess.cause_value)}</p></div>
+                  )}
+                  {detailProcess.tags && (
+                    <div className="col-span-2"><p className="text-[11px] text-muted-foreground">Tags</p><p className="font-medium">{detailProcess.tags}</p></div>
+                  )}
+                  <div><p className="text-[11px] text-muted-foreground">Cadastrado em</p><p className="font-medium">{fmtDateBR(detailProcess.created_at)}</p></div>
+                  <div><p className="text-[11px] text-muted-foreground">Atualizado em</p><p className="font-medium">{fmtDateBR(detailProcess.updated_at)}</p></div>
+                </div>
+
+                {detailProcess.notes && (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground mb-1">Observações</p>
+                    <p className="text-sm whitespace-pre-wrap">{detailProcess.notes}</p>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2 pt-2 border-t">
+                  {detailProcess.court_url && (
+                    <Button variant="outline" size="sm" render={<a href={detailProcess.court_url} target="_blank" rel="noreferrer" />}>
+                      <ExternalLink className="h-3.5 w-3.5 mr-1.5" />Abrir no {detailProcess.electronic_system || 'tribunal'}
+                    </Button>
+                  )}
+                  {detailProcess.drive_url && (
+                    <Button variant="outline" size="sm" render={<a href={detailProcess.drive_url} target="_blank" rel="noreferrer" />}>
+                      <FolderOpen className="h-3.5 w-3.5 mr-1.5" />Pasta
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => setDetailTab('andamentos')}>
+                    <ClipboardList className="h-3.5 w-3.5 mr-1.5" />Adicionar Andamento
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setDetailTab('tarefas')}>
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />Nova Tarefa
+                  </Button>
+                  <Button size="sm" onClick={() => openEdit(detailProcess)}>
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />Editar
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Tarefas tab ── */}
+            {detailTab === 'tarefas' && (
+              <div className="flex-1 overflow-y-auto p-5 space-y-2">
+                {loadingTasks ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
+                ) : processTasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">Nenhuma tarefa vinculada a este processo</p>
+                ) : (
+                  processTasks.map(t => (
+                    <div key={t.id} className="p-3 rounded-lg border flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className={`text-sm font-medium truncate ${t.status === 'concluida' ? 'line-through opacity-60' : ''}`}>{t.title}</p>
+                        {t.due_date && <p className="text-xs text-muted-foreground mt-0.5">{fmtDate(t.due_date)}</p>}
+                      </div>
+                      <Badge variant="outline" className="text-[10px] shrink-0">{t.status === 'concluida' ? 'Concluída' : t.status === 'pendente' ? 'Pendente' : t.status}</Badge>
                     </div>
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className="text-[10px] text-muted-foreground">
-                        <Clock className="h-3 w-3 inline mr-0.5" />
-                        {new Date(u.created_at).toLocaleString('pt-BR')}
-                      </span>
-                      {u.author && <span className="text-[10px] text-muted-foreground">{u.author}</span>}
-                      {u.portal_visible && (
-                        <Badge variant="outline" className="text-[9px] text-green-600 border-green-300">Portal</Badge>
-                      )}
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* ── Andamentos tab ── */}
+            {detailTab === 'andamentos' && (
+              <>
+                <div className="p-4 border-b">
+                  <div className="flex gap-2">
+                    <Textarea
+                      placeholder="Novo andamento..."
+                      value={newUpdate}
+                      onChange={e => setNewUpdate(e.target.value)}
+                      rows={2}
+                      className="flex-1 resize-none"
+                    />
+                    <div className="flex flex-col gap-1">
+                      <Button size="sm" onClick={addUpdate} disabled={!newUpdate.trim()} className="h-8">
+                        <Send className="h-3 w-3 mr-1" />Adicionar
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Switch checked={newUpdatePortal} onCheckedChange={setNewUpdatePortal} />
+                        <span className="text-[10px] text-muted-foreground">Portal</span>
+                      </div>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {loadingUpdates ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
+                  ) : updates.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">Nenhum andamento registrado</p>
+                  ) : (
+                    updates.map(u => (
+                      <div key={u.id} className="p-3 rounded-lg border">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm whitespace-pre-wrap flex-1">{u.text}</p>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive" onClick={() => deleteUpdate(u.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="flex items-center gap-3 mt-2">
+                          <span className="text-[10px] text-muted-foreground">
+                            <Clock className="h-3 w-3 inline mr-0.5" />
+                            {new Date(u.created_at).toLocaleString('pt-BR')}
+                          </span>
+                          {u.author && <span className="text-[10px] text-muted-foreground">{u.author}</span>}
+                          {u.portal_visible && (
+                            <Badge variant="outline" className="text-[9px] text-green-600 border-green-300">Portal</Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
