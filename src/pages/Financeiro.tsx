@@ -466,7 +466,11 @@ export default function Financeiro() {
   // ── Handlers ──
   const handleSave = async () => {
     const val = parseFloat(form.value.replace(',', '.'))
+    if (isNaN(val) || val <= 0) { toast.error('Valor inválido'); return }
     const numInstallments = parseInt(form.installments) || 1
+    const autoPayDate = form.paid
+      ? (form.payment_date || new Date().toISOString().slice(0, 10))
+      : null
 
     const basePayload = {
       type: form.type,
@@ -477,7 +481,7 @@ export default function Financeiro() {
       category: form.category || null,
       origin: form.origin || null,
       paid: form.paid,
-      payment_date: form.payment_date || null,
+      payment_date: autoPayDate,
       client_id: form.client_id || null,
       impacts_cash: form.impacts_cash,
       nature: form.nature,
@@ -491,28 +495,50 @@ export default function Financeiro() {
       current_installment: numInstallments > 1 ? 1 : null,
     }
 
-    if (editingId) {
-      await supabase.from('finance').update(basePayload).eq('id', editingId)
-    } else if (numInstallments > 1) {
-      const inserts = []
-      for (let i = 0; i < numInstallments; i++) {
-        const dueDate = new Date(form.due_date || form.date)
-        dueDate.setMonth(dueDate.getMonth() + i)
-        inserts.push({
-          ...basePayload,
-          description: `${form.description} (${i + 1}/${numInstallments})`,
-          due_date: dueDate.toISOString().slice(0, 10),
-          current_installment: i + 1,
-        })
+    try {
+      if (editingId) {
+        const { error } = await supabase.from('finance').update(basePayload).eq('id', editingId)
+        if (error) throw error
+      } else if (numInstallments > 1) {
+        const inserts = []
+        for (let i = 0; i < numInstallments; i++) {
+          const dueDate = new Date(form.due_date || form.date)
+          dueDate.setMonth(dueDate.getMonth() + i)
+          inserts.push({
+            ...basePayload,
+            description: `${form.description} (${i + 1}/${numInstallments})`,
+            due_date: dueDate.toISOString().slice(0, 10),
+            current_installment: i + 1,
+          })
+        }
+        const { error } = await supabase.from('finance').insert(inserts)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('finance').insert(basePayload)
+        if (error) throw error
       }
-      await supabase.from('finance').insert(inserts)
-    } else {
-      await supabase.from('finance').insert(basePayload)
+      toast.success(editingId ? 'Lançamento atualizado!' : 'Lançamento criado!')
+      setDialogOpen(false)
+      resetForm()
+      loadData()
+    } catch (err: any) {
+      toast.error('Erro ao salvar: ' + (err?.message ?? String(err)))
     }
+  }
 
-    setDialogOpen(false)
-    resetForm()
-    loadData()
+  const handleQuickPay = async (row: FinanceRow, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const today = new Date().toISOString().slice(0, 10)
+    const nowPaid = !row.paid
+    const { error } = await supabase.from('finance')
+      .update({ paid: nowPaid, payment_date: nowPaid ? today : null })
+      .eq('id', row.id)
+    if (error) {
+      toast.error('Erro: ' + error.message)
+    } else {
+      toast.success(nowPaid ? 'Marcado como pago!' : 'Revertido para pendente')
+      loadData()
+    }
   }
 
   const handleEdit = (row: FinanceRow) => {
@@ -958,7 +984,11 @@ export default function Financeiro() {
 
                 <div className="flex items-center gap-8 pt-3 border-t">
                   <div className="flex items-center gap-2">
-                    <Switch checked={form.paid} onCheckedChange={v => setForm(f => ({ ...f, paid: v }))} />
+                    <Switch checked={form.paid} onCheckedChange={v => setForm(f => ({
+                      ...f,
+                      paid: v,
+                      payment_date: v ? (f.payment_date || new Date().toISOString().slice(0, 10)) : f.payment_date,
+                    }))} />
                     <Label>Pago</Label>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1191,10 +1221,12 @@ export default function Financeiro() {
                   <TableCell className={`text-sm text-right font-medium whitespace-nowrap ${row.type === 'receita' ? (row.paid ? 'text-green-600' : rowStatus(row) === 'atrasado' ? 'text-red-500' : 'text-amber-500') : 'text-slate-500'}`}>
                     {fmtBRL(Number(row.value))}
                   </TableCell>
-                  <TableCell className="hidden sm:table-cell">
-                    <StatusLabel row={row} />
+                  <TableCell className="hidden sm:table-cell" onClick={e => handleQuickPay(row, e)}>
+                    <span className="cursor-pointer hover:opacity-70 transition-opacity" title={row.paid ? 'Clique para reverter' : 'Clique para marcar como pago'}>
+                      <StatusLabel row={row} />
+                    </span>
                     {row.payment_link && (
-                      <a href={row.payment_link} target="_blank" rel="noopener noreferrer" className="ml-1">
+                      <a href={row.payment_link} target="_blank" rel="noopener noreferrer" className="ml-1" onClick={e => e.stopPropagation()}>
                         <Link2 className="h-3 w-3 inline text-primary" />
                       </a>
                     )}
