@@ -18,6 +18,9 @@ import {
 import { fmtDate } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
+import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
+import { usePinnedView } from '@/hooks/usePinnedView'
+import { PinViewButton } from '@/components/PinViewButton'
 import { toast } from 'sonner'
 
 interface MarketingItem {
@@ -138,7 +141,7 @@ function MarketingViewDialog({ item, open, onClose, onEdit, onDelete, onMoveStat
           )}
         </div>
 
-        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2">
+        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2 mx-0 mb-0 rounded-none border-t-0">
           <Button variant="destructive" className="mr-auto" onClick={onDelete}>Excluir</Button>
           {nextStatus && (
             <Button variant="outline" onClick={() => onMoveStatus(nextStatus.value)}>
@@ -156,6 +159,8 @@ export default function Marketing() {
   const [items, setItems] = useState<MarketingItem[]>([])
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
+  const pinnedView = usePinnedView('marketing_view', 'kanban')
+  useEffect(() => { if (pinnedView.loaded && pinnedView.isPinned) setViewMode(pinnedView.pinnedValue as any) }, [pinnedView.loaded])
   const [collapsedStatuses, setCollapsedStatuses] = useState<Set<string>>(new Set())
   const toggleStatusCollapsed = (value: string) => {
     setCollapsedStatuses(prev => {
@@ -307,6 +312,7 @@ export default function Marketing() {
               <List className="h-3.5 w-3.5" />
             </button>
           </div>
+          <PinViewButton isPinned={pinnedView.isPinned} currentValue={viewMode} onPin={v => pinnedView.pin(v as any)} onUnpin={pinnedView.unpin} />
           <Button size="sm" onClick={openNew}><Plus className="h-3.5 w-3.5 mr-1.5" />Novo conteúdo</Button>
         </div>
       </div>
@@ -325,26 +331,35 @@ export default function Marketing() {
       </div>
 
       {viewMode === 'kanban' ? (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          {STATUSES.map(s => {
-            const collapsed = collapsedStatuses.has(s.value)
-            return (
-              <div key={s.value} className="space-y-2">
-                <button className="flex items-center gap-2 px-1 w-full md:cursor-default" onClick={() => toggleStatusCollapsed(s.value)}>
-                  <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                  <span className="text-xs font-semibold">{s.label}</span>
-                  <Badge variant="secondary" className="text-[9px] ml-auto">{byStatus.get(s.value)?.length ?? 0}</Badge>
-                  {collapsed ? <ChevronDown className="h-3.5 w-3.5 md:hidden" /> : <ChevronUp className="h-3.5 w-3.5 md:hidden" />}
-                </button>
-                {!collapsed && (
-                  <div className="space-y-2 min-h-[80px] rounded-xl bg-muted/20 p-2">
-                    {(byStatus.get(s.value) ?? []).map(item => <ContentCard key={item.id} item={item} />)}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+        <KanbanDndContext onDropOnColumn={(itemId, statusValue) => {
+          const item = items.find(i => i.id === itemId)
+          if (item && item.status !== statusValue) moveStatus(item.id, statusValue)
+        }}>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            {STATUSES.map(s => {
+              const collapsed = collapsedStatuses.has(s.value)
+              return (
+                <div key={s.value} className="space-y-2">
+                  <button className="flex items-center gap-2 px-1 w-full md:cursor-default" onClick={() => toggleStatusCollapsed(s.value)}>
+                    <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                    <span className="text-xs font-semibold">{s.label}</span>
+                    <Badge variant="secondary" className="text-[9px] ml-auto">{byStatus.get(s.value)?.length ?? 0}</Badge>
+                    {collapsed ? <ChevronDown className="h-3.5 w-3.5 md:hidden" /> : <ChevronUp className="h-3.5 w-3.5 md:hidden" />}
+                  </button>
+                  {!collapsed && (
+                    <DroppableColumn id={s.value} className="space-y-2 min-h-[80px] bg-muted/20 p-2">
+                      {(byStatus.get(s.value) ?? []).map(item => (
+                        <DraggableCard key={item.id} id={item.id}>
+                          <ContentCard item={item} />
+                        </DraggableCard>
+                      ))}
+                    </DroppableColumn>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </KanbanDndContext>
       ) : (
         <div className="space-y-2">
           {filtered.map(item => {

@@ -371,7 +371,7 @@ function FinanceViewDialog({ row, open, onClose, onEdit, onDelete, clients, paym
           )}
         </div>
 
-        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2">
+        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2 mx-0 mb-0 rounded-none border-t-0">
           <Button variant="destructive" className="mr-auto" onClick={onDelete}>Excluir</Button>
           <Button onClick={onEdit}>Editar</Button>
         </DialogFooter>

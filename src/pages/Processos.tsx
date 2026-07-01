@@ -27,6 +27,9 @@ import { searchDjen, stripHtml } from '@/lib/djen'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { DriveFileList } from '@/components/DriveFileList'
 import { toast } from 'sonner'
+import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
+import { usePinnedView } from '@/hooks/usePinnedView'
+import { PinViewButton } from '@/components/PinViewButton'
 
 // ── Types ──
 interface Process {
@@ -117,6 +120,8 @@ export default function Processos() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
+  const pinnedView = usePinnedView('processos_view', 'kanban')
+  useEffect(() => { if (pinnedView.loaded && pinnedView.isPinned) setViewMode(pinnedView.pinnedValue as any) }, [pinnedView.loaded])
   const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set())
   const togglePhaseCollapsed = (value: string) => {
     setCollapsedPhases(prev => {
@@ -516,56 +521,64 @@ export default function Processos() {
               <List className="h-3.5 w-3.5" />
             </Button>
           </div>
+          <PinViewButton isPinned={pinnedView.isPinned} currentValue={viewMode} onPin={v => pinnedView.pin(v as any)} onUnpin={pinnedView.unpin} />
         </div>
       </div>
 
       {/* Kanban */}
       {viewMode === 'kanban' && (
-        <div className="flex flex-col md:flex-row gap-4 md:overflow-x-auto pb-4">
-          {PHASES.filter(ph => ph.value !== 'encerrado' || statusFilter === 'todos').map(phase => {
-            const phaseProcesses = byPhase.get(phase.value) ?? []
-            const collapsed = collapsedPhases.has(phase.value)
-            return (
-              <div key={phase.value} className="w-full md:min-w-[220px] md:w-[220px] shrink-0">
-                <button className="flex items-center gap-2 mb-1 w-full md:cursor-default" onClick={() => togglePhaseCollapsed(phase.value)}>
-                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: phase.color }} />
-                  <span className="text-sm font-semibold">{phase.label}</span>
-                  <Badge variant="secondary" className="text-[10px] ml-auto">{phaseProcesses.length}</Badge>
-                  {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
-                </button>
-                <div className="mb-3" />
-                {!collapsed && (
-                <div className="space-y-2">
-                  {phaseProcesses.map(proc => (
-                    <div key={proc.id} className="p-3 rounded-lg border bg-background hover:shadow-md transition-shadow cursor-pointer"
-                      onClick={() => openDetail(proc)}>
-                      <p className="text-sm font-medium truncate">{proc.title}</p>
-                      {proc.number && <p className="text-xs text-muted-foreground font-mono mt-0.5">{proc.number}</p>}
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-xs text-muted-foreground truncate">
-                          {getClientName(proc.client_id)}
-                        </span>
-                        {proc.responsible && (
-                          <div className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] text-white font-medium shrink-0"
-                            style={{ backgroundColor: RESPONSIBLE_COLORS[proc.responsible] ?? '#6B7280' }}>
-                            {proc.responsible.charAt(0)}
+        <KanbanDndContext onDropOnColumn={(processId, phaseValue) => {
+          const proc = processes.find(p => p.id === processId)
+          if (proc && proc.phase !== phaseValue) updatePhase(processId, phaseValue)
+        }}>
+          <div className="flex flex-col md:flex-row gap-4 md:overflow-x-auto pb-4">
+            {PHASES.filter(ph => ph.value !== 'encerrado' || statusFilter === 'todos').map(phase => {
+              const phaseProcesses = byPhase.get(phase.value) ?? []
+              const collapsed = collapsedPhases.has(phase.value)
+              return (
+                <div key={phase.value} className="w-full md:min-w-[220px] md:w-[220px] shrink-0">
+                  <button className="flex items-center gap-2 mb-1 w-full md:cursor-default" onClick={() => togglePhaseCollapsed(phase.value)}>
+                    <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: phase.color }} />
+                    <span className="text-sm font-semibold">{phase.label}</span>
+                    <Badge variant="secondary" className="text-[10px] ml-auto">{phaseProcesses.length}</Badge>
+                    {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+                  </button>
+                  <div className="mb-3" />
+                  {!collapsed && (
+                  <DroppableColumn id={phase.value} className="space-y-2 min-h-[60px] p-1 -m-1">
+                    {phaseProcesses.map(proc => (
+                      <DraggableCard key={proc.id} id={proc.id}>
+                        <div className="p-3 rounded-lg border bg-background hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => openDetail(proc)}>
+                          <p className="text-sm font-medium truncate">{proc.title}</p>
+                          {proc.number && <p className="text-xs text-muted-foreground font-mono mt-0.5">{proc.number}</p>}
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-xs text-muted-foreground truncate">
+                              {getClientName(proc.client_id)}
+                            </span>
+                            {proc.responsible && (
+                              <div className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] text-white font-medium shrink-0"
+                                style={{ backgroundColor: RESPONSIBLE_COLORS[proc.responsible] ?? '#6B7280' }}>
+                                {proc.responsible.charAt(0)}
+                              </div>
+                            )}
                           </div>
-                        )}
+                          {proc.area && <Badge variant="outline" className="text-[10px] mt-1.5">{proc.area}</Badge>}
+                        </div>
+                      </DraggableCard>
+                    ))}
+                    {phaseProcesses.length === 0 && (
+                      <div className="p-4 rounded-lg border border-dashed text-center">
+                        <p className="text-xs text-muted-foreground">Nenhum processo</p>
                       </div>
-                      {proc.area && <Badge variant="outline" className="text-[10px] mt-1.5">{proc.area}</Badge>}
-                    </div>
-                  ))}
-                  {phaseProcesses.length === 0 && (
-                    <div className="p-4 rounded-lg border border-dashed text-center">
-                      <p className="text-xs text-muted-foreground">Nenhum processo</p>
-                    </div>
+                    )}
+                  </DroppableColumn>
                   )}
                 </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        </KanbanDndContext>
       )}
 
       {/* List */}

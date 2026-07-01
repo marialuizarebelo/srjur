@@ -21,6 +21,9 @@ import {
 } from 'lucide-react'
 import { fmtDate, getDaysDiff, humanize } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
+import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
+import { usePinnedView } from '@/hooks/usePinnedView'
+import { PinViewButton } from '@/components/PinViewButton'
 
 // ── Types ──
 interface Task {
@@ -171,7 +174,7 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
           )}
         </div>
 
-        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2">
+        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2 mx-0 mb-0 rounded-none border-t-0">
           <Button variant="destructive" className="mr-auto" onClick={onDelete}>Excluir</Button>
           {nextStage && (
             <Button variant="outline" onClick={() => onMoveStage(nextStage.value)}>
@@ -196,6 +199,8 @@ export default function Tarefas() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'board' | 'list' | 'execucao'>('list')
+  const pinnedView = usePinnedView('tarefas_view', 'list')
+  useEffect(() => { if (pinnedView.loaded && pinnedView.isPinned) setViewMode(pinnedView.pinnedValue as any) }, [pinnedView.loaded])
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
   const [viewTask, setViewTask] = useState<Task | null>(null)
@@ -491,6 +496,7 @@ export default function Tarefas() {
               <Columns3 className="h-3.5 w-3.5" />
             </Button>
           </div>
+          <PinViewButton isPinned={pinnedView.isPinned} currentValue={viewMode} onPin={v => pinnedView.pin(v as any)} onUnpin={pinnedView.unpin} />
         </div>
       </div>
 
@@ -527,70 +533,77 @@ export default function Tarefas() {
 
       {/* Execução (kanban Scrum) view */}
       {viewMode === 'execucao' && (
-        <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto pb-4">
-          {WORKFLOW_STAGES.map(stage => {
-            const stageTasks = filtered.filter(t => (t.workflow_stage ?? 'a_fazer') === stage.value)
-            const collapsed = collapsedStages.has(stage.value)
-            const stageIdx = WORKFLOW_STAGES.findIndex(s => s.value === stage.value)
-            const prevStage = stageIdx > 0 ? WORKFLOW_STAGES[stageIdx - 1] : null
-            const nextStage = stageIdx < WORKFLOW_STAGES.length - 1 ? WORKFLOW_STAGES[stageIdx + 1] : null
-            return (
-              <div key={stage.value} className="w-full md:min-w-[260px] md:w-[260px] md:shrink-0">
-                <button className="flex items-center gap-2 mb-2 w-full md:cursor-default" onClick={() => toggleStageCollapsed(stage.value)}>
-                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
-                  <span className="text-sm font-semibold">{stage.label}</span>
-                  <Badge variant="secondary" className="text-[10px] ml-auto">{stageTasks.length}</Badge>
-                  {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
-                </button>
-                {!collapsed && (
-                  <div className="space-y-2">
-                    {stageTasks.map(task => (
-                      <div key={task.id} className="p-3 rounded-lg border bg-background hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => setViewTask(task)}>
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <p className="text-sm font-medium truncate flex-1">{task.title}</p>
-                          <ResponsibleAvatars ids={task.responsible_ids} profilesMap={profilesMap} size="xs" />
+        <KanbanDndContext onDropOnColumn={(taskId, stageValue) => {
+          const task = tasks.find(t => t.id === taskId)
+          if (task && (task.workflow_stage ?? 'a_fazer') !== stageValue) moveWorkflowStage(task, stageValue)
+        }}>
+          <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto pb-4">
+            {WORKFLOW_STAGES.map(stage => {
+              const stageTasks = filtered.filter(t => (t.workflow_stage ?? 'a_fazer') === stage.value)
+              const collapsed = collapsedStages.has(stage.value)
+              const stageIdx = WORKFLOW_STAGES.findIndex(s => s.value === stage.value)
+              const prevStage = stageIdx > 0 ? WORKFLOW_STAGES[stageIdx - 1] : null
+              const nextStage = stageIdx < WORKFLOW_STAGES.length - 1 ? WORKFLOW_STAGES[stageIdx + 1] : null
+              return (
+                <div key={stage.value} className="w-full md:min-w-[260px] md:w-[260px] md:shrink-0">
+                  <button className="flex items-center gap-2 mb-2 w-full md:cursor-default" onClick={() => toggleStageCollapsed(stage.value)}>
+                    <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
+                    <span className="text-sm font-semibold">{stage.label}</span>
+                    <Badge variant="secondary" className="text-[10px] ml-auto">{stageTasks.length}</Badge>
+                    {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+                  </button>
+                  {!collapsed && (
+                    <DroppableColumn id={stage.value} className="space-y-2 min-h-[60px] p-1 -m-1">
+                      {stageTasks.map(task => (
+                        <DraggableCard key={task.id} id={task.id}>
+                          <div className="p-3 rounded-lg border bg-background hover:shadow-md transition-shadow cursor-pointer"
+                            onClick={() => setViewTask(task)}>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <p className="text-sm font-medium truncate flex-1">{task.title}</p>
+                              <ResponsibleAvatars ids={task.responsible_ids} profilesMap={profilesMap} size="xs" />
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                              <Badge variant="outline" className="text-[9px]" style={{ borderColor: getTypeInfo(task.type).color, color: getTypeInfo(task.type).color }}>
+                                {getTypeInfo(task.type).label}
+                              </Badge>
+                              {task.priority === 'alta' || task.priority === 'urgente' ? (
+                                <Badge className="text-[9px]" style={{ backgroundColor: getPriorityInfo(task.priority).color, color: '#fff' }}>
+                                  {getPriorityInfo(task.priority).label}
+                                </Badge>
+                              ) : null}
+                            </div>
+                            {task.due_date && (
+                              <p className="text-[10px] text-muted-foreground">{fmtDate(task.due_date)}</p>
+                            )}
+                            <div className="flex items-center gap-1 mt-2">
+                              {prevStage && (
+                                <Button variant="ghost" size="sm" className="flex-1 h-6 text-[10px] text-muted-foreground hover:text-foreground"
+                                  onClick={e => { e.stopPropagation(); moveWorkflowStage(task, prevStage.value) }}>
+                                  ← {prevStage.label}
+                                </Button>
+                              )}
+                              {nextStage && (
+                                <Button variant="ghost" size="sm" className="flex-1 h-6 text-[10px] text-muted-foreground hover:text-foreground"
+                                  onClick={e => { e.stopPropagation(); moveWorkflowStage(task, nextStage.value) }}>
+                                  {nextStage.label} →
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </DraggableCard>
+                      ))}
+                      {stageTasks.length === 0 && (
+                        <div className="p-4 rounded-lg border border-dashed text-center">
+                          <p className="text-xs text-muted-foreground">Nada aqui</p>
                         </div>
-                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                          <Badge variant="outline" className="text-[9px]" style={{ borderColor: getTypeInfo(task.type).color, color: getTypeInfo(task.type).color }}>
-                            {getTypeInfo(task.type).label}
-                          </Badge>
-                          {task.priority === 'alta' || task.priority === 'urgente' ? (
-                            <Badge className="text-[9px]" style={{ backgroundColor: getPriorityInfo(task.priority).color, color: '#fff' }}>
-                              {getPriorityInfo(task.priority).label}
-                            </Badge>
-                          ) : null}
-                        </div>
-                        {task.due_date && (
-                          <p className="text-[10px] text-muted-foreground">{fmtDate(task.due_date)}</p>
-                        )}
-                        <div className="flex items-center gap-1 mt-2">
-                          {prevStage && (
-                            <Button variant="ghost" size="sm" className="flex-1 h-6 text-[10px] text-muted-foreground hover:text-foreground"
-                              onClick={e => { e.stopPropagation(); moveWorkflowStage(task, prevStage.value) }}>
-                              ← {prevStage.label}
-                            </Button>
-                          )}
-                          {nextStage && (
-                            <Button variant="ghost" size="sm" className="flex-1 h-6 text-[10px] text-muted-foreground hover:text-foreground"
-                              onClick={e => { e.stopPropagation(); moveWorkflowStage(task, nextStage.value) }}>
-                              {nextStage.label} →
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    {stageTasks.length === 0 && (
-                      <div className="p-4 rounded-lg border border-dashed text-center">
-                        <p className="text-xs text-muted-foreground">Nada aqui</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+                      )}
+                    </DroppableColumn>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </KanbanDndContext>
       )}
 
       {/* ── View Dialog ── */}

@@ -20,6 +20,9 @@ import {
 } from 'lucide-react'
 import { fmtDate, getDaysDiff } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
+import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
+import { usePinnedView } from '@/hooks/usePinnedView'
+import { PinViewButton } from '@/components/PinViewButton'
 
 interface Deadline {
   id: string
@@ -166,7 +169,7 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
           )}
         </div>
 
-        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2">
+        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2 mx-0 mb-0 rounded-none border-t-0">
           <Button variant="destructive" className="mr-auto" onClick={onDelete}>Excluir</Button>
           <Button variant="outline" onClick={onToggleStatus}>
             {deadline.status === 'cumprido' ? 'Reabrir' : 'Marcar cumprido'}
@@ -186,6 +189,8 @@ export default function Prazos() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'pendente' | 'cumprido' | 'perdido' | 'todos'>('pendente')
   const [viewMode, setViewMode] = useState<'lista' | 'kanban'>('lista')
+  const pinnedView = usePinnedView('prazos_view', 'lista')
+  useEffect(() => { if (pinnedView.loaded && pinnedView.isPinned) setViewMode(pinnedView.pinnedValue as any) }, [pinnedView.loaded])
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set())
   const toggleStageCollapsed = (id: string) => {
     setCollapsedStages(prev => {
@@ -533,61 +538,71 @@ export default function Prazos() {
   function KanbanView() {
     const unassigned = filtered.filter(d => !d.stage_id)
     return (
-      <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto pb-4">
-        {/* Sem etapa column */}
-        {unassigned.length > 0 && (() => {
-          const collapsed = collapsedStages.has('__unassigned__')
-          return (
-            <div className="w-full md:flex-shrink-0 md:w-72">
-              <button className="flex items-center gap-2 mb-3 px-1 w-full md:cursor-default" onClick={() => toggleStageCollapsed('__unassigned__')}>
-                <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40 shrink-0" />
-                <span className="text-sm font-semibold">Sem etapa</span>
-                <Badge variant="secondary" className="text-[10px] ml-auto">{unassigned.length}</Badge>
-                {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
-              </button>
-              {!collapsed && (
-                <div className="space-y-2">
-                  {unassigned.map(d => <KanbanCard key={d.id} deadline={d} />)}
-                </div>
-              )}
-            </div>
-          )
-        })()}
+      <KanbanDndContext onDropOnColumn={(deadlineId, columnId) => {
+        const deadline = deadlines.find(d => d.id === deadlineId)
+        const targetStageId = columnId === '__unassigned__' ? null : columnId
+        if (deadline && deadline.stage_id !== targetStageId) moveToStage(deadlineId, targetStageId)
+      }}>
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto pb-4">
+          {/* Sem etapa column */}
+          {(() => {
+            const collapsed = collapsedStages.has('__unassigned__')
+            return (
+              <div className="w-full md:flex-shrink-0 md:w-72">
+                <button className="flex items-center gap-2 mb-3 px-1 w-full md:cursor-default" onClick={() => toggleStageCollapsed('__unassigned__')}>
+                  <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40 shrink-0" />
+                  <span className="text-sm font-semibold">Sem etapa</span>
+                  <Badge variant="secondary" className="text-[10px] ml-auto">{unassigned.length}</Badge>
+                  {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+                </button>
+                {!collapsed && (
+                  <DroppableColumn id="__unassigned__" className="space-y-2 min-h-[60px] p-1 -m-1">
+                    {unassigned.map(d => (
+                      <DraggableCard key={d.id} id={d.id}><KanbanCard deadline={d} /></DraggableCard>
+                    ))}
+                  </DroppableColumn>
+                )}
+              </div>
+            )
+          })()}
 
-        {/* Stage columns */}
-        {stages.map(stage => {
-          const items = filtered.filter(d => d.stage_id === stage.id)
-          const collapsed = collapsedStages.has(stage.id)
-          return (
-            <div key={stage.id} className="w-full md:flex-shrink-0 md:w-72">
-              <button className="flex items-center gap-2 mb-3 px-1 w-full md:cursor-default" onClick={() => toggleStageCollapsed(stage.id)}>
-                <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
-                <span className="text-sm font-semibold">{stage.name}</span>
-                <Badge variant="secondary" className="text-[10px] ml-auto">{items.length}</Badge>
-                {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
-              </button>
-              {!collapsed && (
-                <div className="space-y-2 min-h-[60px] rounded-xl bg-muted/30 p-2">
-                  {items.map(d => <KanbanCard key={d.id} deadline={d} />)}
-                  {items.length === 0 && (
-                    <p className="text-[11px] text-muted-foreground text-center py-4">Nenhum prazo</p>
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })}
+          {/* Stage columns */}
+          {stages.map(stage => {
+            const items = filtered.filter(d => d.stage_id === stage.id)
+            const collapsed = collapsedStages.has(stage.id)
+            return (
+              <div key={stage.id} className="w-full md:flex-shrink-0 md:w-72">
+                <button className="flex items-center gap-2 mb-3 px-1 w-full md:cursor-default" onClick={() => toggleStageCollapsed(stage.id)}>
+                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
+                  <span className="text-sm font-semibold">{stage.name}</span>
+                  <Badge variant="secondary" className="text-[10px] ml-auto">{items.length}</Badge>
+                  {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+                </button>
+                {!collapsed && (
+                  <DroppableColumn id={stage.id} className="space-y-2 min-h-[60px] rounded-xl bg-muted/30 p-2">
+                    {items.map(d => (
+                      <DraggableCard key={d.id} id={d.id}><KanbanCard deadline={d} /></DraggableCard>
+                    ))}
+                    {items.length === 0 && (
+                      <p className="text-[11px] text-muted-foreground text-center py-4">Nenhum prazo</p>
+                    )}
+                  </DroppableColumn>
+                )}
+              </div>
+            )
+          })}
 
-        {/* Add stage shortcut */}
-        <div className="w-full md:flex-shrink-0 md:w-56 flex items-start pt-1">
-          <button
-            onClick={() => { setStagesOpen(true); openNewStage() }}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors px-2 py-1.5 rounded-lg hover:bg-muted"
-          >
-            <Plus className="h-4 w-4" /> Nova etapa
-          </button>
+          {/* Add stage shortcut */}
+          <div className="w-full md:flex-shrink-0 md:w-56 flex items-start pt-1">
+            <button
+              onClick={() => { setStagesOpen(true); openNewStage() }}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors px-2 py-1.5 rounded-lg hover:bg-muted"
+            >
+              <Plus className="h-4 w-4" /> Nova etapa
+            </button>
+          </div>
         </div>
-      </div>
+      </KanbanDndContext>
     )
   }
 
@@ -627,6 +642,7 @@ export default function Prazos() {
               <LayoutGrid className="h-4 w-4" />
             </button>
           </div>
+          <PinViewButton isPinned={pinnedView.isPinned} currentValue={viewMode} onPin={v => pinnedView.pin(v as any)} onUnpin={pinnedView.unpin} />
           <Button size="sm" onClick={() => { resetDf(); setDialogOpen(true) }}>
             <Plus className="h-3 w-3 mr-1" />Novo Prazo
           </Button>

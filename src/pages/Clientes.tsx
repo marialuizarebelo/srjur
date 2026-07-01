@@ -31,6 +31,9 @@ import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { DriveFileList } from '@/components/DriveFileList'
 import { updateDriveFolder, DRIVE_COLOR_RED, DRIVE_COLOR_GREEN } from '@/lib/googleDrive'
 import { toast } from 'sonner'
+import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
+import { usePinnedView } from '@/hooks/usePinnedView'
+import { PinViewButton } from '@/components/PinViewButton'
 
 // ── Types ──
 interface Client {
@@ -573,6 +576,8 @@ export default function Clientes() {
   const [tab, setTab] = useState<'crm' | 'ativos' | 'encerrados'>('ativos')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
+  const pinnedView = usePinnedView('clientes_view', 'cards')
+  useEffect(() => { if (pinnedView.loaded && pinnedView.isPinned) setViewMode(pinnedView.pinnedValue as any) }, [pinnedView.loaded])
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set())
   const toggleStageCollapsed = (stageValue: string) => {
     setCollapsedStages(prev => {
@@ -1060,6 +1065,7 @@ export default function Clientes() {
                 onClick={() => setViewMode('table')}>
                 <List className="h-3.5 w-3.5" />
               </Button>
+              <PinViewButton isPinned={pinnedView.isPinned} currentValue={viewMode} onPin={v => pinnedView.pin(v as any)} onUnpin={pinnedView.unpin} />
             </div>
           )}
         </div>
@@ -1090,40 +1096,47 @@ export default function Clientes() {
         </div>
       )}
       {tab === 'crm' && (
-        <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto pb-4">
-          {stages.filter(s => s.show_in_kanban).map(stage => {
-            const stageLeads = leadsByStage.get(stage.value) ?? []
-            const collapsed = collapsedStages.has(stage.value)
-            return (
-              <div key={stage.value} className="md:min-w-[260px] md:w-[260px] md:shrink-0 rounded-lg border md:border-none p-2 md:p-0">
-                <button
-                  className="flex items-center gap-2 mb-1 w-full md:cursor-default"
-                  onClick={() => toggleStageCollapsed(stage.value)}
-                >
-                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
-                  <span className="text-sm font-semibold">{stage.label}</span>
-                  <Badge variant="secondary" className="text-[10px] ml-auto">{stageLeads.length}</Badge>
-                  {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
-                </button>
-                <p className="text-xs text-green-600 font-medium mb-3 pl-[18px]">
-                  {fmtBRL(stageLeads.reduce((s, l) => s + (l.potential_value ?? 0), 0))}
-                </p>
-                {!collapsed && (
-                  <div className="space-y-2">
-                    {stageLeads.map(lead => (
-                      <LeadCard key={lead.id} lead={lead} onClick={() => openEditLead(lead)} onStatusChange={updateLeadStatus} stages={stages} />
-                    ))}
-                    {stageLeads.length === 0 && (
-                      <div className="p-4 rounded-lg border border-dashed text-center">
-                        <p className="text-xs text-muted-foreground">Nenhum lead</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+        <KanbanDndContext onDropOnColumn={(leadId, stageValue) => {
+          const lead = leads.find(l => l.id === leadId)
+          if (lead && lead.status !== stageValue) updateLeadStatus(leadId, stageValue)
+        }}>
+          <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto pb-4">
+            {stages.filter(s => s.show_in_kanban).map(stage => {
+              const stageLeads = leadsByStage.get(stage.value) ?? []
+              const collapsed = collapsedStages.has(stage.value)
+              return (
+                <div key={stage.value} className="md:min-w-[260px] md:w-[260px] md:shrink-0 rounded-lg border md:border-none p-2 md:p-0">
+                  <button
+                    className="flex items-center gap-2 mb-1 w-full md:cursor-default"
+                    onClick={() => toggleStageCollapsed(stage.value)}
+                  >
+                    <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
+                    <span className="text-sm font-semibold">{stage.label}</span>
+                    <Badge variant="secondary" className="text-[10px] ml-auto">{stageLeads.length}</Badge>
+                    {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+                  </button>
+                  <p className="text-xs text-green-600 font-medium mb-3 pl-[18px]">
+                    {fmtBRL(stageLeads.reduce((s, l) => s + (l.potential_value ?? 0), 0))}
+                  </p>
+                  {!collapsed && (
+                    <DroppableColumn id={stage.value} className="space-y-2 min-h-[60px] p-1 -m-1">
+                      {stageLeads.map(lead => (
+                        <DraggableCard key={lead.id} id={lead.id}>
+                          <LeadCard lead={lead} onClick={() => openEditLead(lead)} onStatusChange={updateLeadStatus} stages={stages} />
+                        </DraggableCard>
+                      ))}
+                      {stageLeads.length === 0 && (
+                        <div className="p-4 rounded-lg border border-dashed text-center">
+                          <p className="text-xs text-muted-foreground">Nenhum lead</p>
+                        </div>
+                      )}
+                    </DroppableColumn>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </KanbanDndContext>
       )}
 
       {/* Clients Grid */}
