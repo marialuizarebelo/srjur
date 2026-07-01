@@ -53,7 +53,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
-        <main className="flex-1 overflow-auto min-w-0">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
 
           {/* Topbar */}
           <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>

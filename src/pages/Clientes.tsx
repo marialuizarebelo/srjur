@@ -642,7 +642,7 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
           )}
         </div>
 
-        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2">
+        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2 mx-0 mb-0 rounded-none border-t-0">
           <Button variant="destructive" className="mr-auto" onClick={onDelete}>Excluir</Button>
           {!lead.client_id && (
             <Button variant="outline" onClick={onConvert}>Converter em cliente</Button>
