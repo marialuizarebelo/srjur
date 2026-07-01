@@ -126,9 +126,38 @@ function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClic
   )
 }
 
+// ── Row status helpers ──
+const todayStr = new Date().toISOString().slice(0, 10)
+
+function rowStatus(row: FinanceRow) {
+  if (row.paid) return 'pago'
+  if (row.due_date && row.due_date < todayStr) return 'atrasado'
+  return 'pendente'
+}
+
+function RowBadge({ row }: { row: FinanceRow }) {
+  const status = rowStatus(row)
+  if (row.type === 'despesa') {
+    return row.paid
+      ? <Badge className="text-[10px] bg-red-600 text-white">SAÍ</Badge>
+      : <Badge className="text-[10px] bg-gray-400 text-white">PRV</Badge>
+  }
+  if (status === 'pago')    return <Badge className="text-[10px] bg-green-600 text-white">ENT</Badge>
+  if (status === 'atrasado') return <Badge className="text-[10px] bg-red-500 text-white">ATR</Badge>
+  return <Badge className="text-[10px] bg-amber-500 text-white">PRV</Badge>
+}
+
+function StatusLabel({ row }: { row: FinanceRow }) {
+  const status = rowStatus(row)
+  if (status === 'pago')     return <span className="text-xs font-medium text-green-600">Pago</span>
+  if (status === 'atrasado') return <span className="text-xs font-medium text-red-500">Atrasado</span>
+  return <span className="text-xs font-medium text-amber-500">Pendente</span>
+}
+
 // ── Detail Drawer ──
-function DetailDrawer({ title, rows, onClose, clients }: {
+function DetailDrawer({ title, rows, onClose, clients, onEdit }: {
   title: string; rows: FinanceRow[]; onClose: () => void; clients: ClientOption[]
+  onEdit: (row: FinanceRow) => void
 }) {
   const getClientName = (id: string | null) => clients.find(c => c.id === id)?.name ?? '—'
   const total = rows.reduce((s, r) => s + Number(r.value), 0)
@@ -146,7 +175,10 @@ function DetailDrawer({ title, rows, onClose, clients }: {
         </div>
         <div className="p-4 space-y-2">
           {rows.map(row => (
-            <div key={row.id} className="flex items-center justify-between p-3 rounded-lg border">
+            <div key={row.id}
+              className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/40 transition-colors"
+              onClick={() => { onEdit(row); onClose() }}
+            >
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">{row.description}</p>
                 <div className="flex items-center gap-2 mt-0.5">
@@ -156,12 +188,10 @@ function DetailDrawer({ title, rows, onClose, clients }: {
                 </div>
               </div>
               <div className="text-right shrink-0 ml-3">
-                <p className={`text-sm font-semibold ${row.type === 'receita' ? 'text-green-600' : 'text-red-500'}`}>
+                <p className={`text-sm font-semibold ${row.type === 'receita' ? (row.paid ? 'text-green-600' : 'text-amber-500') : 'text-red-500'}`}>
                   {row.type === 'receita' ? '+' : '-'}{fmtBRL(Number(row.value))}
                 </p>
-                <span className={`text-[10px] ${row.paid ? 'text-green-600' : 'text-amber-500'}`}>
-                  {row.paid ? 'Pago' : 'Pendente'}
-                </span>
+                <StatusLabel row={row} />
               </div>
             </div>
           ))}
@@ -532,6 +562,7 @@ export default function Financeiro() {
           rows={getCardRows()}
           onClose={() => setActiveCard(null)}
           clients={clients}
+          onEdit={handleEdit}
         />
       )}
 
@@ -1120,13 +1151,9 @@ export default function Financeiro() {
               <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum lançamento no período</TableCell></TableRow>
             ) : (
               filtered.map(row => (
-                <TableRow key={row.id}>
+                <TableRow key={row.id} className="cursor-pointer hover:bg-muted/30" onClick={() => handleEdit(row)}>
                   <TableCell className="text-sm whitespace-nowrap">{fmtDate(row.date)}</TableCell>
-                  <TableCell>
-                    <Badge variant={row.type === 'receita' ? 'default' : 'destructive'} className={`text-[10px] ${row.type === 'receita' ? 'bg-green-600' : ''}`}>
-                      {row.type === 'receita' ? 'ENT' : 'SAÍ'}
-                    </Badge>
-                  </TableCell>
+                  <TableCell><RowBadge row={row} /></TableCell>
                   <TableCell className="text-sm max-w-[140px] truncate">
                     {row.description}
                     {row.responsible && <span className="text-xs text-muted-foreground ml-1">@{row.responsible}</span>}
@@ -1139,20 +1166,18 @@ export default function Financeiro() {
                       <span className="ml-1">({row.current_installment}/{row.installments})</span>
                     )}
                   </TableCell>
-                  <TableCell className={`text-sm text-right font-medium whitespace-nowrap ${row.type === 'receita' ? 'text-green-600' : 'text-red-500'}`}>
+                  <TableCell className={`text-sm text-right font-medium whitespace-nowrap ${row.type === 'receita' ? (row.paid ? 'text-green-600' : rowStatus(row) === 'atrasado' ? 'text-red-500' : 'text-amber-500') : 'text-red-500'}`}>
                     {fmtBRL(Number(row.value))}
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
-                    <span className={`text-xs font-medium ${row.paid ? 'text-green-600' : 'text-amber-500'}`}>
-                      {row.paid ? 'Pago' : 'Pendente'}
-                    </span>
+                    <StatusLabel row={row} />
                     {row.payment_link && (
                       <a href={row.payment_link} target="_blank" rel="noopener noreferrer" className="ml-1">
                         <Link2 className="h-3 w-3 inline text-primary" />
                       </a>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={e => e.stopPropagation()}>
                     <div className="flex items-center gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(row)}>
                         <Pencil className="h-3 w-3" />
