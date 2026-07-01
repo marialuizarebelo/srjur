@@ -141,11 +141,11 @@ export function AppSidebar() {
           {!collapsed && profile && (
             <div className="flex items-center gap-2 px-2 py-1">
               <div className="h-7 w-7 rounded-full bg-[var(--sidebar-primary)] flex items-center justify-center text-white text-xs font-medium">
-                {profile.display_name?.charAt(0)?.toUpperCase() ?? '?'}
+                {(profile.nickname || profile.display_name)?.charAt(0)?.toUpperCase() ?? '?'}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-[var(--sidebar-accent-foreground)] truncate">
-                  {profile.display_name}
+                  {profile.nickname || profile.display_name}
                 </p>
                 <p className="text-[10px] text-[var(--sidebar-foreground)] truncate">
                   {profile.role_title ?? profile.role}

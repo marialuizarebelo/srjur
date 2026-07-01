@@ -43,19 +43,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true
+    let currentUserId: string | null = null
 
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s)
+      currentUserId = s?.user?.id ?? null
       if (s?.user) await fetchProfile(s.user.id)
       if (active) setLoading(false)
     })
 
+    // onAuthStateChange dispara com frequência (renovação de token ao voltar o foco na aba,
+    // reconexão de rede etc.) — não podemos colocar a tela inteira em "Carregando" nesses casos,
+    // só na primeira carga. Atualizamos sessão/perfil em segundo plano, sem re-exibir o spinner.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
-      setLoading(true)
       setSession(s)
-      if (s?.user) await fetchProfile(s.user.id)
-      else setProfile(null)
-      if (active) setLoading(false)
+      const newUserId = s?.user?.id ?? null
+      if (newUserId !== currentUserId) {
+        currentUserId = newUserId
+        if (s?.user) await fetchProfile(s.user.id)
+        else setProfile(null)
+      }
     })
 
     return () => { active = false; subscription.unsubscribe() }

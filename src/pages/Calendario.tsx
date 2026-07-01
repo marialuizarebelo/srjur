@@ -18,6 +18,8 @@ import { toast } from 'sonner'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
 import { Badge } from '@/components/ui/badge'
 import { Columns3, CalendarDays } from 'lucide-react'
+import { usePinnedView } from '@/hooks/usePinnedView'
+import { PinViewButton } from '@/components/PinViewButton'
 
 type ViewMode = 'mes' | 'semana' | 'dia'
 
@@ -89,6 +91,8 @@ export default function Calendario() {
   const [editTarget, setEditTarget] = useState<CalEvent | null>(null)
   const [ef, setEf] = useState({ title: '', date: '', time: '', responsible_ids: [] as string[], status: '' })
   const [view, setView]       = useState<ViewMode>('mes')
+  const pinnedView = usePinnedView('calendario_view', 'mes')
+  useEffect(() => { if (pinnedView.loaded && pinnedView.isPinned) setView(pinnedView.pinnedValue as ViewMode) }, [pinnedView.loaded])
   const today                  = useMemo(() => new Date(), [])
   const [cursor, setCursor]   = useState(new Date())
   const [selDate, setSelDate] = useState(toYMD(new Date()))
@@ -253,6 +257,8 @@ export default function Calendario() {
   }, [filtered])
 
   const [subView, setSubView] = useState<'agenda' | 'etapas'>('agenda')
+  const pinnedSubView = usePinnedView('calendario_subview', 'agenda')
+  useEffect(() => { if (pinnedSubView.loaded && pinnedSubView.isPinned) setSubView(pinnedSubView.pinnedValue as any) }, [pinnedSubView.loaded])
 
   const weekEvents = useMemo(() => {
     const ws = weekStart(cursor)
@@ -728,6 +734,11 @@ export default function Calendario() {
                 <Columns3 className="h-3.5 w-3.5" />Etapas
               </button>
             </div>
+          )}
+
+          <PinViewButton isPinned={pinnedView.isPinned} currentValue={view} onPin={v => pinnedView.pin(v as any)} onUnpin={pinnedView.unpin} />
+          {hasSidebar && (
+            <PinViewButton isPinned={pinnedSubView.isPinned} currentValue={subView} onPin={v => pinnedSubView.pin(v as any)} onUnpin={pinnedSubView.unpin} />
           )}
         </div>
       </div>

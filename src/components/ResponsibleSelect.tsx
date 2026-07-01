@@ -8,9 +8,12 @@ let cachedProfiles: ProfileOption[] | null = null
 
 export async function getAdminProfiles(): Promise<ProfileOption[]> {
   if (cachedProfiles) return cachedProfiles
-  const { data } = await supabase.from('profiles').select('id, display_name, color').eq('role', 'admin').order('display_name')
-  cachedProfiles = (data as ProfileOption[]) ?? []
-  return cachedProfiles
+  const { data } = await supabase.from('profiles').select('id, display_name, nickname, color').eq('role', 'admin').order('display_name')
+  // Prioriza o apelido sobre o nome/e-mail cadastrado — é o que deve aparecer em toda a UI
+  cachedProfiles = ((data ?? []) as any[]).map(p => ({
+    id: p.id, color: p.color, display_name: p.nickname || p.display_name,
+  }))
+  return cachedProfiles!
 }
 
 interface ResponsibleSelectProps {
