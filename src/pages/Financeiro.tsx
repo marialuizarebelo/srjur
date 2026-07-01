@@ -389,11 +389,11 @@ export default function Financeiro() {
   const despesas = filtered.filter(r => r.type === 'despesa')
   const totalReceitas = receitas.reduce((s, r) => s + Number(r.value), 0)
   const totalDespesas = despesas.reduce((s, r) => s + Number(r.value), 0)
-  const saldo = totalReceitas - totalDespesas
   const receitasPagas = receitas.filter(r => r.paid).reduce((s, r) => s + Number(r.value), 0)
   const receitasPendentes = receitas.filter(r => !r.paid).reduce((s, r) => s + Number(r.value), 0)
   const despesasPagas = despesas.filter(r => r.paid).reduce((s, r) => s + Number(r.value), 0)
   const despesasPendentes = despesas.filter(r => !r.paid).reduce((s, r) => s + Number(r.value), 0)
+  const saldo = receitasPagas - despesasPagas
   const inadimplencia = receitas
     .filter(r => !r.paid && r.due_date && r.due_date < today)
     .reduce((s, r) => s + Number(r.value), 0)
@@ -1021,7 +1021,7 @@ export default function Financeiro() {
         <SummaryCard title="Despesas" subtitle="total" value={fmtBRL(totalDespesas)} icon={ArrowDownCircle} color="#ef4444" active={activeCard === 'despesas'} onClick={() => setActiveCard(activeCard === 'despesas' ? null : 'despesas')} />
         <SummaryCard title="Pago" subtitle="despesas pagas" value={fmtBRL(despesasPagas)} icon={TrendingDown} color="#dc2626" active={activeCard === 'despesas-pagas'} onClick={() => setActiveCard(activeCard === 'despesas-pagas' ? null : 'despesas-pagas')} />
         <SummaryCard title="Inadimplência" subtitle="receitas vencidas" value={fmtBRL(inadimplencia)} icon={AlertTriangle} color={inadimplencia > 0 ? '#ef4444' : '#6b7280'} active={activeCard === 'inadimplencia'} onClick={() => setActiveCard(activeCard === 'inadimplencia' ? null : 'inadimplencia')} />
-        <SummaryCard title="Saldo" subtitle="receitas - despesas" value={fmtBRL(saldo)} icon={Wallet} color={saldo >= 0 ? '#8B5CF6' : '#ef4444'} active={activeCard === 'saldo'} onClick={() => setActiveCard(activeCard === 'saldo' ? null : 'saldo')} />
+        <SummaryCard title="Saldo" subtitle="recebido - pago" value={fmtBRL(saldo)} icon={Wallet} color={saldo >= 0 ? '#8B5CF6' : '#ef4444'} active={activeCard === 'saldo'} onClick={() => setActiveCard(activeCard === 'saldo' ? null : 'saldo')} />
       </div>
 
       {/* ── Charts Row ── */}
