@@ -50,6 +50,7 @@ interface Client {
   created_at: string
   // extra
   referred_by: string | null
+  referral_fee_pct: number | null
   signed_at: string | null
   first_contact_at: string | null
   origin: string | null
@@ -88,6 +89,7 @@ interface Lead {
   drive_url: string | null
   client_id: string | null
   referred_by: string | null
+  referral_fee_pct: number | null
   first_contact_at: string | null
   created_at: string
 }
@@ -598,7 +600,7 @@ export default function Clientes() {
     name: '', email: '', phone: '', cpf_cnpj: '', source: '',
     status: 'novo', potential_value: '', notes: '', responsible: '',
     next_followup: '', drive_folder_id: '', drive_url: '',
-    referred_by: '', first_contact_at: '',
+    referred_by: '', referral_fee_pct: '', first_contact_at: '',
   })
 
   const resetCf = () => {
@@ -609,7 +611,7 @@ export default function Clientes() {
   const resetLf = () => {
     setLf({ name: '', email: '', phone: '', cpf_cnpj: '', source: '',
       status: 'novo', potential_value: '', notes: '', responsible: '', next_followup: '',
-      drive_folder_id: '', drive_url: '', referred_by: '', first_contact_at: '' })
+      drive_folder_id: '', drive_url: '', referred_by: '', referral_fee_pct: '', first_contact_at: '' })
     setEditingLead(null)
   }
 
@@ -723,6 +725,7 @@ export default function Clientes() {
       complement: c.complement ?? '', neighborhood: c.neighborhood ?? '',
       city: c.city ?? '', state: c.state ?? '',
       responsible: c.responsible ?? '', origin: c.origin ?? '', referred_by: c.referred_by ?? '',
+      referral_fee_pct: c.referral_fee_pct ? String(c.referral_fee_pct) : '',
       area: c.area ?? '', areas_selected: c.area ? c.area.split(', ') : [],
       potential_value: c.potential_value ? String(c.potential_value) : '',
       drive_url: c.drive_url ?? '', drive_folder_id: c.drive_folder_id ?? '', tags: c.tags ?? '', notes: c.notes ?? '',
@@ -747,6 +750,7 @@ export default function Clientes() {
       address_number: cf.address_number || null, complement: cf.complement || null,
       neighborhood: cf.neighborhood || null, city: cf.city || null, state: cf.state || null,
       origin: cf.origin || null, referred_by: cf.referred_by || null,
+      referral_fee_pct: cf.referral_fee_pct ? parseFloat(cf.referral_fee_pct) : null,
       signed_at: cf.signed_at || null, first_contact_at: cf.first_contact_at || null,
       potential_value: cf.potential_value ? parseFloat(cf.potential_value.replace(',', '.')) : null,
       drive_url: cf.drive_url || null, drive_folder_id: cf.drive_folder_id || null, tags: cf.tags || null,
@@ -784,7 +788,7 @@ export default function Clientes() {
       source: l.source ?? '', status: l.status, potential_value: l.potential_value ? String(l.potential_value) : '',
       notes: l.notes ?? '', responsible: l.responsible ?? '', next_followup: l.next_followup ?? '',
       drive_folder_id: l.drive_folder_id ?? '', drive_url: l.drive_url ?? '',
-      referred_by: l.referred_by ?? '', first_contact_at: l.first_contact_at ?? '',
+      referred_by: l.referred_by ?? '', referral_fee_pct: l.referral_fee_pct ? String(l.referral_fee_pct) : '', first_contact_at: l.first_contact_at ?? '',
     })
     setEditingLead(l)
     setLeadDialogOpen(true)
@@ -798,7 +802,7 @@ export default function Clientes() {
       notes: lf.notes || null, responsible: lf.responsible || null,
       next_followup: lf.next_followup || null,
       drive_folder_id: lf.drive_folder_id || null, drive_url: lf.drive_url || null,
-      referred_by: lf.referred_by || null, first_contact_at: lf.first_contact_at || null,
+      referred_by: lf.referred_by || null, referral_fee_pct: lf.referral_fee_pct ? parseFloat(lf.referral_fee_pct) : null, first_contact_at: lf.first_contact_at || null,
     }
     if (editingLead) {
       await supabase.from('leads').update(payload).eq('id', editingLead.id)
@@ -1254,9 +1258,18 @@ export default function Clientes() {
             </div>
 
             {lf.source === 'Indicação' && (
-              <div className="space-y-2">
-                <Label>Indicado por</Label>
-                <Input value={lf.referred_by} onChange={e => setLf(f => ({ ...f, referred_by: e.target.value }))} placeholder="Nome de quem indicou" className="h-10" />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Indicado por</Label>
+                  <Input value={lf.referred_by} onChange={e => setLf(f => ({ ...f, referred_by: e.target.value }))} placeholder="Nome de quem indicou" className="h-10" />
+                </div>
+                <div className="space-y-2">
+                  <Label>% de repasse acordado</Label>
+                  <div className="relative">
+                    <Input value={lf.referral_fee_pct} onChange={e => setLf(f => ({ ...f, referral_fee_pct: e.target.value }))} placeholder="Ex: 10" className="h-10 pr-8" />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                  </div>
+                </div>
               </div>
             )}
 

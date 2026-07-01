@@ -138,7 +138,7 @@ export interface ClientFormData {
   rg_number: string; rg_issuer: string
   cep: string; street: string; address_number: string; complement: string
   neighborhood: string; city: string; state: string
-  responsible: string; origin: string; referred_by: string
+  responsible: string; origin: string; referred_by: string; referral_fee_pct: string
   area: string; areas_selected: string[]
   potential_value: string; drive_url: string; drive_folder_id: string; tags: string; notes: string
   status: string; portal_visible: boolean; birth_date: string
@@ -151,7 +151,7 @@ export const emptyClientForm: ClientFormData = {
   profession: '', rg_number: '', rg_issuer: '',
   cep: '', street: '', address_number: '', complement: '',
   neighborhood: '', city: '', state: '',
-  responsible: '', origin: '', referred_by: '', area: '', areas_selected: [],
+  responsible: '', origin: '', referred_by: '', referral_fee_pct: '', area: '', areas_selected: [],
   potential_value: '', drive_url: '', drive_folder_id: '', tags: '', notes: '',
   status: 'ativo', portal_visible: false, birth_date: '',
   signed_at: '', first_contact_at: '',
@@ -446,11 +446,20 @@ export function ClientFormDialog({
               </div>
             </div>
 
-            {/* Campo de indicação — aparece só quando origem é Indicação */}
+            {/* Campos de indicação — aparecem só quando origem é Indicação */}
             {form.origin === 'Indicação' && (
-              <div className="space-y-1.5">
-                <Label>Indicado por</Label>
-                <Input value={form.referred_by} onChange={e => setForm(f => ({ ...f, referred_by: e.target.value }))} placeholder="Nome de quem indicou" className="h-10" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Indicado por</Label>
+                  <Input value={form.referred_by} onChange={e => setForm(f => ({ ...f, referred_by: e.target.value }))} placeholder="Nome de quem indicou" className="h-10" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>% de repasse acordado</Label>
+                  <div className="relative">
+                    <Input value={form.referral_fee_pct} onChange={e => setForm(f => ({ ...f, referral_fee_pct: e.target.value }))} placeholder="Ex: 10" className="h-10 pr-8" />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                  </div>
+                </div>
               </div>
             )}
 
