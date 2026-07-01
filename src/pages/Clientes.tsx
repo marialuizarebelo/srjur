@@ -31,6 +31,7 @@ import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { DriveFileList } from '@/components/DriveFileList'
 import { updateDriveFolder, DRIVE_COLOR_RED, DRIVE_COLOR_GREEN } from '@/lib/googleDrive'
 import { toast } from 'sonner'
+import { Sensitive } from '@/components/Sensitive'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
@@ -154,7 +155,7 @@ function LeadCard({ lead, onClick, onStatusChange, stages }: {
   return (
     <div className="p-3 rounded-lg border bg-background hover:shadow-md transition-shadow cursor-pointer" onClick={onClick}>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium truncate flex-1">{lead.name}</p>
+        <p className="text-sm font-medium truncate flex-1"><Sensitive>{lead.name}</Sensitive></p>
         {lead.client_id && (
           <Badge className="text-[9px] h-4 bg-emerald-100 text-emerald-700 hover:bg-emerald-100 shrink-0">✓ Cliente</Badge>
         )}
@@ -321,7 +322,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
               {getInitials(client.name)}
             </div>
             <div>
-              <h2 className="text-lg font-semibold leading-tight">{client.name}</h2>
+              <h2 className="text-lg font-semibold leading-tight"><Sensitive>{client.name}</Sensitive></h2>
               <div className="flex items-center gap-1.5 mt-1">
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[client.status] ?? 'bg-gray-100 text-gray-600'}`}>
                   {client.status.toUpperCase()}
@@ -548,7 +549,7 @@ function ClientCard({ client, onEdit }: { client: Client; onEdit: () => void }) 
           {getInitials(client.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-sm truncate">{client.name}</p>
+          <p className="font-medium text-sm truncate"><Sensitive>{client.name}</Sensitive></p>
           <p className="text-xs text-muted-foreground truncate">{client.area ?? client.type}</p>
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
             {client.responsible && (
@@ -569,6 +570,93 @@ function ClientCard({ client, onEdit }: { client: Client; onEdit: () => void }) 
 }
 
 // ── Main ──
+// ── Lead View Dialog ──
+function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMoveStage, stages }: {
+  lead: Lead | null
+  open: boolean
+  onClose: () => void
+  onEdit: () => void
+  onDelete: () => void
+  onConvert: () => void
+  onMoveStage: (status: string) => void
+  stages: PipelineStage[]
+}) {
+  if (!lead) return null
+  const stageInfo = stages.find(s => s.value === lead.status)
+  const kanbanStages = stages.filter(s => s.show_in_kanban)
+  const currentIdx = kanbanStages.findIndex(s => s.value === lead.status)
+  const nextStage = currentIdx >= 0 && currentIdx < kanbanStages.length - 1 ? kanbanStages[currentIdx + 1] : null
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
+      <DialogContent className="max-w-[560px] w-[96vw] max-h-[90vh] overflow-y-auto p-0">
+        <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-4 border-b">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+              {stageInfo && (
+                <Badge className="text-[10px]" style={{ backgroundColor: stageInfo.color, color: '#fff' }}>{stageInfo.label}</Badge>
+              )}
+              {lead.client_id && <Badge className="text-[10px] bg-emerald-100 text-emerald-700">✓ Cliente</Badge>}
+              {lead.source && <Badge variant="outline" className="text-[10px]">{lead.source}</Badge>}
+            </div>
+            <h2 className="text-lg font-semibold leading-tight"><Sensitive>{lead.name}</Sensitive></h2>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            {lead.email && (
+              <div><p className="text-[11px] text-muted-foreground">E-mail</p><p className="font-medium">{lead.email}</p></div>
+            )}
+            {lead.phone && (
+              <div><p className="text-[11px] text-muted-foreground">Telefone</p><p className="font-medium">{lead.phone}</p></div>
+            )}
+            {lead.potential_value ? (
+              <div><p className="text-[11px] text-muted-foreground">Valor potencial</p><p className="font-medium text-green-600">{fmtBRL(lead.potential_value)}</p></div>
+            ) : null}
+            {lead.responsible && (
+              <div><p className="text-[11px] text-muted-foreground">Responsável</p><p className="font-medium">{lead.responsible}</p></div>
+            )}
+            {lead.next_followup && (
+              <div><p className="text-[11px] text-muted-foreground">Próximo follow-up</p><p className="font-medium">{new Date(lead.next_followup + 'T00:00').toLocaleDateString('pt-BR')}</p></div>
+            )}
+            {lead.referred_by && (
+              <div><p className="text-[11px] text-muted-foreground">Indicado por</p><p className="font-medium">{lead.referred_by}</p></div>
+            )}
+            {lead.referral_fee_pct != null && (
+              <div><p className="text-[11px] text-muted-foreground">% repasse</p><p className="font-medium">{lead.referral_fee_pct}%</p></div>
+            )}
+          </div>
+
+          {lead.notes && (
+            <div>
+              <p className="text-[11px] text-muted-foreground mb-1">Observações</p>
+              <p className="text-sm whitespace-pre-wrap">{lead.notes}</p>
+            </div>
+          )}
+
+          {lead.drive_url && (
+            <a href={lead.drive_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary inline-flex items-center gap-1">
+              Ver pasta de documentos
+            </a>
+          )}
+        </div>
+
+        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2">
+          <Button variant="destructive" className="mr-auto" onClick={onDelete}>Excluir</Button>
+          {!lead.client_id && (
+            <Button variant="outline" onClick={onConvert}>Converter em cliente</Button>
+          )}
+          {nextStage && (
+            <Button variant="outline" onClick={() => onMoveStage(nextStage.value)}>Avançar → {nextStage.label}</Button>
+          )}
+          <Button onClick={onEdit}>Editar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function Clientes() {
   const [clients, setClients] = useState<Client[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
@@ -592,6 +680,7 @@ export default function Clientes() {
   const [leadDialogOpen, setLeadDialogOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [editingLead, setEditingLead] = useState<Lead | null>(null)
+  const [viewLead, setViewLead] = useState<Lead | null>(null)
   const [stages, setStages] = useState<PipelineStage[]>([])
   const [stagesDialogOpen, setStagesDialogOpen] = useState(false)
   const [quickLeadOpen, setQuickLeadOpen] = useState(false)
@@ -649,6 +738,22 @@ export default function Clientes() {
     supabase.from('office_settings').select('drive_root_folder_id').limit(1).maybeSingle().then(({ data }) => {
       setDriveRootFolderId(data?.drive_root_folder_id ?? null)
     })
+  }, [])
+
+  // Abre o formulário certo quando vem de um atalho "+ Novo" (ex: Dashboard)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const kind = params.get('new')
+    if (kind === 'lead') {
+      setTab('crm')
+      resetLf()
+      setLeadDialogOpen(true)
+      window.history.replaceState({}, '', window.location.pathname)
+    } else if (kind === 'cliente') {
+      resetCf()
+      setDialogOpen(true)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
   }, [])
 
   // Persiste form e estado do dialog no sessionStorage
@@ -1122,7 +1227,7 @@ export default function Clientes() {
                     <DroppableColumn id={stage.value} className="space-y-2 min-h-[60px] p-1 -m-1">
                       {stageLeads.map(lead => (
                         <DraggableCard key={lead.id} id={lead.id}>
-                          <LeadCard lead={lead} onClick={() => openEditLead(lead)} onStatusChange={updateLeadStatus} stages={stages} />
+                          <LeadCard lead={lead} onClick={() => setViewLead(lead)} onStatusChange={updateLeadStatus} stages={stages} />
                         </DraggableCard>
                       ))}
                       {stageLeads.length === 0 && (
@@ -1187,7 +1292,7 @@ export default function Clientes() {
                           style={{ backgroundColor: getAvatarColor(c.name) }}>
                           {getInitials(c.name)}
                         </div>
-                        <span className="text-sm font-medium">{c.name}</span>
+                        <span className="text-sm font-medium"><Sensitive>{c.name}</Sensitive></span>
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">{c.type === 'pessoa_fisica' ? 'PF' : 'PJ'}</TableCell>
@@ -1227,6 +1332,18 @@ export default function Clientes() {
         onDelete={() => { if (viewClient) { deleteClient(viewClient.id); setViewClient(null) } }}
         onNewTask={() => { /* TODO: abrir tarefas com cliente pré-selecionado */ }}
         onNewProcess={() => { /* TODO: abrir processos com cliente pré-selecionado */ }}
+      />
+
+      {/* ── Lead View Dialog ── */}
+      <LeadViewDialog
+        lead={viewLead}
+        open={!!viewLead}
+        onClose={() => setViewLead(null)}
+        onEdit={() => { const l = viewLead; setViewLead(null); if (l) openEditLead(l) }}
+        onDelete={() => { if (viewLead) { deleteLead(viewLead.id); setViewLead(null) } }}
+        onConvert={() => { if (viewLead) { convertLead(viewLead); setViewLead(null) } }}
+        onMoveStage={status => { if (viewLead) { updateLeadStatus(viewLead.id, status); setViewLead(null) } }}
+        stages={stages}
       />
 
       {/* ── Client Dialog ── */}

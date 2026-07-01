@@ -46,6 +46,23 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   return <ClientContext.Provider value={{ client, loading, refresh: load }}>{children}</ClientContext.Provider>
 }
 
+// Usado pela admin para pré-visualizar o portal como um cliente específico —
+// busca o cliente por id (permitido via policy admin_all_clients) em vez de
+// depender do e-mail do usuário logado.
+export function ClientPreviewProvider({ clientId, children }: { clientId: string; children: ReactNode }) {
+  const [client, setClient] = useState<ClientRecord | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  async function load() {
+    const { data } = await supabase.from('clients').select(FIELDS).eq('id', clientId).maybeSingle()
+    setClient(data as ClientRecord | null)
+  }
+
+  useEffect(() => { setLoading(true); load().then(() => setLoading(false)) }, [clientId])
+
+  return <ClientContext.Provider value={{ client, loading, refresh: load }}>{children}</ClientContext.Provider>
+}
+
 export function useClient() {
   return useContext(ClientContext)
 }

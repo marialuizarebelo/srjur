@@ -252,6 +252,16 @@ export default function Tarefas() {
 
   useEffect(() => { loadData() }, [])
 
+  // Abre o formulário de nova tarefa quando vem de um atalho "+ Novo" (ex: Dashboard)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('new') === '1') {
+      resetTf()
+      setDialogOpen(true)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
+
   // ── Filtered ──
   const filtered = useMemo(() => {
     return tasks

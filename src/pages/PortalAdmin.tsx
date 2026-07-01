@@ -139,7 +139,7 @@ export default function PortalAdmin() {
         </div>
         {selectedClient && (
           <a
-            href="/portal"
+            href={`/preview/${selectedClient.id}`}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"

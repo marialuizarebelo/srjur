@@ -121,7 +121,7 @@ function StatCard({ title, value, subtitle, icon: Icon, lightColor, darkColor, b
         </div>
         <p className="text-xs font-semibold uppercase tracking-wider" style={{ color }}>{title}</p>
       </div>
-      <p className="text-4xl font-bold" style={{ color }}>{value}</p>
+      <p className="text-4xl font-bold" style={{ color }}><Sensitive>{value}</Sensitive></p>
       {subtitle && <p className="text-xs mt-1.5 font-medium" style={{ color: color + 'cc' }}>{subtitle}</p>}
       {onClick && (
         <div className="absolute bottom-2 right-3 opacity-50">
@@ -570,16 +570,16 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground">{todayStr} · Sua central de operação</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" render={<Link to="/clientes" />}>
+          <Button variant="outline" size="sm" render={<Link to="/clientes?new=lead" />}>
             <Plus className="h-3 w-3 mr-1" />Lead
           </Button>
-          <Button variant="outline" size="sm" render={<Link to="/clientes" />}>
+          <Button variant="outline" size="sm" render={<Link to="/clientes?new=cliente" />}>
             <Plus className="h-3 w-3 mr-1" />Cliente
           </Button>
-          <Button variant="outline" size="sm" render={<Link to="/processos" />}>
+          <Button variant="outline" size="sm" render={<Link to="/processos?new=1" />}>
             <Plus className="h-3 w-3 mr-1" />Processo
           </Button>
-          <Button size="sm" render={<Link to="/tarefas" />}>
+          <Button size="sm" render={<Link to="/tarefas?new=1" />}>
             <Plus className="h-3 w-3 mr-1" />Tarefa
           </Button>
         </div>

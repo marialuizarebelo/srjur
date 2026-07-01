@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, Navigate, useParams, useLocation } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { PrivacyProvider } from '@/contexts/PrivacyContext'
-import { ClientProvider } from '@/contexts/ClientContext'
+import { ClientProvider, ClientPreviewProvider } from '@/contexts/ClientContext'
 import { AppLayout } from '@/components/AppLayout'
 import { PortalLayout } from '@/components/PortalLayout'
 import PortalDashboard from '@/pages/portal/PortalDashboard'
@@ -34,6 +34,30 @@ import Placeholder from '@/pages/Placeholder'
 import './index.css'
 
 const queryClient = new QueryClient()
+
+// Pré-visualização do portal do cliente, acessada pela admin a partir de /portal-admin.
+// Usa o mesmo layout/páginas do portal real, mas com o cliente forçado por id
+// (em vez de derivado do login), já que quem está navegando é a admin.
+function PortalPreviewRoutes() {
+  const { clientId } = useParams<{ clientId: string }>()
+  if (!clientId) return <Navigate to="/portal-admin" replace />
+  const basePath = `/preview/${clientId}`
+  return (
+    <ClientPreviewProvider clientId={clientId}>
+      <PortalLayout basePath={basePath} previewMode>
+        <Routes>
+          <Route path="/preview/:clientId" element={<PortalDashboard />} />
+          <Route path="/preview/:clientId/processos" element={<PortalProcessos />} />
+          <Route path="/preview/:clientId/financeiro" element={<PortalFinanceiro />} />
+          <Route path="/preview/:clientId/documentos" element={<PortalDocumentos />} />
+          <Route path="/preview/:clientId/agenda" element={<PortalAgenda />} />
+          <Route path="/preview/:clientId/comunicados" element={<PortalComunicados />} />
+          <Route path="/preview/:clientId/perfil" element={<PortalPerfil />} />
+        </Routes>
+      </PortalLayout>
+    </ClientPreviewProvider>
+  )
+}
 
 function AdminRoutes() {
   return (
@@ -80,6 +104,7 @@ function PortalRoutes() {
 
 function ProtectedRoutes() {
   const { session, loading, role } = useAuth()
+  const location = useLocation()
 
   if (loading) {
     return (
@@ -93,6 +118,8 @@ function ProtectedRoutes() {
   }
 
   if (!session) return <Navigate to="/login" replace />
+
+  if (role === 'admin' && location.pathname.startsWith('/preview/')) return <PortalPreviewRoutes />
 
   if (role === 'client') return <PortalRoutes />
 

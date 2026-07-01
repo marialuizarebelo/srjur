@@ -1,25 +1,28 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { supabase } from '@/integrations/supabase/client'
 import {
   LayoutDashboard, Scale, DollarSign, FileText, MessageSquare,
-  CalendarDays, User, LogOut, Moon, Sun, Bell,
+  CalendarDays, User, LogOut, Moon, Sun, Bell, X,
 } from 'lucide-react'
 import { applyThemeColor } from '@/lib/themeColor'
 
-const NAV = [
-  { title: 'Início', url: '/portal', icon: LayoutDashboard },
-  { title: 'Meus Processos', url: '/portal/processos', icon: Scale },
-  { title: 'Financeiro', url: '/portal/financeiro', icon: DollarSign },
-  { title: 'Documentos', url: '/portal/documentos', icon: FileText },
-  { title: 'Agenda', url: '/portal/agenda', icon: CalendarDays },
-  { title: 'Comunicados', url: '/portal/comunicados', icon: MessageSquare },
-  { title: 'Meu Perfil', url: '/portal/perfil', icon: User },
-]
+function getNav(basePath: string) {
+  return [
+    { title: 'Início', url: basePath, icon: LayoutDashboard },
+    { title: 'Meus Processos', url: `${basePath}/processos`, icon: Scale },
+    { title: 'Financeiro', url: `${basePath}/financeiro`, icon: DollarSign },
+    { title: 'Documentos', url: `${basePath}/documentos`, icon: FileText },
+    { title: 'Agenda', url: `${basePath}/agenda`, icon: CalendarDays },
+    { title: 'Comunicados', url: `${basePath}/comunicados`, icon: MessageSquare },
+    { title: 'Meu Perfil', url: `${basePath}/perfil`, icon: User },
+  ]
+}
 
-export function PortalLayout({ children }: { children: ReactNode }) {
+export function PortalLayout({ children, basePath = '/portal', previewMode = false }: { children: ReactNode; basePath?: string; previewMode?: boolean }) {
+  const NAV = getNav(basePath)
   const { profile, signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const location = useLocation()
@@ -41,6 +44,14 @@ export function PortalLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-muted/20 flex flex-col">
+      {previewMode && (
+        <div className="sticky top-0 z-40 bg-amber-500 text-white text-xs font-medium px-4 py-1.5 flex items-center justify-center gap-3">
+          <span>Você está pré-visualizando o portal como este cliente</span>
+          <Link to="/portal-admin" className="underline flex items-center gap-1">
+            <X className="h-3 w-3" />Sair da prévia
+          </Link>
+        </div>
+      )}
       {/* Top bar */}
       <header className="sticky top-0 z-30 bg-background border-b border-border/60">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
@@ -65,9 +76,11 @@ export function PortalLayout({ children }: { children: ReactNode }) {
               <div className="h-8 w-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold overflow-hidden">
                 {profile?.photo_url ? <img src={profile.photo_url} alt="" className="w-full h-full object-cover" /> : (profile?.display_name ?? 'C').charAt(0)}
               </div>
-              <button onClick={signOut} className="h-9 w-9 rounded-xl hover:bg-muted flex items-center justify-center transition-colors text-muted-foreground" title="Sair">
-                <LogOut className="h-4 w-4" />
-              </button>
+              {!previewMode && (
+                <button onClick={signOut} className="h-9 w-9 rounded-xl hover:bg-muted flex items-center justify-center transition-colors text-muted-foreground" title="Sair">
+                  <LogOut className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </div>
 
