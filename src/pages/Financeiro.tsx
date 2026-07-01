@@ -821,10 +821,10 @@ export default function Financeiro() {
               )
             }}
           />
+          <Button size="sm" onClick={() => { resetForm(); setDialogOpen(true) }}>
+            <Plus className="h-3 w-3 mr-1" />Novo Lançamento
+          </Button>
           <Dialog open={dialogOpen} onOpenChange={open => { setDialogOpen(open); if (!open) resetForm() }}>
-            <DialogTrigger render={<Button size="sm" />}>
-              <Plus className="h-3 w-3 mr-1" />Novo Lançamento
-            </DialogTrigger>
             <DialogContent className="max-w-[900px] w-[96vw] max-h-[92vh] overflow-y-auto p-8">
               <DialogHeader>
                 <DialogTitle className="text-lg">{editingId ? 'Editar' : 'Novo'} Lançamento</DialogTitle>
