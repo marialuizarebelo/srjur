@@ -543,7 +543,7 @@ export default function Prazos() {
         const targetStageId = columnId === '__unassigned__' ? null : columnId
         if (deadline && deadline.stage_id !== targetStageId) moveToStage(deadlineId, targetStageId)
       }}>
-        <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto pb-4">
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto scrollbar-thin pb-4">
           {/* Sem etapa column */}
           {(() => {
             const collapsed = collapsedStages.has('__unassigned__')

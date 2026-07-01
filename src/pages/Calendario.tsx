@@ -15,6 +15,9 @@ import { fmtDateLong } from '@/lib/format'
 import { syncGoogleCalendar, type SyncResult } from '@/lib/googleCalendar'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { toast } from 'sonner'
+import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
+import { Badge } from '@/components/ui/badge'
+import { Columns3, CalendarDays } from 'lucide-react'
 
 type ViewMode = 'mes' | 'semana' | 'dia'
 
@@ -26,7 +29,30 @@ interface CalEvent {
   time?: string | null
   responsibleIds: string[]
   status: string
+  workflowStage: string
   processLabel?: string
+}
+
+const WORKFLOW_STAGES = [
+  { value: 'backlog', label: 'Backlog', color: '#6B7280' },
+  { value: 'a_fazer', label: 'A Fazer', color: '#3B82F6' },
+  { value: 'fazendo', label: 'Fazendo', color: '#F59E0B' },
+  { value: 'aguardando', label: 'Aguardando', color: '#8B5CF6' },
+  { value: 'concluido', label: 'Concluído', color: '#10B981' },
+]
+
+// Mapeia o status próprio do Marketing (ideia→publicado) para as 5 fases genéricas do kanban combinado
+function marketingToStage(status: string): string {
+  if (status === 'producao') return 'fazendo'
+  if (status === 'agendado') return 'aguardando'
+  if (status === 'publicado') return 'concluido'
+  return 'a_fazer' // ideia, roteiro
+}
+function stageToMarketingStatus(stage: string): string {
+  if (stage === 'fazendo') return 'producao'
+  if (stage === 'aguardando') return 'agendado'
+  if (stage === 'concluido') return 'publicado'
+  return 'ideia'
 }
 
 const TYPE_COLOR: Record<string, { bg: string; text: string }> = {
@@ -160,8 +186,8 @@ export default function Calendario() {
   async function load() {
     setLoading(true)
     const [{ data: tasks }, { data: deadlines }, { data: processes }, { data: marketing }] = await Promise.all([
-      supabase.from('tasks').select('id,title,due_date,due_time,responsible_ids,status,type,process_id').neq('status','cancelada'),
-      supabase.from('deadlines').select('id,title,due_date,responsible_ids,status,process_id').neq('status','perdido'),
+      supabase.from('tasks').select('id,title,due_date,due_time,responsible_ids,status,type,process_id,workflow_stage').neq('status','cancelada'),
+      supabase.from('deadlines').select('id,title,due_date,responsible_ids,status,process_id,workflow_stage').neq('status','perdido'),
       supabase.from('processes').select('id,title,number'),
       supabase.from('marketing_content').select('id,title,scheduled_date,scheduled_time,responsible_ids,status,platform').not('scheduled_date', 'is', null),
     ])
@@ -172,21 +198,43 @@ export default function Calendario() {
       const isComp = ['compromisso','reuniao','audiencia','diligencia'].includes(t.type)
       evs.push({ id:`t-${t.id}`, type: isComp ? 'compromisso' : 'tarefa',
         title:t.title, date:t.due_date, time:t.due_time, responsibleIds: t.responsible_ids ?? [],
-        status:t.status, processLabel: t.process_id ? pm[t.process_id] : undefined })
+        status:t.status, workflowStage: t.workflow_stage ?? 'a_fazer',
+        processLabel: t.process_id ? pm[t.process_id] : undefined })
     }
     for (const d of deadlines??[]) {
       if (!d.due_date) continue
       evs.push({ id:`d-${d.id}`, type:'prazo', title:d.title, date:d.due_date,
-        responsibleIds: d.responsible_ids ?? [], status:d.status,
+        responsibleIds: d.responsible_ids ?? [], status:d.status, workflowStage: d.workflow_stage ?? 'a_fazer',
         processLabel: d.process_id ? pm[d.process_id] : undefined })
     }
     for (const m of marketing??[]) {
       if (!m.scheduled_date) continue
       evs.push({ id:`m-${m.id}`, type:'marketing', title:`[${m.platform}] ${m.title}`, date:m.scheduled_date,
-        time: m.scheduled_time, responsibleIds: m.responsible_ids ?? [], status: m.status })
+        time: m.scheduled_time, responsibleIds: m.responsible_ids ?? [], status: m.status,
+        workflowStage: marketingToStage(m.status) })
     }
     setEvents(evs)
     setLoading(false)
+  }
+
+  async function moveEventStage(ev: CalEvent, newStage: string) {
+    if (ev.type === 'marketing') {
+      const realId = ev.id.replace(/^m-/, '')
+      await supabase.from('marketing_content').update({ status: stageToMarketingStatus(newStage) }).eq('id', realId)
+    } else if (ev.type === 'prazo') {
+      const realId = ev.id.replace(/^d-/, '')
+      const payload: { workflow_stage: string; status?: string } = { workflow_stage: newStage }
+      if (newStage === 'concluido') payload.status = 'cumprido'
+      else if (ev.status === 'cumprido') payload.status = 'pendente'
+      await supabase.from('deadlines').update(payload).eq('id', realId)
+    } else {
+      const realId = ev.id.replace(/^t-/, '')
+      const payload: { workflow_stage: string; status?: string } = { workflow_stage: newStage }
+      if (newStage === 'concluido') payload.status = 'concluida'
+      else if (ev.status === 'concluida') payload.status = 'pendente'
+      await supabase.from('tasks').update(payload).eq('id', realId)
+    }
+    load()
   }
 
   const filtered = useMemo(() => events.filter(e => {
@@ -203,6 +251,64 @@ export default function Calendario() {
     for (const e of filtered) { if (!m[e.date]) m[e.date]=[]; m[e.date].push(e) }
     return m
   }, [filtered])
+
+  const [subView, setSubView] = useState<'agenda' | 'etapas'>('agenda')
+
+  const weekEvents = useMemo(() => {
+    const ws = weekStart(cursor)
+    const we = new Date(ws); we.setDate(ws.getDate() + 6)
+    const wsStr = toYMD(ws), weStr = toYMD(we)
+    return filtered.filter(e => e.date >= wsStr && e.date <= weStr)
+  }, [filtered, cursor])
+
+  // ── Kanban de etapas (Scrum) combinando tarefas, prazos, compromissos e marketing ──
+  function StageBoard({ evs }: { evs: CalEvent[] }) {
+    return (
+      <KanbanDndContext onDropOnColumn={(evId, stageValue) => {
+        const ev = evs.find(e => e.id === evId)
+        if (ev && ev.workflowStage !== stageValue) moveEventStage(ev, stageValue)
+      }}>
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto scrollbar-thin pb-2">
+          {WORKFLOW_STAGES.map(stage => {
+            const stageEvs = evs.filter(e => e.workflowStage === stage.value)
+            return (
+              <div key={stage.value} className="w-full md:min-w-[240px] md:w-[240px] md:shrink-0">
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
+                  <span className="text-sm font-semibold">{stage.label}</span>
+                  <Badge variant="secondary" className="text-[10px] ml-auto">{stageEvs.length}</Badge>
+                </div>
+                <DroppableColumn id={stage.value} className="space-y-2 min-h-[60px] bg-muted/20 p-2">
+                  {stageEvs.map(ev => {
+                    const tc = TYPE_COLOR[ev.type]
+                    return (
+                      <DraggableCard key={ev.id} id={ev.id}>
+                        <div className="p-2.5 rounded-lg border bg-background hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => openEditEvent(ev)}>
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${tc.bg} ${tc.text}`}>
+                              {ev.type === 'tarefa' ? 'Tarefa' : ev.type === 'prazo' ? 'Prazo' : ev.type === 'marketing' ? 'Marketing' : 'Compromisso'}
+                            </span>
+                            {ev.time && <span className="text-[10px] text-muted-foreground">{ev.time.slice(0,5)}</span>}
+                          </div>
+                          <p className="text-sm font-medium leading-snug">{ev.title}</p>
+                          <p className="text-[10px] text-muted-foreground mt-1">{fmtDateLong(parseYMD(ev.date)).split(',')[0]}</p>
+                          <ResponsibleAvatars ids={ev.responsibleIds} profilesMap={profilesMap} size="xs" />
+                        </div>
+                      </DraggableCard>
+                    )
+                  })}
+                  {stageEvs.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground text-center py-4">Nada aqui</p>
+                  )}
+                </DroppableColumn>
+              </div>
+            )
+          })}
+        </div>
+      </KanbanDndContext>
+    )
+  }
 
   function nav(dir: 1|-1) {
     const d = new Date(cursor)
@@ -605,6 +711,24 @@ export default function Calendario() {
               </button>
             ))}
           </div>
+
+          {/* agenda / etapas toggle — só em semana e dia */}
+          {hasSidebar && (
+            <div className="flex items-center bg-muted/40 rounded-xl p-0.5">
+              <button onClick={() => setSubView('agenda')}
+                className={`px-3 h-7 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  subView==='agenda' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                }`}>
+                <CalendarDays className="h-3.5 w-3.5" />Agenda
+              </button>
+              <button onClick={() => setSubView('etapas')}
+                className={`px-3 h-7 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  subView==='etapas' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                }`}>
+                <Columns3 className="h-3.5 w-3.5" />Etapas
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -615,18 +739,20 @@ export default function Calendario() {
         <div className={hasSidebar ? 'grid gap-4 grid-cols-1 md:[grid-template-columns:1fr_196px]' : ''}>
           <div>
             {view === 'mes'    && <MonthView />}
-            {view === 'semana' && <WeekView />}
+            {view === 'semana' && (subView === 'etapas' ? <StageBoard evs={weekEvents} /> : <WeekView />)}
             {view === 'dia'    && (
-              <div className="rounded-2xl border border-border/60 bg-card shadow-sm p-6">
-                <div className="flex items-center justify-between mb-5">
-                  <p className="text-base font-semibold capitalize text-foreground">
-                    {fmtDateLong(parseYMD(selDate))}
-                  </p>
-                  <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => openQuickCreate(selDate)}>
-                    <Plus className="h-3 w-3 mr-1" />Novo
-                  </Button>
-                </div>
-                <DayView />
+              <div className={subView === 'etapas' ? '' : 'rounded-2xl border border-border/60 bg-card shadow-sm p-6'}>
+                {subView === 'agenda' && (
+                  <div className="flex items-center justify-between mb-5">
+                    <p className="text-base font-semibold capitalize text-foreground">
+                      {fmtDateLong(parseYMD(selDate))}
+                    </p>
+                    <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => openQuickCreate(selDate)}>
+                      <Plus className="h-3 w-3 mr-1" />Novo
+                    </Button>
+                  </div>
+                )}
+                {subView === 'etapas' ? <StageBoard evs={byDate[selDate] ?? []} /> : <DayView />}
               </div>
             )}
           </div>

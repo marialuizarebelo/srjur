@@ -531,7 +531,7 @@ export default function Processos() {
           const proc = processes.find(p => p.id === processId)
           if (proc && proc.phase !== phaseValue) updatePhase(processId, phaseValue)
         }}>
-          <div className="flex flex-col md:flex-row gap-4 md:overflow-x-auto pb-4">
+          <div className="flex flex-col md:flex-row gap-4 md:overflow-x-auto scrollbar-thin pb-4">
             {PHASES.filter(ph => ph.value !== 'encerrado' || statusFilter === 'todos').map(phase => {
               const phaseProcesses = byPhase.get(phase.value) ?? []
               const collapsed = collapsedPhases.has(phase.value)
