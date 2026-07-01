@@ -81,6 +81,10 @@ export default function SistemasEletronicos() {
   const [clients, setClients] = useState<ClientOption[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [lastSyncLabel, setLastSyncLabel] = useState<string | null>(() => {
+    const last = localStorage.getItem('djen_last_sync')
+    return last ? new Date(Number(last)).toLocaleString('pt-BR') : null
+  })
   const [readFilter, setReadFilter] = useState<'nao_lidas' | 'lidas' | 'ignoradas' | 'todas'>('nao_lidas')
 
   const [configOpen, setConfigOpen] = useState(false)
@@ -105,11 +109,7 @@ export default function SistemasEletronicos() {
   })
 
   useEffect(() => {
-    loadData().then(oc => {
-      const last = localStorage.getItem('djen_last_sync')
-      const hoursSince = last ? (Date.now() - Number(last)) / 36e5 : Infinity
-      if (hoursSince >= 6) syncAll(true, oc)
-    })
+    loadData()
   }, [])
 
   async function loadData() {
@@ -185,6 +185,7 @@ export default function SistemasEletronicos() {
         }
       }
       localStorage.setItem('djen_last_sync', String(Date.now()))
+      setLastSyncLabel(new Date().toLocaleString('pt-BR'))
       if (!silent || totalNew > 0) {
         toast.success(totalNew > 0 ? `${totalNew} nova(s) intimação(ões) encontrada(s)!` : 'Nenhuma intimação nova')
       }
@@ -315,24 +316,39 @@ export default function SistemasEletronicos() {
             {countNaoLidas > 0 && <span className="text-amber-600 font-medium"> · {countNaoLidas} não lida(s)</span>}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setConfigOpen(true)} className="rounded-xl">
-            <Settings2 className="h-3.5 w-3.5 mr-1.5" />OABs monitoradas
-          </Button>
-          <Button size="sm" onClick={() => syncAll()} disabled={syncing} className="rounded-xl">
-            {syncing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-            {syncing ? 'Sincronizando...' : 'Sincronizar agora'}
-          </Button>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setConfigOpen(true)} className="rounded-xl">
+              <Settings2 className="h-3.5 w-3.5 mr-1.5" />OABs monitoradas
+            </Button>
+            <Button size="sm" onClick={() => syncAll()} disabled={syncing} className="rounded-xl">
+              {syncing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+              {syncing ? 'Buscando novas intimações...' : 'Verificar novas intimações'}
+            </Button>
+          </div>
+          {lastSyncLabel && !syncing && (
+            <p className="text-[11px] text-muted-foreground">Última verificação: {lastSyncLabel}</p>
+          )}
         </div>
       </div>
 
-      {configs.length === 0 && (
+      {configs.length === 0 ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-4 flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Nenhuma OAB cadastrada</p>
             <p className="text-xs text-amber-600/80 dark:text-amber-400/70 mt-0.5">
-              Cadastre o número de OAB das advogadas em "OABs monitoradas" para começar a sincronizar intimações automaticamente.
+              Cadastre o número de OAB das advogadas em "OABs monitoradas" e depois clique em "Verificar novas intimações" para buscar no DJEN.
+            </p>
+          </div>
+        </div>
+      ) : intimacoes.length === 0 && !syncing && (
+        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 flex items-start gap-3">
+          <RefreshCw className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium">Nenhuma intimação carregada ainda</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Clique em "Verificar novas intimações" acima para buscar no DJEN. A busca não é automática — só roda quando você pedir.
             </p>
           </div>
         </div>
