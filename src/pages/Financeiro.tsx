@@ -257,6 +257,129 @@ function DetailDrawer({ title, rows, onClose, clients, onEdit, paymentsMap }: {
   )
 }
 
+// ── View Dialog ──
+function FinanceViewDialog({ row, open, onClose, onEdit, onDelete, clients, paymentsMap }: {
+  row: FinanceRow | null
+  open: boolean
+  onClose: () => void
+  onEdit: () => void
+  onDelete: () => void
+  clients: ClientOption[]
+  paymentsMap: Record<string, FinancePayment[]>
+}) {
+  if (!row) return null
+  const clientName = clients.find(c => c.id === row.client_id)?.name
+  const payments = paymentsMap[row.id] ?? []
+  const status = rowStatus(row, paymentsMap)
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
+      <DialogContent className="max-w-[560px] w-[96vw] max-h-[90vh] overflow-y-auto p-0">
+        <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-4 border-b">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+              <RowBadge row={row} paymentsMap={paymentsMap} />
+              <Badge variant="outline" className="text-[10px]">{row.type === 'receita' ? 'Receita' : 'Despesa'}</Badge>
+            </div>
+            <h2 className="text-lg font-semibold leading-tight">{row.description}</h2>
+          </div>
+          <p className={`text-xl font-bold shrink-0 ${
+            row.type === 'despesa' ? 'text-slate-500' :
+            status === 'pago' ? 'text-green-600' :
+            status === 'parcial' ? 'text-blue-500' :
+            status === 'atrasado' ? 'text-red-500' : 'text-amber-500'
+          }`}>
+            {fmtBRL(Number(row.value))}
+          </p>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-[11px] text-muted-foreground">Data</p>
+              <p className="font-medium">{fmtDate(row.date)}</p>
+            </div>
+            {row.due_date && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Vencimento</p>
+                <p className="font-medium">{fmtDate(row.due_date)}</p>
+              </div>
+            )}
+            {row.category && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Categoria</p>
+                <p className="font-medium">{row.category}</p>
+              </div>
+            )}
+            {clientName && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Cliente</p>
+                <p className="font-medium">{clientName}</p>
+              </div>
+            )}
+            {row.payment_method && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Forma de pagamento</p>
+                <p className="font-medium">{row.payment_method}</p>
+              </div>
+            )}
+            {row.responsible && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Responsável</p>
+                <p className="font-medium">@{row.responsible}</p>
+              </div>
+            )}
+            {row.installments && row.installments > 1 && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Parcela</p>
+                <p className="font-medium">{row.current_installment}/{row.installments}</p>
+              </div>
+            )}
+            {row.recurrence && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Recorrência</p>
+                <p className="font-medium">{row.recurrence}</p>
+              </div>
+            )}
+          </div>
+
+          {row.notes && (
+            <div>
+              <p className="text-[11px] text-muted-foreground mb-1">Observações</p>
+              <p className="text-sm whitespace-pre-wrap">{row.notes}</p>
+            </div>
+          )}
+
+          {payments.length > 0 && (
+            <div>
+              <p className="text-[11px] text-muted-foreground mb-1.5">Pagamentos registrados</p>
+              <div className="space-y-1.5">
+                {payments.map(p => (
+                  <div key={p.id} className="flex items-center justify-between text-sm bg-muted/40 rounded-lg px-3 py-2">
+                    <span>{fmtDate(p.payment_date)}</span>
+                    <span className="font-medium text-green-600">{fmtBRL(Number(p.amount))}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {row.payment_link && (
+            <a href={row.payment_link} target="_blank" rel="noopener noreferrer" className="text-sm text-primary inline-flex items-center gap-1">
+              <Link2 className="h-3.5 w-3.5" />Link de pagamento
+            </a>
+          )}
+        </div>
+
+        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2">
+          <Button variant="destructive" className="mr-auto" onClick={onDelete}>Excluir</Button>
+          <Button onClick={onEdit}>Editar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ── Main ──
 export default function Financeiro() {
   const [rows, setRows] = useState<FinanceRow[]>([])
@@ -267,6 +390,7 @@ export default function Financeiro() {
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [viewRow, setViewRow] = useState<FinanceRow | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [asaasOpen, setAsaasOpen] = useState(false)
   const [asaasCreating, setAsaasCreating] = useState(false)
@@ -703,13 +827,24 @@ export default function Financeiro() {
           rows={getCardRows()}
           onClose={() => setActiveCard(null)}
           clients={clients}
-          onEdit={handleEdit}
+          onEdit={setViewRow}
           paymentsMap={paymentsMap}
         />
       )}
 
       {/* Import extrato */}
       <ImportExtrato open={importOpen} onOpenChange={setImportOpen} onComplete={loadData} />
+
+      {/* ── View Dialog ── */}
+      <FinanceViewDialog
+        row={viewRow}
+        open={!!viewRow}
+        onClose={() => setViewRow(null)}
+        onEdit={() => { const r = viewRow; setViewRow(null); if (r) handleEdit(r) }}
+        onDelete={() => { if (viewRow) { handleDelete(viewRow.id); setViewRow(null) } }}
+        clients={clients}
+        paymentsMap={paymentsMap}
+      />
 
       {/* ── Cobrança Asaas ── */}
       <Dialog open={asaasOpen} onOpenChange={o => { setAsaasOpen(o); if (!o) resetAf() }}>
@@ -1323,7 +1458,7 @@ export default function Financeiro() {
               status === 'parcial' ? 'text-blue-500' :
               status === 'atrasado' ? 'text-red-500' : 'text-amber-500'
             return (
-              <Card key={row.id} className="p-3 active:bg-muted/40" onClick={() => handleEdit(row)}>
+              <Card key={row.id} className="p-3 active:bg-muted/40" onClick={() => setViewRow(row)}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
@@ -1386,7 +1521,7 @@ export default function Financeiro() {
               <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum lançamento no período</TableCell></TableRow>
             ) : (
               filtered.map(row => (
-                <TableRow key={row.id} className="cursor-pointer hover:bg-muted/30" onClick={() => handleEdit(row)}>
+                <TableRow key={row.id} className="cursor-pointer hover:bg-muted/30" onClick={() => setViewRow(row)}>
                   <TableCell className="text-sm whitespace-nowrap">{fmtDate(row.date)}</TableCell>
                   <TableCell><RowBadge row={row} paymentsMap={paymentsMap} /></TableCell>
                   <TableCell className="text-sm max-w-[140px] truncate">

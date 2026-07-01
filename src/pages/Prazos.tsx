@@ -74,6 +74,110 @@ function getVisibleFields(): Record<string, boolean> {
   } catch { return DEFAULT_VISIBLE }
 }
 
+// ── View Dialog ──
+function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggleStatus, stages, processes, profilesMap }: {
+  deadline: Deadline | null
+  open: boolean
+  onClose: () => void
+  onEdit: () => void
+  onDelete: () => void
+  onToggleStatus: () => void
+  stages: DeadlineStage[]
+  processes: ProcessOption[]
+  profilesMap: Record<string, { display_name: string | null; color: string | null }>
+}) {
+  if (!deadline) return null
+  const days = getDaysDiff(deadline.due_date)
+  const isOverdue = days < 0 && deadline.status === 'pendente'
+  const isToday = days === 0 && deadline.status === 'pendente'
+  const stage = stages.find(s => s.id === deadline.stage_id)
+  const process = processes.find(p => p.id === deadline.process_id)
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
+      <DialogContent className="max-w-[560px] w-[96vw] max-h-[90vh] overflow-y-auto p-0">
+        <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-4 border-b">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+              {deadline.status === 'cumprido' && <Badge className="text-[10px] bg-green-600 text-white">Cumprido</Badge>}
+              {deadline.status === 'perdido' && <Badge className="text-[10px] bg-red-500 text-white">Perdido</Badge>}
+              {isOverdue && deadline.status === 'pendente' && <Badge className="text-[10px] bg-red-500 text-white">Atrasado</Badge>}
+              {isToday && <Badge className="text-[10px] bg-blue-500 text-white">Hoje</Badge>}
+              {stage && (
+                <Badge variant="outline" className="text-[10px]" style={{ borderColor: stage.color, color: stage.color }}>
+                  {stage.name}
+                </Badge>
+              )}
+            </div>
+            <h2 className={`text-lg font-semibold leading-tight ${deadline.status === 'cumprido' ? 'line-through opacity-60' : ''}`}>
+              {deadline.title}
+            </h2>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-[11px] text-muted-foreground">Data limite</p>
+              <p className="font-medium">{fmtDate(deadline.due_date)}</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-muted-foreground">Situação</p>
+              <p className="font-medium">
+                {isOverdue ? `${Math.abs(days)}d atrás` : isToday ? 'Hoje' : deadline.status === 'pendente' ? `${days}d restantes` : deadline.status}
+              </p>
+            </div>
+            {process && (
+              <div className="col-span-2">
+                <p className="text-[11px] text-muted-foreground">Processo</p>
+                <p className="font-medium">{process.number ? `${process.number} — ${process.title}` : process.title}</p>
+              </div>
+            )}
+            {deadline.source && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Origem</p>
+                <p className="font-medium">{deadline.source}</p>
+              </div>
+            )}
+          </div>
+
+          {deadline.responsible_ids && deadline.responsible_ids.length > 0 && (
+            <div>
+              <p className="text-[11px] text-muted-foreground mb-1.5">Responsáveis</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {deadline.responsible_ids.map(id => (
+                  <Badge key={id} variant="outline" className="text-[11px]" style={{ borderColor: profilesMap[id]?.color ?? undefined }}>
+                    {profilesMap[id]?.display_name ?? '—'}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {deadline.notes && (
+            <div>
+              <p className="text-[11px] text-muted-foreground mb-1">Observações</p>
+              <p className="text-sm whitespace-pre-wrap">{deadline.notes}</p>
+            </div>
+          )}
+
+          {deadline.portal_visible && (
+            <p className="text-[11px] text-muted-foreground">Visível no portal do cliente</p>
+          )}
+        </div>
+
+        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2">
+          <Button variant="destructive" className="mr-auto" onClick={onDelete}>Excluir</Button>
+          <Button variant="outline" onClick={onToggleStatus}>
+            {deadline.status === 'cumprido' ? 'Reabrir' : 'Marcar cumprido'}
+          </Button>
+          <Button onClick={onEdit}>Editar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function Prazos() {
   const [deadlines, setDeadlines] = useState<Deadline[]>([])
   const [stages, setStages] = useState<DeadlineStage[]>([])
@@ -93,6 +197,7 @@ export default function Prazos() {
   }
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Deadline | null>(null)
+  const [viewDeadline, setViewDeadline] = useState<Deadline | null>(null)
   const [stagesOpen, setStagesOpen] = useState(false)
   const [fieldsOpen, setFieldsOpen] = useState(false)
   const [visibleFields, setVisibleFields] = useState(getVisibleFields)
@@ -255,7 +360,7 @@ export default function Prazos() {
           isOverdue ? 'border-red-300 dark:border-red-800' :
           isToday ? 'border-blue-300 dark:border-blue-800' : ''
         }`}
-        onClick={() => openEdit(deadline)}
+        onClick={() => setViewDeadline(deadline)}
       >
         <div className="flex items-start gap-2">
           <button
@@ -338,62 +443,66 @@ export default function Prazos() {
     const isToday = days === 0 && deadline.status === 'pendente'
 
     return (
-      <div className={`flex items-center gap-3 p-3 rounded-lg border transition-colors hover:shadow-sm ${
+      <div className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-lg border transition-colors hover:shadow-sm ${
         deadline.status !== 'pendente' ? 'opacity-50' : ''
       } ${isOverdue ? 'border-red-300 bg-red-50/70 dark:border-red-900 dark:bg-red-950/30' :
         isToday ? 'border-blue-300 bg-blue-50/70 dark:border-blue-900 dark:bg-blue-950/30' : ''}`}>
 
-        <button onClick={() => toggleStatus(deadline)} className="shrink-0">
-          {deadline.status === 'cumprido'
-            ? <CheckCircle2 className="h-5 w-5 text-green-500" />
-            : deadline.status === 'perdido'
-            ? <AlertTriangle className="h-5 w-5 text-red-500" />
-            : <Circle className="h-5 w-5 text-muted-foreground hover:text-primary" />
-          }
-        </button>
+        <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+          <button onClick={() => toggleStatus(deadline)} className="shrink-0 mt-0.5 sm:mt-0">
+            {deadline.status === 'cumprido'
+              ? <CheckCircle2 className="h-5 w-5 text-green-500" />
+              : deadline.status === 'perdido'
+              ? <AlertTriangle className="h-5 w-5 text-red-500" />
+              : <Circle className="h-5 w-5 text-muted-foreground hover:text-primary" />
+            }
+          </button>
 
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(deadline)}>
-          <div className="flex items-center gap-2">
-            <p className={`text-sm font-medium truncate ${deadline.status === 'cumprido' ? 'line-through' : ''}`}>
-              {deadline.title}
-            </p>
-            {deadline.source && deadline.source !== 'Manual' && (
-              <Badge variant="outline" className="text-[9px]">{deadline.source}</Badge>
-            )}
-            {deadline.stage_id && (
-              <div className="flex items-center gap-1">
-                <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: getStage(deadline.stage_id)?.color }} />
-                <span className="text-[9px] text-muted-foreground">{getStage(deadline.stage_id)?.name}</span>
-              </div>
+          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setViewDeadline(deadline)}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className={`text-sm font-medium truncate ${deadline.status === 'cumprido' ? 'line-through' : ''}`}>
+                {deadline.title}
+              </p>
+              {deadline.source && deadline.source !== 'Manual' && (
+                <Badge variant="outline" className="text-[9px]">{deadline.source}</Badge>
+              )}
+              {deadline.stage_id && (
+                <div className="flex items-center gap-1">
+                  <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: getStage(deadline.stage_id)?.color }} />
+                  <span className="text-[9px] text-muted-foreground">{getStage(deadline.stage_id)?.name}</span>
+                </div>
+              )}
+            </div>
+            {getProcessLabel(deadline.process_id) && (
+              <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                <Scale className="h-3 w-3 inline mr-0.5" />
+                {getProcessLabel(deadline.process_id)}
+              </p>
             )}
           </div>
-          {getProcessLabel(deadline.process_id) && (
-            <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
-              <Scale className="h-3 w-3 inline mr-0.5" />
-              {getProcessLabel(deadline.process_id)}
-            </p>
-          )}
         </div>
 
-        <ResponsibleAvatars ids={deadline.responsible_ids} profilesMap={profilesMap} />
+        <div className="flex items-center justify-between sm:justify-end gap-2 pl-8 sm:pl-0 shrink-0">
+          <ResponsibleAvatars ids={deadline.responsible_ids} profilesMap={profilesMap} />
 
-        <div className="text-right shrink-0">
-          <p className={`text-xs font-medium whitespace-nowrap ${
-            isOverdue ? 'text-red-600' : isToday ? 'text-blue-600' : 'text-muted-foreground'
-          }`}>
-            {fmtDate(deadline.due_date)}
-          </p>
-          <p className={`text-[10px] ${
-            isOverdue ? 'text-red-500 font-semibold' :
-            isToday ? 'text-blue-600 font-medium' :
-            days === 1 ? 'text-amber-500' :
-            'text-muted-foreground'
-          }`}>
-            {isOverdue ? `${Math.abs(days)}d atrás` :
-             isToday ? 'HOJE' :
-             days === 1 ? 'AMANHÃ' :
-             `${days}d restantes`}
-          </p>
+          <div className="text-right shrink-0">
+            <p className={`text-xs font-medium whitespace-nowrap ${
+              isOverdue ? 'text-red-600' : isToday ? 'text-blue-600' : 'text-muted-foreground'
+            }`}>
+              {fmtDate(deadline.due_date)}
+            </p>
+            <p className={`text-[10px] ${
+              isOverdue ? 'text-red-500 font-semibold' :
+              isToday ? 'text-blue-600 font-medium' :
+              days === 1 ? 'text-amber-500' :
+              'text-muted-foreground'
+            }`}>
+              {isOverdue ? `${Math.abs(days)}d atrás` :
+               isToday ? 'HOJE' :
+               days === 1 ? 'AMANHÃ' :
+               `${days}d restantes`}
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -577,6 +686,19 @@ export default function Prazos() {
       ) : (
         <KanbanView />
       )}
+
+      {/* ── View Dialog ── */}
+      <DeadlineViewDialog
+        deadline={viewDeadline}
+        open={!!viewDeadline}
+        onClose={() => setViewDeadline(null)}
+        onEdit={() => { const d = viewDeadline; setViewDeadline(null); if (d) openEdit(d) }}
+        onDelete={() => { if (viewDeadline) { deleteDeadline(viewDeadline.id); setViewDeadline(null) } }}
+        onToggleStatus={() => { if (viewDeadline) { toggleStatus(viewDeadline); setViewDeadline(null) } }}
+        stages={stages}
+        processes={processes}
+        profilesMap={profilesMap}
+      />
 
       {/* ── Prazo Dialog ── */}
       <Dialog open={dialogOpen} onOpenChange={o => { setDialogOpen(o); if (!o) resetDf() }}>

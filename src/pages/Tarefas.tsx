@@ -63,6 +63,109 @@ const PRIORITIES = [
 
 const RECURRENCES = ['Única', 'Diária', 'Semanal', 'Quinzenal', 'Mensal', 'Trimestral']
 
+// ── View Dialog ──
+function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplete, clients, processes, profilesMap }: {
+  task: Task | null
+  open: boolean
+  onClose: () => void
+  onEdit: () => void
+  onDelete: () => void
+  onToggleComplete: () => void
+  clients: ClientOption[]
+  processes: ProcessOption[]
+  profilesMap: Record<string, { display_name: string | null; color: string | null }>
+}) {
+  if (!task) return null
+  const typeInfo = TYPES.find(t => t.value === task.type) ?? TYPES[0]
+  const priorityInfo = PRIORITIES.find(p => p.value === task.priority) ?? PRIORITIES[1]
+  const clientName = clients.find(c => c.id === task.client_id)?.name
+  const processTitle = processes.find(p => p.id === task.process_id)?.title
+  const days = task.due_date ? getDaysDiff(task.due_date) : null
+  const isOverdue = days !== null && days < 0 && task.status === 'pendente'
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
+      <DialogContent className="max-w-[560px] w-[96vw] max-h-[90vh] overflow-y-auto p-0">
+        <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-4 border-b">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+              <Badge variant="outline" className="text-[10px]" style={{ borderColor: typeInfo.color, color: typeInfo.color }}>
+                {typeInfo.label}
+              </Badge>
+              <Badge className="text-[10px]" style={{ backgroundColor: priorityInfo.color, color: '#fff' }}>
+                {priorityInfo.label}
+              </Badge>
+              {task.status === 'concluida' && <Badge className="text-[10px] bg-green-600 text-white">Concluída</Badge>}
+              {isOverdue && <Badge className="text-[10px] bg-red-500 text-white">Atrasada</Badge>}
+            </div>
+            <h2 className={`text-lg font-semibold leading-tight ${task.status === 'concluida' ? 'line-through opacity-60' : ''}`}>
+              {task.title}
+            </h2>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          {task.description && (
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{task.description}</p>
+          )}
+
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            {task.due_date && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Data</p>
+                <p className="font-medium">{fmtDate(task.due_date)}{task.due_time ? ` às ${task.due_time}` : ''}</p>
+              </div>
+            )}
+            {task.recurrence && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Recorrência</p>
+                <p className="font-medium">{task.recurrence}</p>
+              </div>
+            )}
+            {clientName && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Cliente</p>
+                <p className="font-medium">{clientName}</p>
+              </div>
+            )}
+            {processTitle && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Processo</p>
+                <p className="font-medium">{processTitle}</p>
+              </div>
+            )}
+          </div>
+
+          {task.responsible_ids && task.responsible_ids.length > 0 && (
+            <div>
+              <p className="text-[11px] text-muted-foreground mb-1.5">Responsáveis</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {task.responsible_ids.map(id => (
+                  <Badge key={id} variant="outline" className="text-[11px]" style={{ borderColor: profilesMap[id]?.color ?? undefined }}>
+                    {profilesMap[id]?.display_name ?? '—'}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {task.portal_visible && (
+            <p className="text-[11px] text-muted-foreground">Visível no portal do cliente</p>
+          )}
+        </div>
+
+        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2">
+          <Button variant="destructive" className="mr-auto" onClick={onDelete}>Excluir</Button>
+          <Button variant="outline" onClick={onToggleComplete}>
+            {task.status === 'concluida' ? 'Reabrir' : 'Concluir'}
+          </Button>
+          <Button onClick={onEdit}>Editar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ── Main ──
 export default function Tarefas() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -73,6 +176,7 @@ export default function Tarefas() {
   const [viewMode, setViewMode] = useState<'board' | 'list'>('list')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
+  const [viewTask, setViewTask] = useState<Task | null>(null)
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<'pendente' | 'concluida' | 'todas'>('pendente')
@@ -204,7 +308,7 @@ export default function Tarefas() {
 
           <div className="h-2 w-2 rounded-full shrink-0 mt-2 sm:mt-0" style={{ backgroundColor: typeInfo.color }} />
 
-          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(task)}>
+          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setViewTask(task)}>
             <div className="flex items-center gap-2 flex-wrap">
               <p className={`text-sm font-medium truncate ${task.status === 'concluida' ? 'line-through' : ''}`}>
                 {task.title}
@@ -373,6 +477,19 @@ export default function Tarefas() {
           )}
         </div>
       )}
+
+      {/* ── View Dialog ── */}
+      <TaskViewDialog
+        task={viewTask}
+        open={!!viewTask}
+        onClose={() => setViewTask(null)}
+        onEdit={() => { const t = viewTask; setViewTask(null); if (t) openEdit(t) }}
+        onDelete={() => { if (viewTask) { deleteTask(viewTask.id); setViewTask(null) } }}
+        onToggleComplete={() => { if (viewTask) { toggleComplete(viewTask); setViewTask(null) } }}
+        clients={clients}
+        processes={processes}
+        profilesMap={profilesMap}
+      />
 
       {/* ── Task Dialog ── */}
       <Dialog open={dialogOpen} onOpenChange={o => { setDialogOpen(o); if (!o) resetTf() }}>
