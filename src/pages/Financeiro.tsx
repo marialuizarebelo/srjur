@@ -161,12 +161,12 @@ function RowBadge({ row }: { row: FinanceRow }) {
   const status = rowStatus(row)
   if (row.type === 'despesa') {
     return row.paid
-      ? <Badge className="text-[10px] bg-red-600 text-white">SAÍ</Badge>
-      : <Badge className="text-[10px] bg-gray-400 text-white">PRV</Badge>
+      ? <Badge className="text-[10px] bg-slate-500 text-white">SAÍ</Badge>
+      : <Badge className="text-[10px] bg-slate-300 text-slate-700">PRV</Badge>
   }
-  if (status === 'pago')    return <Badge className="text-[10px] bg-green-600 text-white">ENT</Badge>
+  if (status === 'pago')     return <Badge className="text-[10px] bg-green-600 text-white">ENT</Badge>
   if (status === 'atrasado') return <Badge className="text-[10px] bg-red-500 text-white">ATR</Badge>
-  return <Badge className="text-[10px] bg-amber-500 text-white">PRV</Badge>
+  return <Badge className="text-[10px] bg-amber-400 text-white">PRV</Badge>
 }
 
 function StatusLabel({ row }: { row: FinanceRow }) {
@@ -210,7 +210,7 @@ function DetailDrawer({ title, rows, onClose, clients, onEdit }: {
                 </div>
               </div>
               <div className="text-right shrink-0 ml-3">
-                <p className={`text-sm font-semibold ${row.type === 'receita' ? (row.paid ? 'text-green-600' : 'text-amber-500') : 'text-red-500'}`}>
+                <p className={`text-sm font-semibold ${row.type === 'receita' ? (row.paid ? 'text-green-600' : rowStatus(row) === 'atrasado' ? 'text-red-500' : 'text-amber-500') : 'text-slate-500'}`}>
                   {row.type === 'receita' ? '+' : '-'}{fmtBRL(Number(row.value))}
                 </p>
                 <StatusLabel row={row} />
@@ -1188,7 +1188,7 @@ export default function Financeiro() {
                       <span className="ml-1">({row.current_installment}/{row.installments})</span>
                     )}
                   </TableCell>
-                  <TableCell className={`text-sm text-right font-medium whitespace-nowrap ${row.type === 'receita' ? (row.paid ? 'text-green-600' : rowStatus(row) === 'atrasado' ? 'text-red-500' : 'text-amber-500') : 'text-red-500'}`}>
+                  <TableCell className={`text-sm text-right font-medium whitespace-nowrap ${row.type === 'receita' ? (row.paid ? 'text-green-600' : rowStatus(row) === 'atrasado' ? 'text-red-500' : 'text-amber-500') : 'text-slate-500'}`}>
                     {fmtBRL(Number(row.value))}
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
