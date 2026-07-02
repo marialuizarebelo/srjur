@@ -1507,88 +1507,6 @@ export default function Financeiro() {
         </div>
       </div>
 
-      {/* ── Period Navigation ── */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-          {(['mes', 'ano', 'custom'] as const).map(m => (
-            <Button
-              key={m}
-              variant={viewMode === m ? 'default' : 'ghost'}
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setViewMode(m)}
-            >
-              {m === 'mes' ? 'Mês' : m === 'ano' ? 'Ano' : 'Período'}
-            </Button>
-          ))}
-        </div>
-        {viewMode !== 'custom' && (
-          <MonthNavigator month={viewMonth} year={viewYear} onChange={(m, y) => { setViewMonth(m); setViewYear(y) }} />
-        )}
-        {viewMode === 'custom' && (
-          <div className="flex items-center gap-2">
-            <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
-              className="h-7 text-xs rounded-md border border-input bg-background px-2" />
-            <span className="text-xs text-muted-foreground">até</span>
-            <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
-              className="h-7 text-xs rounded-md border border-input bg-background px-2" />
-            {(customStart || customEnd) && (
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setCustomStart(''); setCustomEnd('') }}>
-                Limpar
-              </Button>
-            )}
-          </div>
-        )}
-        <Select value={clientFilter} onValueChange={setClientFilter}>
-          <SelectTrigger className="h-7 text-xs w-[140px]">
-            <SelectValue>{clientFilter === 'todos' ? 'Cliente' : (clients.find(c => c.id === clientFilter)?.name ?? 'Cliente')}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos os clientes</SelectItem>
-            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={responsibleFilter} onValueChange={setResponsibleFilter}>
-          <SelectTrigger className="h-7 text-xs w-[140px]">
-            <SelectValue>{responsibleFilter === 'todos' ? 'Responsável' : responsibleFilter}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos os responsáveis</SelectItem>
-            {responsibleOptions.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="h-7 text-xs w-[140px]">
-            <SelectValue>{categoryFilter === 'todos' ? 'Categoria' : categoryFilter}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todas as categorias</SelectItem>
-            {categoryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
-          <SelectTrigger className="h-7 text-xs w-[150px]">
-            <SelectValue>{paymentMethodFilter === 'todos' ? 'Forma de pagamento' : paymentMethodFilter}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todas as formas</SelectItem>
-            {paymentMethodOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <div className="flex items-center gap-1 ml-auto bg-muted rounded-lg p-0.5">
-          {(['todos', 'receita', 'despesa'] as const).map(t => (
-            <Button
-              key={t}
-              variant={typeFilter === t ? 'default' : 'ghost'}
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setTypeFilter(t)}
-            >
-              {t === 'todos' ? 'Tudo' : t === 'receita' ? 'Entradas' : 'Saídas'}
-            </Button>
-          ))}
-        </div>
-      </div>
 
       {/* ── Summary Cards (clickable) ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-3">
@@ -1726,6 +1644,89 @@ export default function Financeiro() {
           </div>
         </Card>
       )}
+
+      {/* ── Filtros da tabela (estilo planilha, logo acima da lista) ── */}
+      <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/20">
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+          {(['mes', 'ano', 'custom'] as const).map(m => (
+            <Button
+              key={m}
+              variant={viewMode === m ? 'default' : 'ghost'}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setViewMode(m)}
+            >
+              {m === 'mes' ? 'Mês' : m === 'ano' ? 'Ano' : 'Período'}
+            </Button>
+          ))}
+        </div>
+        {viewMode !== 'custom' && (
+          <MonthNavigator month={viewMonth} year={viewYear} onChange={(m, y) => { setViewMonth(m); setViewYear(y) }} />
+        )}
+        {viewMode === 'custom' && (
+          <div className="flex items-center gap-2">
+            <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+              className="h-7 text-xs rounded-md border border-input bg-background px-2" />
+            <span className="text-xs text-muted-foreground">até</span>
+            <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+              className="h-7 text-xs rounded-md border border-input bg-background px-2" />
+            {(customStart || customEnd) && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setCustomStart(''); setCustomEnd('') }}>
+                Limpar
+              </Button>
+            )}
+          </div>
+        )}
+        <Select value={clientFilter} onValueChange={setClientFilter}>
+          <SelectTrigger className="h-7 text-xs w-[140px]">
+            <SelectValue>{clientFilter === 'todos' ? 'Cliente' : (clients.find(c => c.id === clientFilter)?.name ?? 'Cliente')}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os clientes</SelectItem>
+            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={responsibleFilter} onValueChange={setResponsibleFilter}>
+          <SelectTrigger className="h-7 text-xs w-[140px]">
+            <SelectValue>{responsibleFilter === 'todos' ? 'Responsável' : responsibleFilter}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os responsáveis</SelectItem>
+            {responsibleOptions.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="h-7 text-xs w-[140px]">
+            <SelectValue>{categoryFilter === 'todos' ? 'Categoria' : categoryFilter}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas as categorias</SelectItem>
+            {categoryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
+          <SelectTrigger className="h-7 text-xs w-[150px]">
+            <SelectValue>{paymentMethodFilter === 'todos' ? 'Forma de pagamento' : paymentMethodFilter}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas as formas</SelectItem>
+            {paymentMethodOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-1 ml-auto bg-muted rounded-lg p-0.5">
+          {(['todos', 'receita', 'despesa'] as const).map(t => (
+            <Button
+              key={t}
+              variant={typeFilter === t ? 'default' : 'ghost'}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setTypeFilter(t)}
+            >
+              {t === 'todos' ? 'Tudo' : t === 'receita' ? 'Entradas' : 'Saídas'}
+            </Button>
+          ))}
+        </div>
+      </div>
 
       {/* ── Barra de ações em lote ── */}
       {selectedIds.size > 0 && (
