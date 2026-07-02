@@ -417,11 +417,16 @@ export default function Dashboard() {
       const monthStart = new Date()
       monthStart.setDate(1)
       const monthStartStr = monthStart.toISOString().slice(0, 10)
+      // Fecha o intervalo no fim do mês — sem isso, a consulta soma também lançamentos
+      // futuros (parcelas/mensalidades dos próximos meses), inflando o total do "mês".
+      const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0)
+      const monthEndStr = monthEnd.toISOString().slice(0, 10)
 
       const { data: finData } = await supabase
         .from('finance')
         .select('type, value, paid, due_date')
         .gte('date', monthStartStr)
+        .lte('date', monthEndStr)
 
       if (finData) {
         const receitas = finData.filter(f => f.type === 'receita').reduce((s, f) => s + Number(f.value), 0)
