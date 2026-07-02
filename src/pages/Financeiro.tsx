@@ -13,6 +13,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -24,7 +25,7 @@ import {
   CreditCard, Wallet, ChevronLeft, ChevronRight, Eye,
   ArrowUpCircle, ArrowDownCircle, Clock, Ban, Link2,
   Repeat, BarChart3, PieChart as PieIcon, X, RefreshCw,
-  ArrowUp, ArrowDown, ArrowUpDown,
+  ArrowUp, ArrowDown, ArrowUpDown, CheckCircle2,
 } from 'lucide-react'
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
@@ -444,6 +445,7 @@ export default function Financeiro() {
   const [categoryFilter, setCategoryFilter] = useState<string>('todos')
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('todos')
   const [sortColumn, setSortColumn] = useState<'date' | 'description' | 'client' | 'category' | 'payment' | 'value' | 'status' | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   function toggleSort(col: typeof sortColumn) {
@@ -874,6 +876,44 @@ export default function Financeiro() {
   const handleDelete = async (id: string) => {
     if (!confirm('Excluir este lançamento?')) return
     await supabase.from('finance').delete().eq('id', id)
+    loadData()
+  }
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = (ids: string[]) => {
+    setSelectedIds(prev => {
+      const allSelected = ids.length > 0 && ids.every(id => prev.has(id))
+      return allSelected ? new Set() : new Set(ids)
+    })
+  }
+
+  const handleBulkMarkPaid = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    const today = new Date().toISOString().slice(0, 10)
+    const { error } = await supabase.from('finance').update({ paid: true, payment_date: today }).in('id', ids)
+    if (error) { toast.error('Erro: ' + error.message); return }
+    toast.success(`${ids.length} lançamento(s) marcado(s) como pago!`)
+    setSelectedIds(new Set())
+    loadData()
+  }
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    if (!confirm(`Excluir ${ids.length} lançamento(s) selecionado(s)? Essa ação não pode ser desfeita.`)) return
+    const { error } = await supabase.from('finance').delete().in('id', ids)
+    if (error) { toast.error('Erro: ' + error.message); return }
+    toast.success(`${ids.length} lançamento(s) excluído(s)!`)
+    setSelectedIds(new Set())
     loadData()
   }
 
@@ -1589,6 +1629,22 @@ export default function Financeiro() {
         </Card>
       )}
 
+      {/* ── Barra de ações em lote ── */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/10 border border-primary/30">
+          <span className="text-sm font-medium">{selectedIds.size} selecionado(s)</span>
+          <Button size="sm" variant="outline" onClick={handleBulkMarkPaid}>
+            <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Marcar como pago
+          </Button>
+          <Button size="sm" variant="destructive" onClick={handleBulkDelete}>
+            <Trash2 className="h-3.5 w-3.5 mr-1.5" />Excluir selecionados
+          </Button>
+          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setSelectedIds(new Set())}>
+            Cancelar
+          </Button>
+        </div>
+      )}
+
       {/* ── Lista mobile (cards) ── */}
       <div className="md:hidden space-y-2">
         {loading ? (
@@ -1604,8 +1660,11 @@ export default function Financeiro() {
               status === 'parcial' ? 'text-blue-500' :
               status === 'atrasado' ? 'text-red-500' : 'text-amber-500'
             return (
-              <Card key={row.id} className="p-3 active:bg-muted/40" onClick={() => setViewRow(row)}>
+              <Card key={row.id} className={`p-3 active:bg-muted/40 ${selectedIds.has(row.id) ? 'bg-primary/5 border-primary/40' : ''}`} onClick={() => setViewRow(row)}>
                 <div className="flex items-start justify-between gap-2">
+                  <div onClick={e => e.stopPropagation()} className="pt-0.5">
+                    <Checkbox checked={selectedIds.has(row.id)} onCheckedChange={() => toggleSelected(row.id)} />
+                  </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <RowBadge row={row} paymentsMap={paymentsMap} />
@@ -1649,6 +1708,12 @@ export default function Financeiro() {
         <Table className="w-full table-auto">
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[36px]">
+                <Checkbox
+                  checked={sortedFiltered.length > 0 && sortedFiltered.every(r => selectedIds.has(r.id))}
+                  onCheckedChange={() => toggleSelectAll(sortedFiltered.map(r => r.id))}
+                />
+              </TableHead>
               <SortableHead label="Data" column="date" active={sortColumn === 'date'} dir={sortDir} onClick={() => toggleSort('date')} className="w-[80px]" />
               <TableHead className="w-[70px]">Tipo</TableHead>
               <SortableHead label="Descrição" column="description" active={sortColumn === 'description'} dir={sortDir} onClick={() => toggleSort('description')} />
@@ -1662,12 +1727,15 @@ export default function Financeiro() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
             ) : sortedFiltered.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum lançamento no período</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhum lançamento no período</TableCell></TableRow>
             ) : (
               sortedFiltered.map(row => (
-                <TableRow key={row.id} className="cursor-pointer hover:bg-muted/30" onClick={() => setViewRow(row)}>
+                <TableRow key={row.id} className={`cursor-pointer hover:bg-muted/30 ${selectedIds.has(row.id) ? 'bg-primary/5' : ''}`} onClick={() => setViewRow(row)}>
+                  <TableCell onClick={e => e.stopPropagation()}>
+                    <Checkbox checked={selectedIds.has(row.id)} onCheckedChange={() => toggleSelected(row.id)} />
+                  </TableCell>
                   <TableCell className="text-sm whitespace-nowrap">{fmtDate(row.date)}</TableCell>
                   <TableCell><RowBadge row={row} paymentsMap={paymentsMap} /></TableCell>
                   <TableCell className="text-sm max-w-[140px] truncate">
