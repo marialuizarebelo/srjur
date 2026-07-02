@@ -767,11 +767,17 @@ export default function Financeiro() {
         // que o cliente precisa pagar (e a gente precisa cobrar) todo mês.
         const inserts = []
         for (let i = 0; i < numInstallments; i++) {
+          // Incrementa tanto a data de lançamento quanto o vencimento — a visão "Mês"
+          // do financeiro filtra pela data de lançamento, então as parcelas precisam
+          // cair cada uma no seu próprio mês, não todas no mês do lançamento original.
+          const installDate = new Date(form.date)
+          installDate.setMonth(installDate.getMonth() + i)
           const dueDate = new Date(form.due_date || form.date)
           dueDate.setMonth(dueDate.getMonth() + i)
           inserts.push({
             ...basePayload,
             description: `${form.description} (${i + 1}/${numInstallments})`,
+            date: installDate.toISOString().slice(0, 10),
             due_date: dueDate.toISOString().slice(0, 10),
             current_installment: i + 1,
           })
