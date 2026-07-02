@@ -628,11 +628,14 @@ export default function Financeiro() {
       if (responsibleFilter !== 'todos' && r.responsible !== responsibleFilter) return false
       if (categoryFilter !== 'todos' && r.category !== categoryFilter) return false
       if (paymentMethodFilter !== 'todos' && r.payment_method !== paymentMethodFilter) return false
-      const d = new Date(r.date)
+      // Compara as datas como texto (YYYY-MM-DD), nunca via objeto Date — parsear
+      // "YYYY-MM-DD" com `new Date()` interpreta como UTC e pode "vazar" pro dia/mês
+      // anterior dependendo do fuso horário do navegador, bagunçando os totais do mês.
       if (viewMode === 'mes') {
-        return d.getMonth() === viewMonth && d.getFullYear() === viewYear
+        const monthStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
+        return r.date.slice(0, 7) === monthStr
       } else if (viewMode === 'ano') {
-        return d.getFullYear() === viewYear
+        return r.date.slice(0, 4) === String(viewYear)
       } else if (viewMode === 'custom') {
         if (customStart && r.date < customStart) return false
         if (customEnd && r.date > customEnd) return false

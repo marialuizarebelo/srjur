@@ -398,7 +398,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     const load = async () => {
-      const today = new Date().toISOString().slice(0, 10)
+      // Data local em texto (YYYY-MM-DD), nunca via toISOString() — evita o mesmo
+      // problema de fuso horário "vazando" pro dia seguinte/anterior.
+      const todayD = new Date()
+      const today = `${todayD.getFullYear()}-${String(todayD.getMonth() + 1).padStart(2, '0')}-${String(todayD.getDate()).padStart(2, '0')}`
 
       const [clientsRes, processesRes, tasksRes, deadlinesRes] = await Promise.all([
         supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
@@ -414,24 +417,23 @@ export default function Dashboard() {
         overdueDeadlines: deadlinesRes.count ?? 0,
       })
 
-      const monthStart = new Date()
-      monthStart.setDate(1)
-      const monthStartStr = monthStart.toISOString().slice(0, 10)
-      // Fecha o intervalo no fim do mês — sem isso, a consulta soma também lançamentos
-      // futuros (parcelas/mensalidades dos próximos meses), inflando o total do "mês".
-      const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0)
-      const monthEndStr = monthEnd.toISOString().slice(0, 10)
+      // Monta a string do mês (YYYY-MM) manualmente, com data local — nunca via
+      // toISOString(), que converte pra UTC e pode "vazar" pro dia seguinte/anterior
+      // dependendo da hora e do fuso do navegador. Mesma lógica usada no Financeiro,
+      // pra garantir que os dois mostrem exatamente o mesmo valor.
+      const nowLocal = new Date()
+      const currentMonthStr = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, '0')}`
 
       const { data: finData } = await supabase
         .from('finance')
-        .select('type, value, paid, due_date')
-        .gte('date', monthStartStr)
-        .lte('date', monthEndStr)
+        .select('type, value, paid, due_date, date')
+
+      const finDataThisMonth = (finData ?? []).filter(f => f.date.slice(0, 7) === currentMonthStr)
 
       if (finData) {
-        const receitas = finData.filter(f => f.type === 'receita').reduce((s, f) => s + Number(f.value), 0)
-        const despesas = finData.filter(f => f.type === 'despesa').reduce((s, f) => s + Number(f.value), 0)
-        const inadimplencia = finData
+        const receitas = finDataThisMonth.filter(f => f.type === 'receita').reduce((s, f) => s + Number(f.value), 0)
+        const despesas = finDataThisMonth.filter(f => f.type === 'despesa').reduce((s, f) => s + Number(f.value), 0)
+        const inadimplencia = finDataThisMonth
           .filter(f => f.type === 'receita' && !f.paid && f.due_date && f.due_date < today)
           .reduce((s, f) => s + Number(f.value), 0)
         setFinance({ receitas, despesas, inadimplencia })
