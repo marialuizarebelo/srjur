@@ -62,6 +62,7 @@ interface FinanceRow {
   current_installment: number | null
   recurrence: string | null
   payment_link: string | null
+  card_fee_percent: number | null
 }
 
 interface ClientOption { id: string; name: string }
@@ -476,6 +477,7 @@ export default function Financeiro() {
     installments: '1',
     recurrence: 'Única',
     payment_link: '',
+    card_fee_percent: '',
   })
 
   const resetForm = () => {
@@ -485,7 +487,7 @@ export default function Financeiro() {
       origin: '', paid: false, payment_date: '', client_id: '',
       impacts_cash: true, nature: 'real', responsible: '', notes: '',
       portal_visible: false, payment_method: '', installments: '1',
-      recurrence: 'Única', payment_link: '',
+      recurrence: 'Única', payment_link: '', card_fee_percent: '',
     })
     setEditingId(null)
   }
@@ -706,6 +708,8 @@ export default function Financeiro() {
     const val = parseFloat(form.value.replace(',', '.'))
     if (isNaN(val) || val <= 0) { toast.error('Valor inválido'); return }
     const numInstallments = parseInt(form.installments) || 1
+    const isCardInstallment = form.payment_method === 'Cartão de Crédito' && numInstallments > 1
+    const feePercent = parseFloat(form.card_fee_percent.replace(',', '.')) || 0
     const autoPayDate = form.paid
       ? (form.payment_date || new Date().toISOString().slice(0, 10))
       : null
@@ -713,7 +717,7 @@ export default function Financeiro() {
     const basePayload = {
       type: form.type,
       description: form.description,
-      value: numInstallments > 1 ? val / numInstallments : val,
+      value: (!isCardInstallment && numInstallments > 1) ? val / numInstallments : val,
       date: form.date,
       due_date: form.due_date || null,
       category: form.category || null,
@@ -730,14 +734,27 @@ export default function Financeiro() {
       recurrence: form.recurrence === 'Única' ? null : form.recurrence,
       payment_link: form.payment_link || null,
       installments: numInstallments > 1 ? numInstallments : null,
-      current_installment: numInstallments > 1 ? 1 : null,
+      current_installment: (!isCardInstallment && numInstallments > 1) ? 1 : null,
+      card_fee_percent: isCardInstallment && feePercent > 0 ? feePercent : null,
     }
 
     try {
       if (editingId) {
         const { error } = await supabase.from('finance').update(basePayload).eq('id', editingId)
         if (error) throw error
+      } else if (isCardInstallment) {
+        // Cartão de crédito parcelado: a operadora repassa o valor integral menos a taxa,
+        // de uma vez só — não faz sentido dividir em N lançamentos mensais como no boleto.
+        const netValue = feePercent > 0 ? val * (1 - feePercent / 100) : val
+        const { error } = await supabase.from('finance').insert({
+          ...basePayload,
+          value: netValue,
+          description: `${form.description} (${numInstallments}x no cartão)`,
+        })
+        if (error) throw error
       } else if (numInstallments > 1) {
+        // Boleto/outras formas parceladas: gera uma cobrança por mês, refletindo
+        // que o cliente precisa pagar (e a gente precisa cobrar) todo mês.
         const inserts = []
         for (let i = 0; i < numInstallments; i++) {
           const dueDate = new Date(form.due_date || form.date)
@@ -1244,15 +1261,38 @@ export default function Financeiro() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Parcelas</Label>
+                    <Label>{form.payment_method === 'Cartão de Crédito' ? 'Parcelas no cartão' : 'Parcelas'}</Label>
                     <Input type="number" min="1" max="48" value={form.installments} onChange={e => setForm(f => ({ ...f, installments: e.target.value }))} className="h-10" />
-                    {parseInt(form.installments) > 1 && form.value && (
+                    {parseInt(form.installments) > 1 && form.value && form.payment_method !== 'Cartão de Crédito' && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        {form.installments}x de {fmtBRL(parseFloat(form.value.replace(',', '.')) / parseInt(form.installments))}
+                        Gera {form.installments} cobranças, uma por mês, de {fmtBRL(parseFloat(form.value.replace(',', '.')) / parseInt(form.installments))} cada
                       </p>
                     )}
                   </div>
                 </div>
+
+                {form.payment_method === 'Cartão de Crédito' && parseInt(form.installments) > 1 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 rounded-xl bg-muted/30">
+                    <div className="space-y-2">
+                      <Label>Taxa da maquininha (%)</Label>
+                      <Input value={form.card_fee_percent} onChange={e => setForm(f => ({ ...f, card_fee_percent: e.target.value }))} placeholder="Ex: 4,5" className="h-10" />
+                    </div>
+                    <div className="flex flex-col justify-center text-xs text-muted-foreground">
+                      {form.value && (() => {
+                        const gross = parseFloat(form.value.replace(',', '.')) || 0
+                        const fee = parseFloat(form.card_fee_percent.replace(',', '.')) || 0
+                        const net = gross * (1 - fee / 100)
+                        return (
+                          <>
+                            <p>Valor bruto: {fmtBRL(gross)}</p>
+                            <p>Taxa ({fee || 0}%): -{fmtBRL(gross - net)}</p>
+                            <p className="font-semibold text-foreground">Você recebe: {fmtBRL(net)} (à vista)</p>
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
