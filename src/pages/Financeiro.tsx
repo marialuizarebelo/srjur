@@ -32,6 +32,7 @@ import {
   Tooltip as RTooltip, ResponsiveContainer, LineChart, Line, Area, AreaChart,
 } from 'recharts'
 import { fmtBRL, fmtDate, getDaysDiff } from '@/lib/format'
+import { ClientCombobox } from '@/components/ClientCombobox'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ImportExtrato } from '@/components/ImportExtrato'
@@ -79,7 +80,20 @@ interface FinancePayment {
 // ── Constants ──
 const CATEGORIES_RECEITA = ['Honorários Iniciais', 'Mensalidade', 'Acordo', 'Consultoria', 'Êxito', 'Outros']
 const CATEGORIES_DESPESA = ['Operacional', 'Pessoal', 'Impostos', 'Software', 'Marketing', 'Aluguel', 'Outros']
-const PAYMENT_METHODS = ['PIX', 'Boleto', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência', 'Dinheiro', 'Link de Pagamento']
+const PAYMENT_METHODS = ['PIX/Transferência', 'Boleto', 'Cartão de Crédito', 'Cartão de Débito', 'Dinheiro']
+
+// Soma meses mantendo o mesmo dia do mês (ex: todo dia 5) — sem o bug clássico do
+// JS Date onde somar 1 mês a 31/01 "estoura" pra 02 ou 03/03. Se o mês de destino
+// não tiver esse dia (ex: dia 31 em fevereiro), usa o último dia daquele mês.
+function addMonthsFixedDay(dateStr: string, monthsToAdd: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const totalMonths = (m - 1) + monthsToAdd
+  const targetYear = y + Math.floor(totalMonths / 12)
+  const targetMonth = ((totalMonths % 12) + 12) % 12
+  const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate()
+  const clampedDay = Math.min(d, lastDayOfTargetMonth)
+  return `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`
+}
 const RECURRENCE_OPTIONS = ['Única', 'Semanal', 'Quinzenal', 'Mensal', 'Trimestral', 'Semestral', 'Anual']
 const PIE_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366F1', '#14B8A6']
 
@@ -723,6 +737,10 @@ export default function Financeiro() {
     // Ao editar um lançamento já existente, o valor no formulário já é o valor daquela
     // linha específica (não o total) — não deve ser dividido de novo pelas parcelas.
     const shouldSplitValue = !editingId && !isCardLumpSum && numInstallments > 1
+    // Natureza é automática: "real" se já foi pago ou se a data já passou/é hoje,
+    // "previsto" se ainda não entrou/saiu do caixa (data futura e não pago).
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const autoNature: 'real' | 'previsto' = (form.paid || form.date <= todayStr) ? 'real' : 'previsto'
 
     const basePayload = {
       type: form.type,
@@ -736,7 +754,7 @@ export default function Financeiro() {
       payment_date: autoPayDate,
       client_id: form.client_id || null,
       impacts_cash: form.impacts_cash,
-      nature: form.nature,
+      nature: autoNature,
       responsible: form.responsible || null,
       notes: form.notes || null,
       portal_visible: form.portal_visible,
@@ -767,19 +785,19 @@ export default function Financeiro() {
         // que o cliente precisa pagar (e a gente precisa cobrar) todo mês.
         const inserts = []
         for (let i = 0; i < numInstallments; i++) {
-          // Incrementa tanto a data de lançamento quanto o vencimento — a visão "Mês"
-          // do financeiro filtra pela data de lançamento, então as parcelas precisam
-          // cair cada uma no seu próprio mês, não todas no mês do lançamento original.
-          const installDate = new Date(form.date)
-          installDate.setMonth(installDate.getMonth() + i)
-          const dueDate = new Date(form.due_date || form.date)
-          dueDate.setMonth(dueDate.getMonth() + i)
+          // Incrementa tanto a data de lançamento quanto o vencimento, mantendo o
+          // mesmo dia do mês em ambos (ex: sempre dia 5) — a visão "Mês" do financeiro
+          // filtra pela data de lançamento, então cada parcela precisa cair no seu
+          // próprio mês, no mesmo dia fixo, não em datas erráticas.
+          const installDate = addMonthsFixedDay(form.date, i)
           inserts.push({
             ...basePayload,
             description: `${form.description} (${i + 1}/${numInstallments})`,
-            date: installDate.toISOString().slice(0, 10),
-            due_date: dueDate.toISOString().slice(0, 10),
+            date: installDate,
+            due_date: addMonthsFixedDay(form.due_date || form.date, i),
             current_installment: i + 1,
+            // primeira parcela pode já ser real (se for hoje/passado); as futuras são sempre previstas
+            nature: (i === 0 ? autoNature : (installDate <= todayStr ? 'real' : 'previsto')),
           })
         }
         const { error } = await supabase.from('finance').insert(inserts)
@@ -1292,15 +1310,7 @@ export default function Financeiro() {
                   </div>
                   <div className="space-y-2">
                     <Label>Cliente</Label>
-                    <Select value={form.client_id} onValueChange={v => setForm(f => ({ ...f, client_id: v }))}>
-                      <SelectTrigger className="h-10"><SelectValue>{clients.find(c => c.id === form.client_id)?.name ?? 'Nenhum'}</SelectValue></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Nenhum</SelectItem>
-                        {clients.map(c => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <ClientCombobox clients={clients} value={form.client_id} onChange={id => setForm(f => ({ ...f, client_id: id }))} />
                   </div>
                 </div>
 
@@ -1364,26 +1374,9 @@ export default function Financeiro() {
                   return null
                 })()}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Responsável</Label>
-                    <Input value={form.responsible} onChange={e => setForm(f => ({ ...f, responsible: e.target.value }))} placeholder="@nome" className="h-10" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Natureza</Label>
-                    <Select value={form.nature} onValueChange={v => setForm(f => ({ ...f, nature: v as 'real' | 'previsto' }))}>
-                      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="real">Real</SelectItem>
-                        <SelectItem value="previsto">Previsto</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
                 <div className="space-y-2">
-                  <Label>Link de pagamento</Label>
-                  <Input value={form.payment_link} onChange={e => setForm(f => ({ ...f, payment_link: e.target.value }))} placeholder="https://..." className="h-10" />
+                  <Label>Responsável</Label>
+                  <Input value={form.responsible} onChange={e => setForm(f => ({ ...f, responsible: e.target.value }))} placeholder="@nome" className="h-10" />
                 </div>
 
                 <div className="space-y-2">
