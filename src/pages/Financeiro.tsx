@@ -1277,7 +1277,7 @@ export default function Financeiro() {
                   <div className="space-y-2">
                     <Label>Cliente</Label>
                     <Select value={form.client_id} onValueChange={v => setForm(f => ({ ...f, client_id: v }))}>
-                      <SelectTrigger className="h-10"><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                      <SelectTrigger className="h-10"><SelectValue>{clients.find(c => c.id === form.client_id)?.name ?? 'Nenhum'}</SelectValue></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">Nenhum</SelectItem>
                         {clients.map(c => (
