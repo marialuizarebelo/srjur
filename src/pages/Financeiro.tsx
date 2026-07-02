@@ -33,6 +33,7 @@ import {
 } from 'recharts'
 import { fmtBRL, fmtDate, getDaysDiff } from '@/lib/format'
 import { ClientCombobox } from '@/components/ClientCombobox'
+import { getAdminProfiles } from '@/components/ResponsibleSelect'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ImportExtrato } from '@/components/ImportExtrato'
@@ -94,6 +95,13 @@ function addMonthsFixedDay(dateStr: string, monthsToAdd: number): string {
   const clampedDay = Math.min(d, lastDayOfTargetMonth)
   return `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`
 }
+
+function addDaysToDate(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00')
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
 const RECURRENCE_OPTIONS = ['Única', 'Semanal', 'Quinzenal', 'Mensal', 'Trimestral', 'Semestral', 'Anual']
 const PIE_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366F1', '#14B8A6']
 
@@ -734,9 +742,13 @@ export default function Financeiro() {
     const autoPayDate = form.paid
       ? (form.payment_date || new Date().toISOString().slice(0, 10))
       : null
-    // Ao editar um lançamento já existente, o valor no formulário já é o valor daquela
-    // linha específica (não o total) — não deve ser dividido de novo pelas parcelas.
-    const shouldSplitValue = !editingId && !isCardLumpSum && numInstallments > 1
+    // Recorrência (Mensal/Semanal/etc) ≠ Parcelamento: numa mensalidade o valor se REPETE
+    // integral todo mês (ex: R$149 em jan, R$149 em fev...); numa parcela, o valor total é
+    // DIVIDIDO entre as vezes (ex: R$5.196 em 12x = R$433/mês). Só divide quando é parcelamento
+    // de verdade (Recorrência = Única). Também nunca divide ao editar uma linha já existente,
+    // já que o valor no formulário já é o valor daquela linha específica.
+    const isRecurringRepeat = form.recurrence !== 'Única' && numInstallments > 1
+    const shouldSplitValue = !editingId && !isCardLumpSum && !isRecurringRepeat && numInstallments > 1
     // Natureza é automática: "real" se já foi pago ou se a data já passou/é hoje,
     // "previsto" se ainda não entrou/saiu do caixa (data futura e não pago).
     const todayStr = new Date().toISOString().slice(0, 10)
@@ -802,6 +814,24 @@ export default function Financeiro() {
         }
         const { error } = await supabase.from('finance').insert(inserts)
         if (error) throw error
+
+        // Mensalidade com prazo definido: cria uma tarefa pra verificar a renovação
+        // perto do último mês previsto, pra não deixar cair no esquecimento.
+        if (form.category === 'Mensalidade' && numInstallments > 0) {
+          const lastDueDate = addMonthsFixedDay(form.due_date || form.date, numInstallments - 1)
+          const checkDate = addDaysToDate(lastDueDate, -7)
+          const admins = await getAdminProfiles()
+          await supabase.from('tasks').insert({
+            title: `Verificar renovação de mensalidade — ${form.description}`,
+            description: `A mensalidade "${form.description}" prevista até ${fmtDate(lastDueDate)} está terminando. Confirmar com o cliente se vai renovar.`,
+            type: 'cliente',
+            status: 'pendente',
+            priority: 'media',
+            due_date: checkDate,
+            client_id: form.client_id || null,
+            responsible_ids: admins.map(a => a.id),
+          })
+        }
       } else {
         const { error } = await supabase.from('finance').insert(basePayload)
         if (error) throw error
@@ -1387,11 +1417,13 @@ export default function Financeiro() {
                     )
                   }
                   if (isMonthlySplitPreview) {
+                    const isRecurring = form.recurrence !== 'Única'
+                    const perMonthValue = isRecurring ? gross : gross / numInst
                     return (
                       <p className="text-xs text-muted-foreground -mt-2">
-                        {isCard
-                          ? `Mensalidade no cartão: gera ${numInst} cobranças, uma por mês, de ${fmtBRL(gross / numInst)} cada — cada mês depende do cartão debitar com sucesso.`
-                          : `Gera ${numInst} cobranças, uma por mês, de ${fmtBRL(gross / numInst)} cada — depende da pessoa pagar cada uma.`}
+                        {isRecurring
+                          ? `Mensalidade: lança ${fmtBRL(perMonthValue)} todo mês, por ${numInst} meses (não divide o valor)${isCard ? ' — cada mês depende do cartão debitar com sucesso' : ' — depende da pessoa pagar cada mês'}.`
+                          : `Parcelamento: divide o total em ${numInst} cobranças de ${fmtBRL(perMonthValue)} cada, uma por mês.`}
                       </p>
                     )
                   }
