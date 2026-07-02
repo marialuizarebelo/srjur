@@ -33,6 +33,8 @@ import {
 } from 'recharts'
 import { fmtBRL, fmtDate, getDaysDiff } from '@/lib/format'
 import { ClientCombobox } from '@/components/ClientCombobox'
+import { useCollapsibleSection } from '@/hooks/useCollapsibleSection'
+import { PinViewButton } from '@/components/PinViewButton'
 import { getAdminProfiles } from '@/components/ResponsibleSelect'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
@@ -482,8 +484,9 @@ export default function Financeiro() {
     }
   }
   const [projectionMonths, setProjectionMonths] = useState(3)
-  const [chartsCollapsed, setChartsCollapsed] = useState(false)
-  const [vencimentosCollapsed, setVencimentosCollapsed] = useState(false)
+  const projecaoSection = useCollapsibleSection('financeiro_projecao')
+  const chartsSection = useCollapsibleSection('financeiro_graficos')
+  const vencimentosSection = useCollapsibleSection('financeiro_vencimentos')
 
   // Form
   const [form, setForm] = useState({
@@ -1521,24 +1524,32 @@ export default function Financeiro() {
         <SummaryCard title="Saldo" subtitle="recebido - pago" value={fmtBRL(saldo)} icon={Wallet} color={saldo >= 0 ? '#8B5CF6' : '#ef4444'} active={activeCard === 'saldo'} onClick={() => setActiveCard(activeCard === 'saldo' ? null : 'saldo')} />
       </div>
 
-      {/* ── Projection (sempre visível, é o mais importante) ── */}
+      {/* ── Projection (minimizável, com fixar visualização) ── */}
       <Card className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-sm flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-primary" />Projeção Futura
-          </h3>
+        <div className="flex items-center justify-between mb-4 gap-2">
+          <button className="flex items-center gap-2 min-w-0" onClick={projecaoSection.toggle}>
+            <h3 className="font-semibold text-sm flex items-center gap-2 shrink-0">
+              <Calendar className="h-4 w-4 text-primary" />Projeção Futura
+            </h3>
+            {projecaoSection.collapsed ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
+          </button>
           <div className="flex items-center gap-1 flex-wrap">
-            <Button variant={projectionMonths === 0 ? 'default' : 'outline'} size="sm" className="h-7 text-xs" onClick={() => setProjectionMonths(0)}>
-              Este mês
-            </Button>
-            {[3, 6, 12].map(n => (
-              <Button key={n} variant={projectionMonths === n ? 'default' : 'outline'} size="sm" className="h-7 text-xs" onClick={() => setProjectionMonths(n)}>
-                {n} meses
-              </Button>
-            ))}
+            {!projecaoSection.collapsed && (
+              <>
+                <Button variant={projectionMonths === 0 ? 'default' : 'outline'} size="sm" className="h-7 text-xs" onClick={() => setProjectionMonths(0)}>
+                  Este mês
+                </Button>
+                {[3, 6, 12].map(n => (
+                  <Button key={n} variant={projectionMonths === n ? 'default' : 'outline'} size="sm" className="h-7 text-xs" onClick={() => setProjectionMonths(n)}>
+                    {n} meses
+                  </Button>
+                ))}
+              </>
+            )}
+            <PinViewButton isPinned={projecaoSection.isPinned} currentValue="" onPin={() => projecaoSection.pinCurrent()} onUnpin={projecaoSection.unpin} />
           </div>
         </div>
-        {projection.length > 0 ? (
+        {!projecaoSection.collapsed && (projection.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
@@ -1566,18 +1577,21 @@ export default function Financeiro() {
           </div>
         ) : (
           <p className="text-sm text-muted-foreground text-center py-8">Sem dados de projeção</p>
-        )}
+        ))}
       </Card>
 
       {/* ── Charts Row (minimizável) ── */}
       <Card className="p-5">
-        <button className="flex items-center justify-between w-full" onClick={() => setChartsCollapsed(c => !c)}>
-          <h3 className="font-semibold text-sm flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-primary" />Gráficos
-          </h3>
-          {chartsCollapsed ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
-        </button>
-        {!chartsCollapsed && (
+        <div className="flex items-center justify-between">
+          <button className="flex items-center gap-2" onClick={chartsSection.toggle}>
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-primary" />Gráficos
+            </h3>
+            {chartsSection.collapsed ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
+          </button>
+          <PinViewButton isPinned={chartsSection.isPinned} currentValue="" onPin={() => chartsSection.pinCurrent()} onUnpin={chartsSection.unpin} />
+        </div>
+        {!chartsSection.collapsed && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
             {/* Evolution */}
             <div className="lg:col-span-2">
@@ -1629,13 +1643,16 @@ export default function Financeiro() {
       {/* ── Próximos vencimentos (minimizável) ── */}
       {proximosVencimentos.length > 0 && (
         <Card className="p-5">
-          <button className="flex items-center justify-between w-full" onClick={() => setVencimentosCollapsed(c => !c)}>
-            <h3 className="font-semibold text-sm flex items-center gap-2">
-              <Clock className="h-4 w-4 text-amber-500" />Próximos Vencimentos
-            </h3>
-            {vencimentosCollapsed ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
-          </button>
-          {!vencimentosCollapsed && (
+          <div className="flex items-center justify-between">
+            <button className="flex items-center gap-2" onClick={vencimentosSection.toggle}>
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-500" />Próximos Vencimentos
+              </h3>
+              {vencimentosSection.collapsed ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
+            </button>
+            <PinViewButton isPinned={vencimentosSection.isPinned} currentValue="" onPin={() => vencimentosSection.pinCurrent()} onUnpin={vencimentosSection.unpin} />
+          </div>
+          {!vencimentosSection.collapsed && (
             <div className="space-y-2 mt-3">
               {proximosVencimentos.map(r => {
                 const days = getDaysDiff(r.due_date!)
