@@ -712,14 +712,17 @@ export default function Financeiro() {
     const val = parseFloat(form.value.replace(',', '.'))
     if (isNaN(val) || val <= 0) { toast.error('Valor inválido'); return }
     const numInstallments = parseInt(form.installments) || 1
-    const isCardInstallment = form.payment_method === 'Cartão de Crédito' && numInstallments > 1
+    // Cartão parcelado (parcelamento no cartão): 1 lançamento único, valor líquido — a operadora
+    // paga tudo de uma vez, minus a taxa. Diferente de "mensalidade no cartão" (recorrência mensal),
+    // que gera uma cobrança por mês igual boleto, pois depende do cartão debitar com sucesso naquele mês.
+    const isCardLumpSum = form.payment_method === 'Cartão de Crédito' && numInstallments > 1 && form.recurrence === 'Única'
     const feePercent = parseFloat((form.card_fee_percent || '').replace(',', '.')) || 0
     const autoPayDate = form.paid
       ? (form.payment_date || new Date().toISOString().slice(0, 10))
       : null
     // Ao editar um lançamento já existente, o valor no formulário já é o valor daquela
     // linha específica (não o total) — não deve ser dividido de novo pelas parcelas.
-    const shouldSplitValue = !editingId && !isCardInstallment && numInstallments > 1
+    const shouldSplitValue = !editingId && !isCardLumpSum && numInstallments > 1
 
     const basePayload = {
       type: form.type,
@@ -741,15 +744,15 @@ export default function Financeiro() {
       recurrence: form.recurrence === 'Única' ? null : form.recurrence,
       payment_link: form.payment_link || null,
       installments: numInstallments > 1 ? numInstallments : null,
-      current_installment: editingId ? editingCurrentInstallment : ((!isCardInstallment && numInstallments > 1) ? 1 : null),
-      card_fee_percent: isCardInstallment && feePercent > 0 ? feePercent : null,
+      current_installment: editingId ? editingCurrentInstallment : ((!isCardLumpSum && numInstallments > 1) ? 1 : null),
+      card_fee_percent: isCardLumpSum && feePercent > 0 ? feePercent : null,
     }
 
     try {
       if (editingId) {
         const { error } = await supabase.from('finance').update(basePayload).eq('id', editingId)
         if (error) throw error
-      } else if (isCardInstallment) {
+      } else if (isCardLumpSum) {
         // Cartão de crédito parcelado: a operadora repassa o valor integral menos a taxa,
         // de uma vez só — não faz sentido dividir em N lançamentos mensais como no boleto.
         const netValue = feePercent > 0 ? val * (1 - feePercent / 100) : val
@@ -1310,36 +1313,50 @@ export default function Financeiro() {
                   <div className="space-y-2">
                     <Label>{form.payment_method === 'Cartão de Crédito' ? 'Parcelas no cartão' : 'Parcelas'}</Label>
                     <Input type="number" min="1" max="48" value={form.installments} onChange={e => setForm(f => ({ ...f, installments: e.target.value }))} className="h-10" />
-                    {parseInt(form.installments) > 1 && form.value && form.payment_method !== 'Cartão de Crédito' && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Gera {form.installments} cobranças, uma por mês, de {fmtBRL(parseFloat(form.value.replace(',', '.')) / parseInt(form.installments))} cada
-                      </p>
-                    )}
                   </div>
                 </div>
 
-                {form.payment_method === 'Cartão de Crédito' && parseInt(form.installments) > 1 && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 rounded-xl bg-muted/30">
-                    <div className="space-y-2">
-                      <Label>Taxa da maquininha (%)</Label>
-                      <Input value={form.card_fee_percent} onChange={e => setForm(f => ({ ...f, card_fee_percent: e.target.value }))} placeholder="Ex: 4,5" className="h-10" />
-                    </div>
-                    <div className="flex flex-col justify-center text-xs text-muted-foreground">
-                      {form.value && (() => {
-                        const gross = parseFloat(form.value.replace(',', '.')) || 0
-                        const fee = parseFloat(form.card_fee_percent.replace(',', '.')) || 0
-                        const net = gross * (1 - fee / 100)
-                        return (
-                          <>
-                            <p>Valor bruto: {fmtBRL(gross)}</p>
-                            <p>Taxa ({fee || 0}%): -{fmtBRL(gross - net)}</p>
-                            <p className="font-semibold text-foreground">Você recebe: {fmtBRL(net)} (à vista)</p>
-                          </>
-                        )
-                      })()}
-                    </div>
-                  </div>
-                )}
+                {(() => {
+                  const numInst = parseInt(form.installments) || 1
+                  const isCard = form.payment_method === 'Cartão de Crédito'
+                  const isCardLumpSumPreview = isCard && numInst > 1 && form.recurrence === 'Única'
+                  const isMonthlySplitPreview = numInst > 1 && !isCardLumpSumPreview
+                  const gross = parseFloat((form.value || '0').replace(',', '.')) || 0
+
+                  if (isCardLumpSumPreview) {
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 rounded-xl bg-muted/30">
+                        <div className="space-y-2">
+                          <Label>Taxa da maquininha (%)</Label>
+                          <Input value={form.card_fee_percent} onChange={e => setForm(f => ({ ...f, card_fee_percent: e.target.value }))} placeholder="Ex: 4,5" className="h-10" />
+                        </div>
+                        <div className="flex flex-col justify-center text-xs text-muted-foreground">
+                          {form.value && (() => {
+                            const fee = parseFloat((form.card_fee_percent || '0').replace(',', '.')) || 0
+                            const net = gross * (1 - fee / 100)
+                            return (
+                              <>
+                                <p>Valor bruto: {fmtBRL(gross)}</p>
+                                <p>Taxa ({fee || 0}%): -{fmtBRL(gross - net)}</p>
+                                <p className="font-semibold text-foreground">Você recebe: {fmtBRL(net)} de uma vez (1 lançamento)</p>
+                              </>
+                            )
+                          })()}
+                        </div>
+                      </div>
+                    )
+                  }
+                  if (isMonthlySplitPreview) {
+                    return (
+                      <p className="text-xs text-muted-foreground -mt-2">
+                        {isCard
+                          ? `Mensalidade no cartão: gera ${numInst} cobranças, uma por mês, de ${fmtBRL(gross / numInst)} cada — cada mês depende do cartão debitar com sucesso.`
+                          : `Gera ${numInst} cobranças, uma por mês, de ${fmtBRL(gross / numInst)} cada — depende da pessoa pagar cada uma.`}
+                      </p>
+                    )
+                  }
+                  return null
+                })()}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
