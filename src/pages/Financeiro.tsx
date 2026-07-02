@@ -25,7 +25,7 @@ import {
   CreditCard, Wallet, ChevronLeft, ChevronRight, Eye,
   ArrowUpCircle, ArrowDownCircle, Clock, Ban, Link2,
   Repeat, BarChart3, PieChart as PieIcon, X, RefreshCw,
-  ArrowUp, ArrowDown, ArrowUpDown, CheckCircle2,
+  ArrowUp, ArrowDown, ArrowUpDown, CheckCircle2, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
@@ -482,6 +482,8 @@ export default function Financeiro() {
     }
   }
   const [projectionMonths, setProjectionMonths] = useState(3)
+  const [chartsCollapsed, setChartsCollapsed] = useState(false)
+  const [vencimentosCollapsed, setVencimentosCollapsed] = useState(false)
 
   // Form
   const [form, setForm] = useState({
@@ -1519,57 +1521,7 @@ export default function Financeiro() {
         <SummaryCard title="Saldo" subtitle="recebido - pago" value={fmtBRL(saldo)} icon={Wallet} color={saldo >= 0 ? '#8B5CF6' : '#ef4444'} active={activeCard === 'saldo'} onClick={() => setActiveCard(activeCard === 'saldo' ? null : 'saldo')} />
       </div>
 
-      {/* ── Charts Row ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Evolution */}
-        <Card className="p-5 lg:col-span-2">
-          <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-primary" />Evolução (12 meses)
-          </h3>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyEvolution}>
-                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <RTooltip formatter={(v) => fmtBRL(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                <Area type="monotone" dataKey="receitas" stroke="#22c55e" fill="#22c55e20" strokeWidth={2} />
-                <Area type="monotone" dataKey="despesas" stroke="#ef4444" fill="#ef444420" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        {/* Category pie */}
-        <Card className="p-5">
-          <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
-            <PieIcon className="h-4 w-4 text-primary" />
-            {typeFilter === 'despesa' ? 'Despesas' : 'Receitas'} por Categoria
-          </h3>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={typeFilter === 'despesa' ? despesaCategoryData : categoryData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={75}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  labelLine={false}
-                >
-                  {(typeFilter === 'despesa' ? despesaCategoryData : categoryData).map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <RTooltip formatter={(v) => fmtBRL(Number(v))} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
-
-      {/* ── Projection ── */}
+      {/* ── Projection (sempre visível, é o mais importante) ── */}
       <Card className="p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-sm flex items-center gap-2">
@@ -1617,31 +1569,93 @@ export default function Financeiro() {
         )}
       </Card>
 
-      {/* ── Próximos vencimentos ── */}
+      {/* ── Charts Row (minimizável) ── */}
+      <Card className="p-5">
+        <button className="flex items-center justify-between w-full" onClick={() => setChartsCollapsed(c => !c)}>
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-primary" />Gráficos
+          </h3>
+          {chartsCollapsed ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
+        </button>
+        {!chartsCollapsed && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+            {/* Evolution */}
+            <div className="lg:col-span-2">
+              <h4 className="font-medium text-xs mb-3 text-muted-foreground">Evolução (12 meses)</h4>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={monthlyEvolution}>
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <RTooltip formatter={(v) => fmtBRL(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                    <Area type="monotone" dataKey="receitas" stroke="#22c55e" fill="#22c55e20" strokeWidth={2} />
+                    <Area type="monotone" dataKey="despesas" stroke="#ef4444" fill="#ef444420" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Category pie */}
+            <div>
+              <h4 className="font-medium text-xs mb-3 text-muted-foreground">
+                {typeFilter === 'despesa' ? 'Despesas' : 'Receitas'} por Categoria
+              </h4>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={typeFilter === 'despesa' ? despesaCategoryData : categoryData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={75}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      labelLine={false}
+                    >
+                      {(typeFilter === 'despesa' ? despesaCategoryData : categoryData).map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RTooltip formatter={(v) => fmtBRL(Number(v))} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* ── Próximos vencimentos (minimizável) ── */}
       {proximosVencimentos.length > 0 && (
         <Card className="p-5">
-          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            <Clock className="h-4 w-4 text-amber-500" />Próximos Vencimentos
-          </h3>
-          <div className="space-y-2">
-            {proximosVencimentos.map(r => {
-              const days = getDaysDiff(r.due_date!)
-              return (
-                <div key={r.id} className="flex items-center justify-between p-3 rounded-lg border">
-                  <div>
-                    <p className="text-sm font-medium">{r.description}</p>
-                    <p className="text-xs text-muted-foreground">{fmtDate(r.due_date!)} · {getClientName(r.client_id)}</p>
+          <button className="flex items-center justify-between w-full" onClick={() => setVencimentosCollapsed(c => !c)}>
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Clock className="h-4 w-4 text-amber-500" />Próximos Vencimentos
+            </h3>
+            {vencimentosCollapsed ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
+          </button>
+          {!vencimentosCollapsed && (
+            <div className="space-y-2 mt-3">
+              {proximosVencimentos.map(r => {
+                const days = getDaysDiff(r.due_date!)
+                return (
+                  <div key={r.id} className="flex items-center justify-between p-3 rounded-lg border">
+                    <div>
+                      <p className="text-sm font-medium">{r.description}</p>
+                      <p className="text-xs text-muted-foreground">{fmtDate(r.due_date!)} · {getClientName(r.client_id)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-sm font-semibold ${r.type === 'receita' ? 'text-green-600' : 'text-red-500'}`}>{fmtBRL(Number(r.value))}</p>
+                      <Badge variant={days <= 3 ? 'destructive' : 'outline'} className="text-[10px]">
+                        {days === 0 ? 'Hoje' : days === 1 ? 'Amanhã' : `${days}d`}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-semibold ${r.type === 'receita' ? 'text-green-600' : 'text-red-500'}`}>{fmtBRL(Number(r.value))}</p>
-                    <Badge variant={days <= 3 ? 'destructive' : 'outline'} className="text-[10px]">
-                      {days === 0 ? 'Hoje' : days === 1 ? 'Amanhã' : `${days}d`}
-                    </Badge>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </Card>
       )}
 
