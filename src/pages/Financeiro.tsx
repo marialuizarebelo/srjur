@@ -1274,7 +1274,14 @@ export default function Financeiro() {
                   </div>
                   <div className="space-y-2">
                     <Label>Categoria</Label>
-                    <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+                    <Select value={form.category} onValueChange={v => setForm(f => ({
+                      ...f,
+                      category: v,
+                      // Mensalidade é sempre recorrente — assume mensal e projeta os próximos
+                      // 12 meses como previsto, pra não depender de lembrar de configurar isso.
+                      recurrence: v === 'Mensalidade' ? 'Mensal' : f.recurrence,
+                      installments: v === 'Mensalidade' && f.installments === '1' ? '12' : f.installments,
+                    }))}>
                       <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         {(form.type === 'receita' ? CATEGORIES_RECEITA : CATEGORIES_DESPESA).map(c => (
@@ -1284,6 +1291,23 @@ export default function Financeiro() {
                     </Select>
                   </div>
                 </div>
+
+                {form.category === 'Mensalidade' && (
+                  <div className="p-3 rounded-xl bg-muted/30 space-y-2">
+                    <Label className="text-xs">Como a mensalidade é cobrada?</Label>
+                    <Select value={form.payment_method} onValueChange={v => setForm(f => ({ ...f, payment_method: v }))}>
+                      <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Boleto">Boleto — a pessoa precisa pagar todo mês</SelectItem>
+                        <SelectItem value="PIX/Transferência">PIX/Transferência — a pessoa precisa mandar todo mês</SelectItem>
+                        <SelectItem value="Cartão de Crédito">Cartão de Crédito recorrente (assinatura) — debita automático todo mês</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Isso vai lançar {form.installments || 12} meses como previsto, um por mês, no mesmo dia do vencimento — cada mês precisa ser confirmado como pago conforme for entrando.
+                    </p>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -1327,7 +1351,7 @@ export default function Financeiro() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>{form.payment_method === 'Cartão de Crédito' ? 'Parcelas no cartão' : 'Parcelas'}</Label>
+                    <Label>{form.category === 'Mensalidade' ? 'Meses a prever' : form.payment_method === 'Cartão de Crédito' ? 'Parcelas no cartão' : 'Parcelas'}</Label>
                     <Input type="number" min="1" max="48" value={form.installments} onChange={e => setForm(f => ({ ...f, installments: e.target.value }))} className="h-10" />
                   </div>
                 </div>
