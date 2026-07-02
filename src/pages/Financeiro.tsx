@@ -461,6 +461,8 @@ export default function Financeiro() {
   const [viewMonth, setViewMonth] = useState(now.getMonth())
   const [viewYear, setViewYear] = useState(now.getFullYear())
   const [viewMode, setViewMode] = useState<'mes' | 'ano' | 'custom'>('mes')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
   const [activeCard, setActiveCard] = useState<string | null>(null)
   const [typeFilter, setTypeFilter] = useState<'todos' | 'receita' | 'despesa'>('todos')
   const [clientFilter, setClientFilter] = useState<string>('todos')
@@ -626,10 +628,13 @@ export default function Financeiro() {
         return d.getMonth() === viewMonth && d.getFullYear() === viewYear
       } else if (viewMode === 'ano') {
         return d.getFullYear() === viewYear
+      } else if (viewMode === 'custom') {
+        if (customStart && r.date < customStart) return false
+        if (customEnd && r.date > customEnd) return false
       }
       return true
     })
-  }, [rows, typeFilter, clientFilter, responsibleFilter, categoryFilter, paymentMethodFilter, viewMode, viewMonth, viewYear])
+  }, [rows, typeFilter, clientFilter, responsibleFilter, categoryFilter, paymentMethodFilter, viewMode, viewMonth, viewYear, customStart, customEnd])
 
   const sortedFiltered = useMemo(() => {
     if (!sortColumn) return filtered
@@ -731,7 +736,7 @@ export default function Financeiro() {
 
   // ── Handlers ──
   const handleSave = async () => {
-    const val = parseFloat(form.value.replace(',', '.'))
+    const val = parseBRLValue(form.value)
     if (isNaN(val) || val <= 0) { toast.error('Valor inválido'); return }
     const numInstallments = parseInt(form.installments) || 1
     // Cartão parcelado (parcelamento no cartão): 1 lançamento único, valor líquido — a operadora
@@ -913,7 +918,7 @@ export default function Financeiro() {
     setForm({
       type: row.type,
       description: row.description,
-      value: String(row.value),
+      value: new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(Number(row.value)),
       date: row.date,
       due_date: row.due_date ?? '',
       category: row.category ?? '',
@@ -1300,7 +1305,7 @@ export default function Financeiro() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Valor (R$)</Label>
-                    <Input value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} placeholder="0,00" className="h-10" />
+                    <Input value={form.value} onChange={e => setForm(f => ({ ...f, value: maskBRL(e.target.value) }))} placeholder="0,00" className="h-10" inputMode="numeric" />
                   </div>
                   <div className="space-y-2">
                     <Label>Categoria</Label>
@@ -1391,7 +1396,7 @@ export default function Financeiro() {
                   const isCard = form.payment_method === 'Cartão de Crédito'
                   const isCardLumpSumPreview = isCard && numInst > 1 && form.recurrence === 'Única'
                   const isMonthlySplitPreview = numInst > 1 && !isCardLumpSumPreview
-                  const gross = parseFloat((form.value || '0').replace(',', '.')) || 0
+                  const gross = parseBRLValue(form.value)
 
                   if (isCardLumpSumPreview) {
                     return (
@@ -1474,8 +1479,8 @@ export default function Financeiro() {
                           </div>
                         ))}
                         <p className="text-xs text-muted-foreground pt-1">
-                          Recebido: {fmtBRL(paidAmount(rows.find(r => r.id === editingId)!, paymentsMap))} de {fmtBRL(parseFloat(form.value.replace(',', '.')) || 0)}
-                          {' · '}Falta: {fmtBRL(Math.max((parseFloat(form.value.replace(',', '.')) || 0) - paidAmount(rows.find(r => r.id === editingId)!, paymentsMap), 0))}
+                          Recebido: {fmtBRL(paidAmount(rows.find(r => r.id === editingId)!, paymentsMap))} de {fmtBRL(parseBRLValue(form.value))}
+                          {' · '}Falta: {fmtBRL(Math.max((parseBRLValue(form.value)) - paidAmount(rows.find(r => r.id === editingId)!, paymentsMap), 0))}
                         </p>
                       </div>
                     )}
@@ -1513,12 +1518,26 @@ export default function Financeiro() {
               className="h-7 text-xs"
               onClick={() => setViewMode(m)}
             >
-              {m === 'mes' ? 'Mês' : m === 'ano' ? 'Ano' : 'Todos'}
+              {m === 'mes' ? 'Mês' : m === 'ano' ? 'Ano' : 'Período'}
             </Button>
           ))}
         </div>
         {viewMode !== 'custom' && (
           <MonthNavigator month={viewMonth} year={viewYear} onChange={(m, y) => { setViewMonth(m); setViewYear(y) }} />
+        )}
+        {viewMode === 'custom' && (
+          <div className="flex items-center gap-2">
+            <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+              className="h-7 text-xs rounded-md border border-input bg-background px-2" />
+            <span className="text-xs text-muted-foreground">até</span>
+            <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+              className="h-7 text-xs rounded-md border border-input bg-background px-2" />
+            {(customStart || customEnd) && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setCustomStart(''); setCustomEnd('') }}>
+                Limpar
+              </Button>
+            )}
+          </div>
         )}
         <Select value={clientFilter} onValueChange={setClientFilter}>
           <SelectTrigger className="h-7 text-xs w-[140px]">
