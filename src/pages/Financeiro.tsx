@@ -407,6 +407,7 @@ export default function Financeiro() {
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingCurrentInstallment, setEditingCurrentInstallment] = useState<number | null>(null)
   const [viewRow, setViewRow] = useState<FinanceRow | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [asaasOpen, setAsaasOpen] = useState(false)
@@ -492,6 +493,7 @@ export default function Financeiro() {
       recurrence: 'Única', payment_link: '', card_fee_percent: '',
     })
     setEditingId(null)
+    setEditingCurrentInstallment(null)
   }
 
   function resetAf() {
@@ -711,15 +713,18 @@ export default function Financeiro() {
     if (isNaN(val) || val <= 0) { toast.error('Valor inválido'); return }
     const numInstallments = parseInt(form.installments) || 1
     const isCardInstallment = form.payment_method === 'Cartão de Crédito' && numInstallments > 1
-    const feePercent = parseFloat(form.card_fee_percent.replace(',', '.')) || 0
+    const feePercent = parseFloat((form.card_fee_percent || '').replace(',', '.')) || 0
     const autoPayDate = form.paid
       ? (form.payment_date || new Date().toISOString().slice(0, 10))
       : null
+    // Ao editar um lançamento já existente, o valor no formulário já é o valor daquela
+    // linha específica (não o total) — não deve ser dividido de novo pelas parcelas.
+    const shouldSplitValue = !editingId && !isCardInstallment && numInstallments > 1
 
     const basePayload = {
       type: form.type,
       description: form.description,
-      value: (!isCardInstallment && numInstallments > 1) ? val / numInstallments : val,
+      value: shouldSplitValue ? val / numInstallments : val,
       date: form.date,
       due_date: form.due_date || null,
       category: form.category || null,
@@ -736,7 +741,7 @@ export default function Financeiro() {
       recurrence: form.recurrence === 'Única' ? null : form.recurrence,
       payment_link: form.payment_link || null,
       installments: numInstallments > 1 ? numInstallments : null,
-      current_installment: (!isCardInstallment && numInstallments > 1) ? 1 : null,
+      current_installment: editingId ? editingCurrentInstallment : ((!isCardInstallment && numInstallments > 1) ? 1 : null),
       card_fee_percent: isCardInstallment && feePercent > 0 ? feePercent : null,
     }
 
@@ -868,8 +873,10 @@ export default function Financeiro() {
       installments: String(row.installments ?? 1),
       recurrence: row.recurrence ?? 'Única',
       payment_link: row.payment_link ?? '',
+      card_fee_percent: row.card_fee_percent != null ? String(row.card_fee_percent) : '',
     })
     setEditingId(row.id)
+    setEditingCurrentInstallment(row.current_installment)
     setDialogOpen(true)
   }
 
