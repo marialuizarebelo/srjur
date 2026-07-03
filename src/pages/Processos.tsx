@@ -325,7 +325,10 @@ export default function Processos() {
     if (!clean) return
     try {
       const items = await searchDjen({ numeroProcesso: clean, itensPorPagina: 100 })
-      if (items.length === 0) return
+      if (items.length === 0) {
+        toast('Nenhuma movimentação encontrada ainda no DJEN para este número.', { duration: 5000 })
+        return
+      }
       let novas = 0
       for (const item of items) {
         const { data: exists } = await supabase.from('intimacoes').select('id').eq('djen_id', item.id).maybeSingle()
@@ -354,8 +357,11 @@ export default function Processos() {
         novas++
       }
       if (novas > 0) toast.success(`${novas} movimentação(ões) encontrada(s) no DJEN para este processo!`)
-    } catch {
-      // busca silenciosa — não interrompe o fluxo de cadastro do processo
+      else toast(`${items.length} movimentação(ões) já estavam sincronizadas.`, { duration: 4000 })
+    } catch (err: any) {
+      // Não interrompe o cadastro do processo (que já foi salvo), mas avisa
+      // que a busca automática no DJEN falhou, pra não parecer que sumiu no vazio.
+      toast.error('Processo salvo, mas a busca automática no DJEN falhou: ' + (err?.message ?? String(err)), { duration: 6000 })
     }
   }
 
