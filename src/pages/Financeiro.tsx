@@ -810,20 +810,16 @@ export default function Financeiro() {
         // que o cliente precisa pagar (e a gente precisa cobrar) todo mês.
         const inserts = []
         for (let i = 0; i < numInstallments; i++) {
-          // Incrementa tanto a data de lançamento quanto o vencimento, mantendo o
-          // mesmo dia do mês em ambos (ex: sempre dia 5) — a visão "Mês" do financeiro
-          // filtra pela data de lançamento, então cada parcela precisa cair no seu
-          // próprio mês, no mesmo dia fixo, não em datas erráticas.
-          // Usa o Vencimento como base pra "Data" também — evita que a parcela caia
-          // no mês da Data de lançamento (ex: hoje) quando o vencimento real é em
-          // outro mês (ex: a pessoa preenche só o Vencimento pra novembro e a Data
-          // fica esquecida em hoje/agosto — sem isso a parcela aparecia no mês errado).
-          const installDate = addMonthsFixedDay(form.due_date || form.date, i)
+          // Data e Vencimento de cada parcela SEMPRE vêm da mesma base (o campo único
+          // "Primeiro vencimento" da série) — não existe mais um par de datas
+          // independentes que pudesse divergir entre si feito antes.
+          const seriesBase = form.due_date || form.date
+          const installDate = addMonthsFixedDay(seriesBase, i)
           inserts.push({
             ...basePayload,
             description: `${form.description} (${i + 1}/${numInstallments})`,
             date: installDate,
-            due_date: addMonthsFixedDay(form.due_date || form.date, i),
+            due_date: installDate,
             current_installment: i + 1,
             // primeira parcela pode já ser real (se for hoje/passado); as futuras são sempre previstas
             nature: (i === 0 ? autoNature : (installDate <= todayStr ? 'real' : 'previsto')),
@@ -1356,27 +1352,33 @@ export default function Financeiro() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {!editingId && (parseInt(form.installments) || 1) > 1 ? (
+                  // Parcelamento/mensalidade: um único campo de data governa toda a série —
+                  // impossível a Data e o Vencimento de cada parcela divergirem entre si,
+                  // já que não existem mais dois campos independentes pra esse caso.
                   <div className="space-y-2">
-                    <Label>Data</Label>
-                    <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className="h-10" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Vencimento</Label>
+                    <Label>Primeiro vencimento</Label>
                     <Input
-                      type="date" value={form.due_date}
-                      onChange={e => setForm(f => ({
-                        ...f,
-                        due_date: e.target.value,
-                        // Em parcelamento/mensalidade o Vencimento é quem manda no mês de
-                        // cada cobrança — mantém a Data acompanhando pra não ficar
-                        // divergente (ex: Data em agosto, Vencimento em novembro).
-                        date: (Number(f.installments) > 1) ? e.target.value : f.date,
-                      }))}
+                      type="date" value={form.due_date || form.date}
+                      onChange={e => setForm(f => ({ ...f, due_date: e.target.value, date: e.target.value }))}
                       className="h-10"
                     />
+                    <p className="text-[11px] text-muted-foreground">
+                      As demais parcelas caem automaticamente nesse mesmo dia, um mês depois da outra.
+                    </p>
                   </div>
-                </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Data</Label>
+                      <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className="h-10" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Vencimento</Label>
+                      <Input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} className="h-10" />
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
