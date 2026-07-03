@@ -295,7 +295,13 @@ export default function Tarefas() {
   // ── CRUD ──
   const toggleComplete = async (task: Task) => {
     const newStatus = task.status === 'pendente' ? 'concluida' : 'pendente'
-    const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
+    // Mantém o workflow_stage (usado pelos kanbans de Tarefas e Agenda) em sincronia
+    // com o status — senão marcar como concluída aqui deixava o card preso na coluna
+    // antiga (ex: "Fazendo") nos kanbans, mesmo já estando concluída.
+    const payload: { status: string; workflow_stage?: string } = { status: newStatus }
+    if (newStatus === 'concluida') payload.workflow_stage = 'concluido'
+    else if (task.workflow_stage === 'concluido') payload.workflow_stage = 'a_fazer'
+    const { error } = await supabase.from('tasks').update(payload).eq('id', task.id)
     if (error) { toast.error('Erro ao atualizar tarefa: ' + error.message); return }
     loadData()
   }
