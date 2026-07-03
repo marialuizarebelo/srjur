@@ -116,7 +116,7 @@ export default function Configuracoes() {
   async function loadData() {
     const [{ data: os }, { data: us }, { data: gc }] = await Promise.all([
       supabase.from('office_settings').select('*').limit(1).maybeSingle(),
-      supabase.from('profiles').select('*').order('created_at'),
+      supabase.from('profiles').select('*').eq('role', 'admin').order('created_at'),
       supabase.from('google_calendar_connections').select('*'),
     ])
     if (os) {
