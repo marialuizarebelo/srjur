@@ -199,6 +199,7 @@ export default function Tarefas() {
   const [clients, setClients] = useState<ClientOption[]>([])
   const [processes, setProcesses] = useState<ProcessOption[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'board' | 'list' | 'execucao'>('list')
   const pinnedView = usePinnedView('tarefas_view', 'list')
@@ -329,26 +330,32 @@ export default function Tarefas() {
   }
 
   const saveTask = async () => {
-    const names = tf.responsible_ids.map(id => profilesMap[id]?.display_name).filter(Boolean)
-    const payload = {
-      title: tf.title, description: tf.description || null, type: tf.type,
-      status: tf.status, priority: tf.priority, due_date: tf.due_date || null,
-      due_time: tf.due_time || null,
-      responsible_ids: tf.responsible_ids,
-      responsible: names.length > 1 ? 'Ambas' : (names[0] ?? null), // legado, mantido para telas antigas
-      client_id: tf.client_id || null, process_id: tf.process_id || null,
-      recurrence: tf.recurrence === 'Única' ? null : tf.recurrence,
-      portal_visible: tf.portal_visible,
-      workflow_stage: tf.workflow_stage,
+    if (saving) return
+    setSaving(true)
+    try {
+      const names = tf.responsible_ids.map(id => profilesMap[id]?.display_name).filter(Boolean)
+      const payload = {
+        title: tf.title, description: tf.description || null, type: tf.type,
+        status: tf.status, priority: tf.priority, due_date: tf.due_date || null,
+        due_time: tf.due_time || null,
+        responsible_ids: tf.responsible_ids,
+        responsible: names.length > 1 ? 'Ambas' : (names[0] ?? null), // legado, mantido para telas antigas
+        client_id: tf.client_id || null, process_id: tf.process_id || null,
+        recurrence: tf.recurrence === 'Única' ? null : tf.recurrence,
+        portal_visible: tf.portal_visible,
+        workflow_stage: tf.workflow_stage,
+      }
+      if (editing) {
+        await supabase.from('tasks').update(payload).eq('id', editing.id)
+      } else {
+        await supabase.from('tasks').insert(payload)
+      }
+      setDialogOpen(false)
+      resetTf()
+      loadData()
+    } finally {
+      setSaving(false)
     }
-    if (editing) {
-      await supabase.from('tasks').update(payload).eq('id', editing.id)
-    } else {
-      await supabase.from('tasks').insert(payload)
-    }
-    setDialogOpen(false)
-    resetTf()
-    loadData()
   }
 
   const deleteTask = async (id: string) => {
@@ -757,7 +764,7 @@ export default function Tarefas() {
               </Button>
             )}
             <DialogClose render={<Button variant="outline" size="lg" />}>Cancelar</DialogClose>
-            <Button size="lg" onClick={saveTask} disabled={!tf.title}>Salvar</Button>
+            <Button size="lg" onClick={saveTask} disabled={!tf.title || saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

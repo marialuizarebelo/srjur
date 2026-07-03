@@ -158,6 +158,7 @@ function MarketingViewDialog({ item, open, onClose, onEdit, onDelete, onMoveStat
 export default function Marketing() {
   const [items, setItems] = useState<MarketingItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
   const pinnedView = usePinnedView('marketing_view', 'kanban')
   useEffect(() => { if (pinnedView.loaded && pinnedView.isPinned) setViewMode(pinnedView.pinnedValue as any) }, [pinnedView.loaded])
@@ -218,19 +219,25 @@ export default function Marketing() {
   }
 
   async function saveItem() {
-    const payload = {
-      title: mf.title, platform: mf.platform, content_type: mf.content_type, status: mf.status,
-      scheduled_date: mf.scheduled_date || null, scheduled_time: mf.scheduled_time || null,
-      caption: mf.caption || null, reference_url: mf.reference_url || null,
-      drive_folder_id: mf.drive_folder_id || null, drive_url: mf.drive_url || null,
-      responsible_ids: mf.responsible_ids, tags: mf.tags || null, notes: mf.notes || null,
-      updated_at: new Date().toISOString(),
+    if (saving) return
+    setSaving(true)
+    try {
+      const payload = {
+        title: mf.title, platform: mf.platform, content_type: mf.content_type, status: mf.status,
+        scheduled_date: mf.scheduled_date || null, scheduled_time: mf.scheduled_time || null,
+        caption: mf.caption || null, reference_url: mf.reference_url || null,
+        drive_folder_id: mf.drive_folder_id || null, drive_url: mf.drive_url || null,
+        responsible_ids: mf.responsible_ids, tags: mf.tags || null, notes: mf.notes || null,
+        updated_at: new Date().toISOString(),
+      }
+      if (editing) await supabase.from('marketing_content').update(payload).eq('id', editing.id)
+      else await supabase.from('marketing_content').insert(payload)
+      setDialogOpen(false)
+      resetMf()
+      loadData()
+    } finally {
+      setSaving(false)
     }
-    if (editing) await supabase.from('marketing_content').update(payload).eq('id', editing.id)
-    else await supabase.from('marketing_content').insert(payload)
-    setDialogOpen(false)
-    resetMf()
-    loadData()
   }
 
   async function deleteItem(id: string) {
@@ -493,7 +500,7 @@ export default function Marketing() {
           <DialogFooter className="pt-4">
             {editing && <Button variant="destructive" className="mr-auto" onClick={() => { deleteItem(editing.id); setDialogOpen(false) }}>Excluir</Button>}
             <DialogClose asChild><Button variant="outline" size="lg">Cancelar</Button></DialogClose>
-            <Button size="lg" onClick={saveItem} disabled={!mf.title}>Salvar</Button>
+            <Button size="lg" onClick={saveItem} disabled={!mf.title || saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

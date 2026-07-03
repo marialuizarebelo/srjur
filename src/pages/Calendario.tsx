@@ -84,6 +84,7 @@ export default function Calendario() {
   const navigate = useNavigate()
   const [events, setEvents]   = useState<CalEvent[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [quickOpen, setQuickOpen] = useState(false)
   const [qf, setQf] = useState({ tipo: 'tarefa' as 'tarefa' | 'compromisso' | 'prazo', title: '', date: '', time: '', responsible_ids: [] as string[] })
@@ -117,22 +118,27 @@ export default function Calendario() {
   }
 
   async function saveQuickCreate() {
-    if (!qf.title || !qf.date) return
-    if (qf.tipo === 'prazo') {
-      await supabase.from('deadlines').insert({
-        title: qf.title, due_date: qf.date, status: 'pendente',
-        responsible_ids: qf.responsible_ids, responsible: namesFor(qf.responsible_ids), source: 'Manual',
-      })
-    } else {
-      await supabase.from('tasks').insert({
-        title: qf.title, due_date: qf.date, due_time: qf.time || null,
-        type: qf.tipo, status: 'pendente',
-        responsible_ids: qf.responsible_ids, responsible: namesFor(qf.responsible_ids),
-      })
+    if (!qf.title || !qf.date || saving) return
+    setSaving(true)
+    try {
+      if (qf.tipo === 'prazo') {
+        await supabase.from('deadlines').insert({
+          title: qf.title, due_date: qf.date, status: 'pendente',
+          responsible_ids: qf.responsible_ids, responsible: namesFor(qf.responsible_ids), source: 'Manual',
+        })
+      } else {
+        await supabase.from('tasks').insert({
+          title: qf.title, due_date: qf.date, due_time: qf.time || null,
+          type: qf.tipo, status: 'pendente',
+          responsible_ids: qf.responsible_ids, responsible: namesFor(qf.responsible_ids),
+        })
+      }
+      toast.success('Criado!')
+      setQuickOpen(false)
+      load()
+    } finally {
+      setSaving(false)
     }
-    toast.success('Criado!')
-    setQuickOpen(false)
-    load()
   }
 
   function openEditEvent(ev: CalEvent) {
@@ -143,21 +149,26 @@ export default function Calendario() {
   }
 
   async function saveEditEvent() {
-    if (!editTarget) return
-    if (editTarget.type === 'prazo') {
-      await supabase.from('deadlines').update({
-        title: ef.title, due_date: ef.date, status: ef.status,
-        responsible_ids: ef.responsible_ids, responsible: namesFor(ef.responsible_ids),
-      }).eq('id', editTarget.id)
-    } else {
-      await supabase.from('tasks').update({
-        title: ef.title, due_date: ef.date, due_time: ef.time || null, status: ef.status,
-        responsible_ids: ef.responsible_ids, responsible: namesFor(ef.responsible_ids),
-      }).eq('id', editTarget.id)
+    if (!editTarget || saving) return
+    setSaving(true)
+    try {
+      if (editTarget.type === 'prazo') {
+        await supabase.from('deadlines').update({
+          title: ef.title, due_date: ef.date, status: ef.status,
+          responsible_ids: ef.responsible_ids, responsible: namesFor(ef.responsible_ids),
+        }).eq('id', editTarget.id)
+      } else {
+        await supabase.from('tasks').update({
+          title: ef.title, due_date: ef.date, due_time: ef.time || null, status: ef.status,
+          responsible_ids: ef.responsible_ids, responsible: namesFor(ef.responsible_ids),
+        }).eq('id', editTarget.id)
+      }
+      toast.success('Atualizado!')
+      setEditOpen(false)
+      load()
+    } finally {
+      setSaving(false)
     }
-    toast.success('Atualizado!')
-    setEditOpen(false)
-    load()
   }
 
   async function deleteEditEvent() {
@@ -853,7 +864,7 @@ export default function Calendario() {
           <DialogFooter className="pt-4">
             <Button variant="destructive" className="mr-auto" onClick={deleteEditEvent}>Excluir</Button>
             <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-            <Button onClick={saveEditEvent} disabled={!ef.title}>Salvar</Button>
+            <Button onClick={saveEditEvent} disabled={!ef.title || saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -944,7 +955,7 @@ export default function Calendario() {
           </div>
           <DialogFooter className="pt-4">
             <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-            <Button onClick={saveQuickCreate} disabled={!qf.title}>Criar</Button>
+            <Button onClick={saveQuickCreate} disabled={!qf.title || saving}>{saving ? 'Criando...' : 'Criar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

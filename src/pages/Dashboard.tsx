@@ -342,50 +342,62 @@ export default function Dashboard() {
   const [saving, setSaving] = useState(false)
 
   async function saveQuickLead() {
-    if (!quickLead.name.trim()) return
+    if (!quickLead.name.trim() || saving) return
     setSaving(true)
-    const { error } = await supabase.from('leads').insert({ name: quickLead.name, phone: quickLead.phone || null, source: quickLead.source || null, status: 'novo' })
-    setSaving(false)
-    if (error) { toast.error('Erro ao criar lead: ' + error.message); return }
-    toast.success('Lead criado!')
-    setQuickLeadOpen(false)
-    setQuickLead({ name: '', phone: '', source: '' })
+    try {
+      const { error } = await supabase.from('leads').insert({ name: quickLead.name, phone: quickLead.phone || null, source: quickLead.source || null, status: 'novo' })
+      if (error) { toast.error('Erro ao criar lead: ' + error.message); return }
+      toast.success('Lead criado!')
+      setQuickLeadOpen(false)
+      setQuickLead({ name: '', phone: '', source: '' })
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function saveQuickClient() {
-    if (!quickClient.name.trim()) return
+    if (!quickClient.name.trim() || saving) return
     setSaving(true)
-    const { error } = await supabase.from('clients').insert({ name: quickClient.name, email: quickClient.email || null, phone: quickClient.phone || null, type: quickClient.type, status: 'ativo' })
-    setSaving(false)
-    if (error) { toast.error('Erro ao criar cliente: ' + error.message); return }
-    toast.success('Cliente criado!')
-    setQuickClientOpen(false)
-    setQuickClient({ name: '', email: '', phone: '', type: 'pessoa_fisica' })
+    try {
+      const { error } = await supabase.from('clients').insert({ name: quickClient.name, email: quickClient.email || null, phone: quickClient.phone || null, type: quickClient.type, status: 'ativo' })
+      if (error) { toast.error('Erro ao criar cliente: ' + error.message); return }
+      toast.success('Cliente criado!')
+      setQuickClientOpen(false)
+      setQuickClient({ name: '', email: '', phone: '', type: 'pessoa_fisica' })
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function saveQuickProcess() {
-    if (!quickProcess.title.trim()) return
+    if (!quickProcess.title.trim() || saving) return
     setSaving(true)
-    const { error } = await supabase.from('processes').insert({ title: quickProcess.title, client_id: quickProcess.client_id || null, area: quickProcess.area || null, status: 'em_andamento', phase: 'inicial' })
-    setSaving(false)
-    if (error) { toast.error('Erro ao criar processo: ' + error.message); return }
-    toast.success('Processo criado!')
-    setQuickProcessOpen(false)
-    setQuickProcess({ title: '', client_id: '', area: '' })
+    try {
+      const { error } = await supabase.from('processes').insert({ title: quickProcess.title, client_id: quickProcess.client_id || null, area: quickProcess.area || null, status: 'em_andamento', phase: 'inicial' })
+      if (error) { toast.error('Erro ao criar processo: ' + error.message); return }
+      toast.success('Processo criado!')
+      setQuickProcessOpen(false)
+      setQuickProcess({ title: '', client_id: '', area: '' })
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function saveQuickTask() {
-    if (!quickTask.title.trim()) return
+    if (!quickTask.title.trim() || saving) return
     setSaving(true)
-    const { error } = await supabase.from('tasks').insert({
-      title: quickTask.title, due_date: quickTask.due_date || null, status: 'pendente',
-      responsible_ids: quickTask.responsible_ids, type: 'tarefa',
-    })
-    setSaving(false)
-    if (error) { toast.error('Erro ao criar tarefa: ' + error.message); return }
-    toast.success('Tarefa criada!')
-    setQuickTaskOpen(false)
-    setQuickTask({ title: '', due_date: '', responsible_ids: [] })
+    try {
+      const { error } = await supabase.from('tasks').insert({
+        title: quickTask.title, due_date: quickTask.due_date || null, status: 'pendente',
+        responsible_ids: quickTask.responsible_ids, type: 'tarefa',
+      })
+      if (error) { toast.error('Erro ao criar tarefa: ' + error.message); return }
+      toast.success('Tarefa criada!')
+      setQuickTaskOpen(false)
+      setQuickTask({ title: '', due_date: '', responsible_ids: [] })
+    } finally {
+      setSaving(false)
+    }
   }
 
   const firstName = profile?.nickname || profile?.display_name?.split(' ')[0] || 'Usuária'

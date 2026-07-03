@@ -190,6 +190,7 @@ export default function Prazos() {
   const [responsibleFilter, setResponsibleFilter] = useState('todos')
   const [clientFilter, setClientFilter] = useState('todos')
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'pendente' | 'cumprido' | 'perdido' | 'todos'>('pendente')
   const [viewMode, setViewMode] = useState<'lista' | 'kanban'>('lista')
@@ -299,21 +300,27 @@ export default function Prazos() {
   }
 
   const saveDeadline = async () => {
-    const payload = {
-      title: df.title, due_date: df.due_date, process_id: df.process_id || null,
-      status: df.status, notes: df.notes || null,
-      responsible_ids: df.responsible_ids,
-      responsible: df.responsible_ids.length > 1 ? 'Ambas' : (profilesMap[df.responsible_ids[0]]?.display_name ?? null),
-      source: df.source || null, portal_visible: df.portal_visible, stage_id: df.stage_id || null,
+    if (saving) return
+    setSaving(true)
+    try {
+      const payload = {
+        title: df.title, due_date: df.due_date, process_id: df.process_id || null,
+        status: df.status, notes: df.notes || null,
+        responsible_ids: df.responsible_ids,
+        responsible: df.responsible_ids.length > 1 ? 'Ambas' : (profilesMap[df.responsible_ids[0]]?.display_name ?? null),
+        source: df.source || null, portal_visible: df.portal_visible, stage_id: df.stage_id || null,
+      }
+      if (editing) {
+        await supabase.from('deadlines').update(payload).eq('id', editing.id)
+      } else {
+        await supabase.from('deadlines').insert(payload)
+      }
+      setDialogOpen(false)
+      resetDf()
+      loadData()
+    } finally {
+      setSaving(false)
     }
-    if (editing) {
-      await supabase.from('deadlines').update(payload).eq('id', editing.id)
-    } else {
-      await supabase.from('deadlines').insert(payload)
-    }
-    setDialogOpen(false)
-    resetDf()
-    loadData()
   }
 
   const deleteDeadline = async (id: string) => {
@@ -338,12 +345,17 @@ export default function Prazos() {
   }
 
   const saveStage = async () => {
-    if (!stageName.trim()) return
-    if (stageEditing) {
-      await supabase.from('deadline_stages').update({ name: stageName, color: stageColor }).eq('id', stageEditing.id)
-    } else {
-      const maxPos = stages.length > 0 ? Math.max(...stages.map(s => s.position)) + 1 : 0
-      await supabase.from('deadline_stages').insert({ name: stageName, color: stageColor, position: maxPos })
+    if (!stageName.trim() || saving) return
+    setSaving(true)
+    try {
+      if (stageEditing) {
+        await supabase.from('deadline_stages').update({ name: stageName, color: stageColor }).eq('id', stageEditing.id)
+      } else {
+        const maxPos = stages.length > 0 ? Math.max(...stages.map(s => s.position)) + 1 : 0
+        await supabase.from('deadline_stages').insert({ name: stageName, color: stageColor, position: maxPos })
+      }
+    } finally {
+      setSaving(false)
     }
     setStageFormOpen(false)
     loadData()
@@ -848,7 +860,7 @@ export default function Prazos() {
               </Button>
             )}
             <DialogClose render={<Button variant="outline" size="lg" />}>Cancelar</DialogClose>
-            <Button size="lg" onClick={saveDeadline} disabled={!df.title || !df.due_date}>Salvar</Button>
+            <Button size="lg" onClick={saveDeadline} disabled={!df.title || !df.due_date || saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -897,7 +909,7 @@ export default function Prazos() {
               </div>
               <div className="flex gap-2 pt-1">
                 <Button size="sm" variant="outline" className="flex-1" onClick={() => setStageFormOpen(false)}>Cancelar</Button>
-                <Button size="sm" className="flex-1" onClick={saveStage} disabled={!stageName.trim()}>Salvar</Button>
+                <Button size="sm" className="flex-1" onClick={saveStage} disabled={!stageName.trim() || saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
               </div>
             </div>
           ) : (

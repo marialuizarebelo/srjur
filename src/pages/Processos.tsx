@@ -163,6 +163,7 @@ export default function Processos() {
   const [processes, setProcesses] = useState<Process[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
   const pinnedView = usePinnedView('processos_view', 'kanban')
@@ -325,6 +326,8 @@ export default function Processos() {
 
   const saveProcess = async () => {
     if (!pf.title.trim()) { toast.error('Preencha o título do processo'); return }
+    if (saving) return
+    setSaving(true)
     const payload = {
       title: pf.title, number: pf.number || null, client_id: pf.client_id || null,
       client_role: pf.client_role || null,
@@ -366,6 +369,8 @@ export default function Processos() {
       }
     } catch (err: any) {
       toast.error('Erro ao salvar processo: ' + (err?.message ?? String(err)))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -1171,7 +1176,7 @@ export default function Processos() {
               </Button>
             )}
             <DialogClose render={<Button variant="outline" size="lg" />}>Cancelar</DialogClose>
-            <Button size="lg" onClick={saveProcess} disabled={!pf.title}>Salvar</Button>
+            <Button size="lg" onClick={saveProcess} disabled={!pf.title || saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -432,6 +432,7 @@ export default function Financeiro() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingCurrentInstallment, setEditingCurrentInstallment] = useState<number | null>(null)
+  const [saving, setSaving] = useState(false)
   const [viewRow, setViewRow] = useState<FinanceRow | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [asaasOpen, setAsaasOpen] = useState(false)
@@ -744,6 +745,7 @@ export default function Financeiro() {
 
   // ── Handlers ──
   const handleSave = async () => {
+    if (saving) return
     const val = parseBRLValue(form.value)
     if (isNaN(val) || val <= 0) { toast.error('Valor inválido'); return }
     const numInstallments = parseInt(form.installments) || 1
@@ -791,6 +793,7 @@ export default function Financeiro() {
       card_fee_percent: isCardLumpSum && feePercent > 0 ? feePercent : null,
     }
 
+    setSaving(true)
     try {
       if (editingId) {
         const { error } = await supabase.from('finance').update(basePayload).eq('id', editingId)
@@ -855,6 +858,8 @@ export default function Financeiro() {
       loadData()
     } catch (err: any) {
       toast.error('Erro ao salvar: ' + (err?.message ?? String(err)))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -1525,7 +1530,7 @@ export default function Financeiro() {
               </div>
               <DialogFooter className="pt-4">
                 <DialogClose render={<Button variant="outline" size="lg" />}>Cancelar</DialogClose>
-                <Button size="lg" onClick={handleSave} disabled={!form.description || !form.value}>Salvar</Button>
+                <Button size="lg" onClick={handleSave} disabled={!form.description || !form.value || saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

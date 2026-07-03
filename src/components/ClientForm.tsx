@@ -172,6 +172,7 @@ interface ClientFormDialogProps {
   onDelete?: () => void
   isEditing: boolean
   clientId?: string
+  saving?: boolean
 }
 
 // ── Seção visual ───────────────────────────────────────────────────────────────
@@ -187,7 +188,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export function ClientFormDialog({
-  open, onOpenChange, form, setForm, onSave, onDelete, isEditing, clientId,
+  open, onOpenChange, form, setForm, onSave, onDelete, isEditing, clientId, saving,
 }: ClientFormDialogProps) {
   const [cepLoading, setCepLoading] = useState(false)
   const [driveRootFolderId, setDriveRootFolderId] = useState<string | null>(null)
@@ -558,7 +559,7 @@ export function ClientFormDialog({
             <Button variant="destructive" className="mr-auto" onClick={onDelete}>Excluir</Button>
           )}
           <DialogClose render={<Button variant="outline" size="lg" />}>Cancelar</DialogClose>
-          <Button size="lg" onClick={onSave} disabled={!form.name}>Salvar</Button>
+          <Button size="lg" onClick={onSave} disabled={!form.name || saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -682,6 +682,7 @@ export default function Clientes() {
   const [clients, setClients] = useState<Client[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<'crm' | 'ativos' | 'encerrados'>('ativos')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
@@ -899,6 +900,9 @@ export default function Clientes() {
   }
 
   const saveClient = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
     const payload = {
       name: cf.name, email: cf.email || null, phone: cf.phone || null,
       cpf_cnpj: cf.cpf_cnpj || null, type: cf.type,
@@ -940,6 +944,9 @@ export default function Clientes() {
     setDialogOpen(false)
     resetCf()
     loadData()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const deleteClient = async (id: string) => {
@@ -962,27 +969,33 @@ export default function Clientes() {
   }
 
   const saveLead = async () => {
-    const payload = {
-      name: lf.name, email: lf.email || null, phone: lf.phone || null,
-      cpf_cnpj: lf.cpf_cnpj || null, source: lf.source || null, status: lf.status,
-      potential_value: lf.potential_value ? parseFloat(lf.potential_value.replace(',', '.')) : null,
-      notes: lf.notes || null,
-      responsible_ids: lf.responsible_ids,
-      responsible: lf.responsible_ids.length > 1
-        ? lf.responsible_ids.map(id => profilesMap[id]?.display_name).filter(Boolean).join(' e ')
-        : (profilesMap[lf.responsible_ids[0]]?.display_name ?? null),
-      next_followup: lf.next_followup || null,
-      drive_folder_id: lf.drive_folder_id || null, drive_url: lf.drive_url || null,
-      referred_by: lf.referred_by || null, referral_fee_pct: lf.referral_fee_pct ? parseFloat(lf.referral_fee_pct) : null, first_contact_at: lf.first_contact_at || null,
+    if (saving) return
+    setSaving(true)
+    try {
+      const payload = {
+        name: lf.name, email: lf.email || null, phone: lf.phone || null,
+        cpf_cnpj: lf.cpf_cnpj || null, source: lf.source || null, status: lf.status,
+        potential_value: lf.potential_value ? parseFloat(lf.potential_value.replace(',', '.')) : null,
+        notes: lf.notes || null,
+        responsible_ids: lf.responsible_ids,
+        responsible: lf.responsible_ids.length > 1
+          ? lf.responsible_ids.map(id => profilesMap[id]?.display_name).filter(Boolean).join(' e ')
+          : (profilesMap[lf.responsible_ids[0]]?.display_name ?? null),
+        next_followup: lf.next_followup || null,
+        drive_folder_id: lf.drive_folder_id || null, drive_url: lf.drive_url || null,
+        referred_by: lf.referred_by || null, referral_fee_pct: lf.referral_fee_pct ? parseFloat(lf.referral_fee_pct) : null, first_contact_at: lf.first_contact_at || null,
+      }
+      if (editingLead) {
+        await supabase.from('leads').update(payload).eq('id', editingLead.id)
+      } else {
+        await supabase.from('leads').insert(payload)
+      }
+      setLeadDialogOpen(false)
+      resetLf()
+      loadData()
+    } finally {
+      setSaving(false)
     }
-    if (editingLead) {
-      await supabase.from('leads').update(payload).eq('id', editingLead.id)
-    } else {
-      await supabase.from('leads').insert(payload)
-    }
-    setLeadDialogOpen(false)
-    resetLf()
-    loadData()
   }
 
   const convertLead = async (lead: Lead) => {
@@ -1409,6 +1422,7 @@ export default function Clientes() {
         onDelete={editingClient ? () => { deleteClient(editingClient.id); setDialogOpen(false); resetCf() } : undefined}
         isEditing={!!editingClient}
         clientId={editingClient?.id}
+        saving={saving}
       />
 
       {/* ── Lead Dialog ── */}
@@ -1537,7 +1551,7 @@ export default function Clientes() {
               </div>
             )}
             <DialogClose render={<Button variant="outline" size="lg" />}>Cancelar</DialogClose>
-            <Button size="lg" onClick={saveLead} disabled={!lf.name}>Salvar</Button>
+            <Button size="lg" onClick={saveLead} disabled={!lf.name || saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
