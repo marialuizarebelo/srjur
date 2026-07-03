@@ -21,6 +21,7 @@ import {
 import { ResponsibleSelect, useProfilesMap } from '@/components/ResponsibleSelect'
 import { toast } from 'sonner'
 import { fmtBRL, fmtDate, fmtDateLong, getDaysDiff } from '@/lib/format'
+import { ClientCombobox } from '@/components/ClientCombobox'
 import {
   Users, Scale, ClipboardList, AlertTriangle, ChevronRight,
   Calendar, DollarSign, Bell,
@@ -735,13 +736,7 @@ export default function Dashboard() {
               </div>
               <div className="space-y-1.5">
                 <Label>Cliente</Label>
-                <Select value={quickProcess.client_id} onValueChange={v => setQuickProcess(f => ({ ...f, client_id: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Nenhum" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
-                    {clientOptions.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <ClientCombobox clients={clientOptions} value={quickProcess.client_id} onChange={id => setQuickProcess(f => ({ ...f, client_id: id }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Área</Label>

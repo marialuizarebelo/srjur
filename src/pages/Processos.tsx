@@ -24,6 +24,7 @@ import {
 import { fmtDate, fmtBRL } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
+import { ClientCombobox } from '@/components/ClientCombobox'
 import { searchDjen, stripHtml } from '@/lib/djen'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { DriveFileList } from '@/components/DriveFileList'
@@ -838,13 +839,7 @@ export default function Processos() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Cliente</Label>
-                <Select value={pf.client_id} onValueChange={v => setPf(f => ({ ...f, client_id: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
-                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <ClientCombobox clients={clients} value={pf.client_id} onChange={id => setPf(f => ({ ...f, client_id: id }))} />
               </div>
               <div className="space-y-2">
                 <Label>Número do processo</Label>

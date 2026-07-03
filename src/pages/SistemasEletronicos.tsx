@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { fmtDate } from '@/lib/format'
+import { ClientCombobox } from '@/components/ClientCombobox'
 
 interface OabConfig { id: string; nome: string; numero_oab: string; uf_oab: string; ativo: boolean }
 interface ProcessOption { id: string; title: string; number: string | null }
@@ -563,13 +564,7 @@ export default function SistemasEletronicos() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Cliente</Label>
-                <Select value={npf.client_id} onValueChange={v => setNpf(f => ({ ...f, client_id: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Nenhum" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
-                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <ClientCombobox clients={clients} value={npf.client_id} onChange={id => setNpf(f => ({ ...f, client_id: id }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Área do direito</Label>

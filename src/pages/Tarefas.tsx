@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { fmtDate, getDaysDiff, humanize } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
+import { ClientCombobox } from '@/components/ClientCombobox'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
@@ -715,13 +716,7 @@ export default function Tarefas() {
               </div>
               <div className="space-y-2">
                 <Label>Cliente</Label>
-                <Select value={tf.client_id} onValueChange={v => setTf(f => ({ ...f, client_id: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Nenhum" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
-                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <ClientCombobox clients={clients} value={tf.client_id} onChange={id => setTf(f => ({ ...f, client_id: id }))} />
               </div>
               <div className="space-y-2">
                 <Label>Processo</Label>
