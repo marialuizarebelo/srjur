@@ -50,6 +50,19 @@ interface Process {
   portal_visible: boolean
   created_at: string
   updated_at: string
+  access_key: string | null
+  cause_value: number | null
+  court_url: string | null
+  drive_url: string | null
+  drive_folder_id: string | null
+  tags: string | null
+  opposing_party: string | null
+  opposing_lawyer: string | null
+  filing_date: string | null
+  citation_date: string | null
+  instance: string | null
+  confidential: boolean
+  closed_date: string | null
 }
 
 interface ProcessUpdate {
@@ -162,6 +175,8 @@ export default function Processos() {
     area: '', status: 'em_andamento', phase: 'inicial', responsible: '',
     court: '', electronic_system: '', notes: '', portal_visible: true,
     access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
+    opposing_party: '', opposing_lawyer: '', filing_date: '', citation_date: '',
+    instance: '1º Grau', confidential: false, closed_date: '',
   })
 
   // Detail view (andamentos)
@@ -178,7 +193,9 @@ export default function Processos() {
     setPf({ title: '', number: '', client_id: '', type: 'consultivo',
       area: '', status: 'em_andamento', phase: 'inicial', responsible: '',
       court: '', electronic_system: '', notes: '', portal_visible: true,
-      access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '' })
+      access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
+      opposing_party: '', opposing_lawyer: '', filing_date: '', citation_date: '',
+      instance: '1º Grau', confidential: false, closed_date: '' })
     setEditing(null)
   }
 
@@ -261,7 +278,7 @@ export default function Processos() {
   const getClientName = (id: string | null) => clients.find(c => c.id === id)?.name ?? ''
 
   // ── CRUD ──
-  const openEdit = (p: any) => {
+  const openEdit = (p: Process) => {
     setPf({
       title: p.title, number: p.number ?? '', client_id: p.client_id ?? '',
       type: p.type, area: p.area ?? '', status: p.status, phase: p.phase,
@@ -270,6 +287,10 @@ export default function Processos() {
       portal_visible: p.portal_visible,
       access_key: p.access_key ?? '', cause_value: p.cause_value ? String(p.cause_value) : '',
       court_url: p.court_url ?? '', drive_url: p.drive_url ?? '', drive_folder_id: p.drive_folder_id ?? '', tags: p.tags ?? '',
+      opposing_party: p.opposing_party ?? '', opposing_lawyer: p.opposing_lawyer ?? '',
+      filing_date: p.filing_date ?? '', citation_date: p.citation_date ?? '',
+      instance: p.instance ?? '1º Grau', confidential: p.confidential ?? false,
+      closed_date: p.closed_date ?? '',
     })
     setEditing(p)
     setDialogOpen(true)
@@ -294,6 +315,10 @@ export default function Processos() {
       cause_value: pf.cause_value ? parseFloat(pf.cause_value.replace(',', '.')) : null,
       court_url: pf.court_url || null, drive_url: pf.drive_url || null, drive_folder_id: pf.drive_folder_id || null,
       tags: pf.tags || null,
+      opposing_party: pf.opposing_party || null, opposing_lawyer: pf.opposing_lawyer || null,
+      filing_date: pf.filing_date || null, citation_date: pf.citation_date || null,
+      instance: pf.instance || null, confidential: pf.confidential,
+      closed_date: pf.closed_date || null,
     }
     let processId = editing?.id
     try {
@@ -418,6 +443,9 @@ export default function Processos() {
                       {STATUS_MAP[detailProcess.status]?.label}
                     </Badge>
                     <Badge variant="outline">{PHASES.find(p => p.value === detailProcess.phase)?.label}</Badge>
+                    {detailProcess.confidential && (
+                      <Badge variant="outline" className="border-amber-400 text-amber-600">🔒 Segredo de justiça</Badge>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -489,7 +517,25 @@ export default function Processos() {
                     <div><p className="text-[11px] text-muted-foreground">Responsável</p><p className="font-medium">{detailProcess.responsible}</p></div>
                   )}
                   {detailProcess.court && (
-                    <div className="col-span-2"><p className="text-[11px] text-muted-foreground">Vara / Tribunal</p><p className="font-medium">{detailProcess.court}</p></div>
+                    <div className="col-span-2"><p className="text-[11px] text-muted-foreground">Vara</p><p className="font-medium">{detailProcess.court}</p></div>
+                  )}
+                  {detailProcess.opposing_party && (
+                    <div><p className="text-[11px] text-muted-foreground">Parte contrária</p><p className="font-medium">{detailProcess.opposing_party}</p></div>
+                  )}
+                  {detailProcess.opposing_lawyer && (
+                    <div><p className="text-[11px] text-muted-foreground">Advogado da parte contrária</p><p className="font-medium">{detailProcess.opposing_lawyer}</p></div>
+                  )}
+                  {detailProcess.filing_date && (
+                    <div><p className="text-[11px] text-muted-foreground">Data de distribuição</p><p className="font-medium">{fmtDate(detailProcess.filing_date)}</p></div>
+                  )}
+                  {detailProcess.citation_date && (
+                    <div><p className="text-[11px] text-muted-foreground">Data de citação</p><p className="font-medium">{fmtDate(detailProcess.citation_date)}</p></div>
+                  )}
+                  {detailProcess.instance && (
+                    <div><p className="text-[11px] text-muted-foreground">Instância</p><p className="font-medium">{detailProcess.instance}</p></div>
+                  )}
+                  {detailProcess.closed_date && (
+                    <div><p className="text-[11px] text-muted-foreground">Encerramento / trânsito em julgado</p><p className="font-medium">{fmtDate(detailProcess.closed_date)}</p></div>
                   )}
                   {detailProcess.electronic_system && (
                     <div><p className="text-[11px] text-muted-foreground">Sistema eletrônico</p><p className="font-medium">{detailProcess.electronic_system}</p></div>
@@ -935,6 +981,51 @@ export default function Processos() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Parte contrária (contra quem)</Label>
+                <Input value={pf.opposing_party} onChange={e => setPf(f => ({ ...f, opposing_party: e.target.value }))} placeholder="Nome do réu/autor da outra parte" className="h-10" />
+              </div>
+              <div className="space-y-2">
+                <Label>Advogado da parte contrária</Label>
+                <Input value={pf.opposing_lawyer} onChange={e => setPf(f => ({ ...f, opposing_lawyer: e.target.value }))} placeholder="Nome + OAB (opcional)" className="h-10" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Data de distribuição</Label>
+                <Input type="date" value={pf.filing_date} onChange={e => setPf(f => ({ ...f, filing_date: e.target.value }))} className="h-10" />
+              </div>
+              <div className="space-y-2">
+                <Label>Data de citação</Label>
+                <Input type="date" value={pf.citation_date} onChange={e => setPf(f => ({ ...f, citation_date: e.target.value }))} className="h-10" />
+              </div>
+              <div className="space-y-2">
+                <Label>Instância</Label>
+                <Select value={pf.instance} onValueChange={v => setPf(f => ({ ...f, instance: v }))}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1º Grau">1º Grau</SelectItem>
+                    <SelectItem value="2º Grau">2º Grau</SelectItem>
+                    <SelectItem value="Superior (STJ/STF/TST)">Superior (STJ/STF/TST)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {pf.status === 'concluido' && (
+              <div className="space-y-2">
+                <Label>Data de encerramento / trânsito em julgado</Label>
+                <Input type="date" value={pf.closed_date} onChange={e => setPf(f => ({ ...f, closed_date: e.target.value }))} className="h-10" />
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <Switch checked={pf.confidential} onCheckedChange={v => setPf(f => ({ ...f, confidential: v }))} />
+              <Label>Segredo de justiça</Label>
             </div>
 
             <div className="space-y-2">
