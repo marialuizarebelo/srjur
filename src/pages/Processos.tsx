@@ -58,6 +58,7 @@ interface Process {
   tags: string | null
   opposing_party: string | null
   opposing_cpf: string | null
+  opposing_parties: { name: string; cpf: string }[] | null
   filing_date: string | null
   citation_date: string | null
   instance: string | null
@@ -175,7 +176,7 @@ export default function Processos() {
     area: '', status: 'em_andamento', phase: 'inicial', responsible: '',
     court: '', electronic_system: '', notes: '', portal_visible: true,
     access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
-    opposing_party: '', opposing_cpf: '', filing_date: '', citation_date: '',
+    opposing_parties: [{ name: '', cpf: '' }] as { name: string; cpf: string }[], filing_date: '', citation_date: '',
     instance: '1º Grau', confidential: false, closed_date: '',
   })
 
@@ -194,7 +195,7 @@ export default function Processos() {
       area: '', status: 'em_andamento', phase: 'inicial', responsible: '',
       court: '', electronic_system: '', notes: '', portal_visible: true,
       access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
-      opposing_party: '', opposing_cpf: '', filing_date: '', citation_date: '',
+      opposing_parties: [{ name: '', cpf: '' }], filing_date: '', citation_date: '',
       instance: '1º Grau', confidential: false, closed_date: '' })
     setEditing(null)
   }
@@ -287,7 +288,11 @@ export default function Processos() {
       portal_visible: p.portal_visible,
       access_key: p.access_key ?? '', cause_value: p.cause_value ? String(p.cause_value) : '',
       court_url: p.court_url ?? '', drive_url: p.drive_url ?? '', drive_folder_id: p.drive_folder_id ?? '', tags: p.tags ?? '',
-      opposing_party: p.opposing_party ?? '', opposing_cpf: p.opposing_cpf ?? '',
+      opposing_parties: (p.opposing_parties && p.opposing_parties.length > 0)
+        ? p.opposing_parties
+        : (p.opposing_party || p.opposing_cpf)
+          ? [{ name: p.opposing_party ?? '', cpf: p.opposing_cpf ?? '' }]
+          : [{ name: '', cpf: '' }],
       filing_date: p.filing_date ?? '', citation_date: p.citation_date ?? '',
       instance: p.instance ?? '1º Grau', confidential: p.confidential ?? false,
       closed_date: p.closed_date ?? '',
@@ -315,7 +320,8 @@ export default function Processos() {
       cause_value: pf.cause_value ? parseFloat(pf.cause_value.replace(',', '.')) : null,
       court_url: pf.court_url || null, drive_url: pf.drive_url || null, drive_folder_id: pf.drive_folder_id || null,
       tags: pf.tags || null,
-      opposing_party: pf.opposing_party || null, opposing_cpf: pf.opposing_cpf || null,
+      opposing_parties: pf.opposing_parties.filter(op => op.name.trim() || op.cpf.trim()),
+      opposing_party: pf.opposing_parties[0]?.name || null, opposing_cpf: pf.opposing_parties[0]?.cpf || null,
       filing_date: pf.filing_date || null, citation_date: pf.citation_date || null,
       instance: pf.instance || null, confidential: pf.confidential,
       closed_date: pf.closed_date || null,
@@ -519,11 +525,20 @@ export default function Processos() {
                   {detailProcess.court && (
                     <div className="col-span-2"><p className="text-[11px] text-muted-foreground">Vara</p><p className="font-medium">{detailProcess.court}</p></div>
                   )}
-                  {detailProcess.opposing_party && (
-                    <div><p className="text-[11px] text-muted-foreground">Parte contrária</p><p className="font-medium">{detailProcess.opposing_party}</p></div>
-                  )}
-                  {detailProcess.opposing_cpf && (
-                    <div><p className="text-[11px] text-muted-foreground">CPF/CNPJ da parte contrária</p><p className="font-medium">{detailProcess.opposing_cpf}</p></div>
+                  {((detailProcess.opposing_parties && detailProcess.opposing_parties.length > 0) || detailProcess.opposing_party) && (
+                    <div className="col-span-2">
+                      <p className="text-[11px] text-muted-foreground">Parte(s) contrária(s)</p>
+                      <div className="space-y-1 mt-1">
+                        {(detailProcess.opposing_parties && detailProcess.opposing_parties.length > 0
+                          ? detailProcess.opposing_parties
+                          : [{ name: detailProcess.opposing_party ?? '', cpf: detailProcess.opposing_cpf ?? '' }]
+                        ).map((op, i) => (
+                          <p key={i} className="font-medium">
+                            {op.name}{op.cpf ? ` — ${op.cpf}` : ''}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
                   )}
                   {detailProcess.filing_date && (
                     <div><p className="text-[11px] text-muted-foreground">Data de distribuição</p><p className="font-medium">{fmtDate(detailProcess.filing_date)}</p></div>
@@ -983,15 +998,40 @@ export default function Processos() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
                 <Label>Parte contrária (contra quem)</Label>
-                <Input value={pf.opposing_party} onChange={e => setPf(f => ({ ...f, opposing_party: e.target.value }))} placeholder="Nome do réu/autor da outra parte" className="h-10" />
+                <Button
+                  type="button" variant="ghost" size="sm"
+                  onClick={() => setPf(f => ({ ...f, opposing_parties: [...f.opposing_parties, { name: '', cpf: '' }] }))}
+                  className="h-7 px-2 text-xs"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar parte
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label>CPF/CNPJ da parte contrária</Label>
-                <Input value={pf.opposing_cpf} onChange={e => setPf(f => ({ ...f, opposing_cpf: e.target.value }))} placeholder="000.000.000-00" className="h-10" />
-              </div>
+              {pf.opposing_parties.map((op, i) => (
+                <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
+                  <Input
+                    value={op.name}
+                    onChange={e => setPf(f => ({ ...f, opposing_parties: f.opposing_parties.map((o, idx) => idx === i ? { ...o, name: e.target.value } : o) }))}
+                    placeholder="Nome do réu/autor da outra parte" className="h-10"
+                  />
+                  <Input
+                    value={op.cpf}
+                    onChange={e => setPf(f => ({ ...f, opposing_parties: f.opposing_parties.map((o, idx) => idx === i ? { ...o, cpf: e.target.value } : o) }))}
+                    placeholder="CPF/CNPJ" className="h-10"
+                  />
+                  {pf.opposing_parties.length > 1 && (
+                    <Button
+                      type="button" variant="ghost" size="icon"
+                      onClick={() => setPf(f => ({ ...f, opposing_parties: f.opposing_parties.filter((_, idx) => idx !== i) }))}
+                      className="h-10 w-10 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
