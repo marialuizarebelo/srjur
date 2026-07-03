@@ -86,11 +86,6 @@ const AREAS = [
   'Previdenciário', 'Administrativo', 'Outro',
 ]
 
-const COURTS = [
-  'TJ/RS', 'TRF4', 'TRT4', 'JEC', 'JEF',
-  'STJ', 'STF', 'TST', 'Outro',
-]
-
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   em_andamento: { label: 'Em Andamento', color: '#3B82F6' },
   concluido: { label: 'Concluído', color: '#10B981' },
@@ -287,6 +282,7 @@ export default function Processos() {
   }
 
   const saveProcess = async () => {
+    if (!pf.title.trim()) { toast.error('Preencha o título do processo'); return }
     const payload = {
       title: pf.title, number: pf.number || null, client_id: pf.client_id || null,
       type: pf.type, area: pf.area || null, status: pf.status, phase: pf.phase,
@@ -299,18 +295,25 @@ export default function Processos() {
       tags: pf.tags || null,
     }
     let processId = editing?.id
-    if (editing) {
-      await supabase.from('processes').update(payload).eq('id', editing.id)
-    } else {
-      const { data: created } = await supabase.from('processes').insert(payload).select().single()
-      processId = created?.id
-    }
-    setDialogOpen(false)
-    resetPf()
-    loadData()
+    try {
+      if (editing) {
+        const { error } = await supabase.from('processes').update(payload).eq('id', editing.id)
+        if (error) throw error
+      } else {
+        const { data: created, error } = await supabase.from('processes').insert(payload).select().single()
+        if (error) throw error
+        processId = created?.id
+      }
+      toast.success(editing ? 'Processo atualizado!' : 'Processo criado!')
+      setDialogOpen(false)
+      resetPf()
+      loadData()
 
-    if (processId && pf.number) {
-      syncProcessIntimacoes(processId, pf.number)
+      if (processId && pf.number) {
+        syncProcessIntimacoes(processId, pf.number)
+      }
+    } catch (err: any) {
+      toast.error('Erro ao salvar processo: ' + (err?.message ?? String(err)))
     }
   }
 
@@ -906,13 +909,8 @@ export default function Processos() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Vara / Tribunal</Label>
-                <Select value={pf.court} onValueChange={v => setPf(f => ({ ...f, court: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {COURTS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Vara</Label>
+                <Input value={pf.court} onChange={e => setPf(f => ({ ...f, court: e.target.value }))} placeholder="Ex: 8ª Vara de Família do Foro Central de Porto Alegre" className="h-10" />
               </div>
             </div>
 
