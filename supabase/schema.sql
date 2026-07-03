@@ -41,7 +41,7 @@ create table if not exists public.processes (
   client_id uuid references public.clients(id) on delete cascade,
   number text,
   title text not null,
-  type text default 'consultivo' check (type in ('consultivo', 'contencioso')),
+  type text default 'consultivo' check (type in ('consultivo', 'contencioso', 'extrajudicial')),
   area text,
   status text default 'em_andamento' check (status in ('em_andamento', 'concluido', 'arquivado', 'suspenso')),
   phase text default 'inicial',

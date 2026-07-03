@@ -96,6 +96,20 @@ const PHASES = [
   { value: 'encerrado', label: 'Encerrado', color: '#6B7280' },
 ]
 
+const EXTRAJUDICIAL_PHASES = [
+  { value: 'notificacao', label: 'Notificação enviada', color: '#8B5CF6' },
+  { value: 'aguardando_resposta', label: 'Aguardando resposta', color: '#3B82F6' },
+  { value: 'negociacao', label: 'Negociação', color: '#F59E0B' },
+  { value: 'acordo', label: 'Acordo fechado', color: '#14B8A6' },
+  { value: 'sem_acordo', label: 'Sem acordo / vai a juízo', color: '#F97316' },
+  { value: 'encerrado', label: 'Encerrado', color: '#6B7280' },
+]
+
+const phasesForType = (type: string) => type === 'extrajudicial' ? EXTRAJUDICIAL_PHASES : PHASES
+
+// coluna única com todas as fases (judiciais + extrajudiciais), sem duplicar "encerrado"
+const ALL_PHASES = [...PHASES, ...EXTRAJUDICIAL_PHASES.filter(ep => !PHASES.some(p => p.value === ep.value))]
+
 const AREAS = [
   'Cível', 'Trabalhista', 'Família', 'Sucessões', 'Empresarial',
   'Consumidor', 'Penal', 'Criminal', 'Tributário', 'Imobiliário',
@@ -136,7 +150,7 @@ export function FieldWithCopy({ label, value, onCopy, className = '' }: { label:
 
 function formatLabel(value: string): string {
   if (STATUS_MAP[value]) return STATUS_MAP[value].label
-  const phase = PHASES.find(p => p.value === value)
+  const phase = ALL_PHASES.find(p => p.value === value)
   if (phase) return phase.label
   return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
 }
@@ -265,7 +279,7 @@ export default function Processos() {
 
   const byPhase = useMemo(() => {
     const map = new Map<string, Process[]>()
-    PHASES.forEach(ph => map.set(ph.value, []))
+    ALL_PHASES.forEach(ph => map.set(ph.value, []))
     filtered.forEach(p => {
       const arr = map.get(p.phase) ?? []
       arr.push(p)
@@ -449,11 +463,11 @@ export default function Processos() {
                 <div className="min-w-0 flex-1">
                   <h3 className="font-semibold text-lg">{detailProcess.title}</h3>
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <Badge variant="outline">{detailProcess.type === 'contencioso' ? 'CONTENCIOSO' : 'CONSULTIVO'}</Badge>
+                    <Badge variant="outline">{detailProcess.type.toUpperCase()}</Badge>
                     <Badge style={{ backgroundColor: STATUS_MAP[detailProcess.status]?.color, color: '#fff' }}>
                       {STATUS_MAP[detailProcess.status]?.label}
                     </Badge>
-                    <Badge variant="outline">{PHASES.find(p => p.value === detailProcess.phase)?.label}</Badge>
+                    <Badge variant="outline">{phasesForType(detailProcess.type).find(p => p.value === detailProcess.phase)?.label ?? ALL_PHASES.find(p => p.value === detailProcess.phase)?.label}</Badge>
                     {detailProcess.confidential && (
                       <Badge variant="outline" className="border-amber-400 text-amber-600">🔒 Segredo de justiça</Badge>
                     )}
@@ -806,7 +820,7 @@ export default function Processos() {
           if (proc && proc.phase !== phaseValue) updatePhase(processId, phaseValue)
         }}>
           <div className="flex flex-col md:flex-row gap-4 md:overflow-x-auto scrollbar-thin pb-4">
-            {PHASES.filter(ph => ph.value !== 'encerrado' || statusFilter === 'todos').map(phase => {
+            {ALL_PHASES.filter(ph => ph.value !== 'encerrado' || statusFilter === 'todos').map(phase => {
               const phaseProcesses = byPhase.get(phase.value) ?? []
               const collapsed = collapsedPhases.has(phase.value)
               return (
@@ -869,7 +883,7 @@ export default function Processos() {
                 className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 p-3 sm:p-4 rounded-lg border hover:shadow-sm transition-shadow cursor-pointer"
                 onClick={() => openDetail(proc)}>
                 <div className="flex items-start gap-2 sm:contents">
-                  <div className="h-2.5 w-2.5 rounded-full shrink-0 mt-1.5 sm:mt-0" style={{ backgroundColor: PHASES.find(p => p.value === proc.phase)?.color }} />
+                  <div className="h-2.5 w-2.5 rounded-full shrink-0 mt-1.5 sm:mt-0" style={{ backgroundColor: ALL_PHASES.find(p => p.value === proc.phase)?.color }} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium truncate">{proc.title}</p>
@@ -883,7 +897,7 @@ export default function Processos() {
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap pl-[18px] sm:pl-0">
                   <Badge variant="outline" className="text-[10px] shrink-0">
-                    {PHASES.find(p => p.value === proc.phase)?.label}
+                    {ALL_PHASES.find(p => p.value === proc.phase)?.label}
                   </Badge>
                   <Badge style={{ backgroundColor: STATUS_MAP[proc.status]?.color + '20', color: STATUS_MAP[proc.status]?.color }}
                     className="text-[10px] shrink-0">
@@ -937,7 +951,7 @@ export default function Processos() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Tipo</Label>
-                <Select value={pf.type} onValueChange={v => setPf(f => ({ ...f, type: v }))}>
+                <Select value={pf.type} onValueChange={v => setPf(f => ({ ...f, type: v, phase: phasesForType(v)[0].value }))}>
                   <SelectTrigger className="h-10"><SelectValue>{formatLabel(pf.type)}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="consultivo">Consultivo</SelectItem>
@@ -972,7 +986,7 @@ export default function Processos() {
                 <Select value={pf.phase} onValueChange={v => setPf(f => ({ ...f, phase: v }))}>
                   <SelectTrigger className="h-10"><SelectValue>{formatLabel(pf.phase)}</SelectValue></SelectTrigger>
                   <SelectContent>
-                    {PHASES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+                    {phasesForType(pf.type).map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
