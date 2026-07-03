@@ -57,7 +57,7 @@ interface Process {
   drive_folder_id: string | null
   tags: string | null
   opposing_party: string | null
-  opposing_lawyer: string | null
+  opposing_cpf: string | null
   filing_date: string | null
   citation_date: string | null
   instance: string | null
@@ -175,7 +175,7 @@ export default function Processos() {
     area: '', status: 'em_andamento', phase: 'inicial', responsible: '',
     court: '', electronic_system: '', notes: '', portal_visible: true,
     access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
-    opposing_party: '', opposing_lawyer: '', filing_date: '', citation_date: '',
+    opposing_party: '', opposing_cpf: '', filing_date: '', citation_date: '',
     instance: '1º Grau', confidential: false, closed_date: '',
   })
 
@@ -194,7 +194,7 @@ export default function Processos() {
       area: '', status: 'em_andamento', phase: 'inicial', responsible: '',
       court: '', electronic_system: '', notes: '', portal_visible: true,
       access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
-      opposing_party: '', opposing_lawyer: '', filing_date: '', citation_date: '',
+      opposing_party: '', opposing_cpf: '', filing_date: '', citation_date: '',
       instance: '1º Grau', confidential: false, closed_date: '' })
     setEditing(null)
   }
@@ -287,7 +287,7 @@ export default function Processos() {
       portal_visible: p.portal_visible,
       access_key: p.access_key ?? '', cause_value: p.cause_value ? String(p.cause_value) : '',
       court_url: p.court_url ?? '', drive_url: p.drive_url ?? '', drive_folder_id: p.drive_folder_id ?? '', tags: p.tags ?? '',
-      opposing_party: p.opposing_party ?? '', opposing_lawyer: p.opposing_lawyer ?? '',
+      opposing_party: p.opposing_party ?? '', opposing_cpf: p.opposing_cpf ?? '',
       filing_date: p.filing_date ?? '', citation_date: p.citation_date ?? '',
       instance: p.instance ?? '1º Grau', confidential: p.confidential ?? false,
       closed_date: p.closed_date ?? '',
@@ -315,7 +315,7 @@ export default function Processos() {
       cause_value: pf.cause_value ? parseFloat(pf.cause_value.replace(',', '.')) : null,
       court_url: pf.court_url || null, drive_url: pf.drive_url || null, drive_folder_id: pf.drive_folder_id || null,
       tags: pf.tags || null,
-      opposing_party: pf.opposing_party || null, opposing_lawyer: pf.opposing_lawyer || null,
+      opposing_party: pf.opposing_party || null, opposing_cpf: pf.opposing_cpf || null,
       filing_date: pf.filing_date || null, citation_date: pf.citation_date || null,
       instance: pf.instance || null, confidential: pf.confidential,
       closed_date: pf.closed_date || null,
@@ -522,8 +522,8 @@ export default function Processos() {
                   {detailProcess.opposing_party && (
                     <div><p className="text-[11px] text-muted-foreground">Parte contrária</p><p className="font-medium">{detailProcess.opposing_party}</p></div>
                   )}
-                  {detailProcess.opposing_lawyer && (
-                    <div><p className="text-[11px] text-muted-foreground">Advogado da parte contrária</p><p className="font-medium">{detailProcess.opposing_lawyer}</p></div>
+                  {detailProcess.opposing_cpf && (
+                    <div><p className="text-[11px] text-muted-foreground">CPF/CNPJ da parte contrária</p><p className="font-medium">{detailProcess.opposing_cpf}</p></div>
                   )}
                   {detailProcess.filing_date && (
                     <div><p className="text-[11px] text-muted-foreground">Data de distribuição</p><p className="font-medium">{fmtDate(detailProcess.filing_date)}</p></div>
@@ -989,8 +989,8 @@ export default function Processos() {
                 <Input value={pf.opposing_party} onChange={e => setPf(f => ({ ...f, opposing_party: e.target.value }))} placeholder="Nome do réu/autor da outra parte" className="h-10" />
               </div>
               <div className="space-y-2">
-                <Label>Advogado da parte contrária</Label>
-                <Input value={pf.opposing_lawyer} onChange={e => setPf(f => ({ ...f, opposing_lawyer: e.target.value }))} placeholder="Nome + OAB (opcional)" className="h-10" />
+                <Label>CPF/CNPJ da parte contrária</Label>
+                <Input value={pf.opposing_cpf} onChange={e => setPf(f => ({ ...f, opposing_cpf: e.target.value }))} placeholder="000.000.000-00" className="h-10" />
               </div>
             </div>
 
