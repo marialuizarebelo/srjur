@@ -58,7 +58,8 @@ interface Process {
   tags: string | null
   opposing_party: string | null
   opposing_cpf: string | null
-  opposing_parties: { name: string; cpf: string }[] | null
+  opposing_parties: { name: string; cpf: string; role: string }[] | null
+  client_role: string | null
   filing_date: string | null
   citation_date: string | null
   instance: string | null
@@ -176,7 +177,8 @@ export default function Processos() {
     area: '', status: 'em_andamento', phase: 'inicial', responsible: '',
     court: '', electronic_system: '', notes: '', portal_visible: true,
     access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
-    opposing_parties: [{ name: '', cpf: '' }] as { name: string; cpf: string }[], filing_date: '', citation_date: '',
+    client_role: 'autor',
+    opposing_parties: [{ name: '', cpf: '', role: 'reu' }] as { name: string; cpf: string; role: string }[], filing_date: '', citation_date: '',
     instance: '1º Grau', confidential: false, closed_date: '',
   })
 
@@ -195,7 +197,8 @@ export default function Processos() {
       area: '', status: 'em_andamento', phase: 'inicial', responsible: '',
       court: '', electronic_system: '', notes: '', portal_visible: true,
       access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
-      opposing_parties: [{ name: '', cpf: '' }], filing_date: '', citation_date: '',
+      client_role: 'autor',
+      opposing_parties: [{ name: '', cpf: '', role: 'reu' }], filing_date: '', citation_date: '',
       instance: '1º Grau', confidential: false, closed_date: '' })
     setEditing(null)
   }
@@ -288,11 +291,12 @@ export default function Processos() {
       portal_visible: p.portal_visible,
       access_key: p.access_key ?? '', cause_value: p.cause_value ? String(p.cause_value) : '',
       court_url: p.court_url ?? '', drive_url: p.drive_url ?? '', drive_folder_id: p.drive_folder_id ?? '', tags: p.tags ?? '',
+      client_role: p.client_role ?? 'autor',
       opposing_parties: (p.opposing_parties && p.opposing_parties.length > 0)
         ? p.opposing_parties
         : (p.opposing_party || p.opposing_cpf)
-          ? [{ name: p.opposing_party ?? '', cpf: p.opposing_cpf ?? '' }]
-          : [{ name: '', cpf: '' }],
+          ? [{ name: p.opposing_party ?? '', cpf: p.opposing_cpf ?? '', role: 'reu' }]
+          : [{ name: '', cpf: '', role: 'reu' }],
       filing_date: p.filing_date ?? '', citation_date: p.citation_date ?? '',
       instance: p.instance ?? '1º Grau', confidential: p.confidential ?? false,
       closed_date: p.closed_date ?? '',
@@ -312,6 +316,7 @@ export default function Processos() {
     if (!pf.title.trim()) { toast.error('Preencha o título do processo'); return }
     const payload = {
       title: pf.title, number: pf.number || null, client_id: pf.client_id || null,
+      client_role: pf.client_role || null,
       type: pf.type, area: pf.area || null, status: pf.status, phase: pf.phase,
       responsible: pf.responsible || null, court: pf.court || null,
       electronic_system: pf.electronic_system || null, notes: pf.notes || null,
@@ -508,7 +513,11 @@ export default function Processos() {
                     <FieldWithCopy label="Chave de acesso (eProc)" value={detailProcess.access_key} onCopy={() => copyToClipboard(detailProcess.access_key!, 'Chave de acesso')} />
                   )}
                   {dClient && (
-                    <FieldWithCopy label="Cliente" value={dClient.name} onCopy={() => copyToClipboard(dClient.name, 'Nome do cliente')} />
+                    <FieldWithCopy
+                      label={`Cliente${detailProcess.client_role ? ` (${detailProcess.client_role === 'autor' ? 'Autor' : 'Réu'})` : ''}`}
+                      value={dClient.name}
+                      onCopy={() => copyToClipboard(dClient.name, 'Nome do cliente')}
+                    />
                   )}
                   {dClient?.cpf_cnpj && (
                     <FieldWithCopy label="CPF/CNPJ" value={dClient.cpf_cnpj} onCopy={() => copyToClipboard(dClient.cpf_cnpj!, 'CPF/CNPJ')} />
@@ -527,14 +536,14 @@ export default function Processos() {
                   )}
                   {((detailProcess.opposing_parties && detailProcess.opposing_parties.length > 0) || detailProcess.opposing_party) && (
                     <div className="col-span-2">
-                      <p className="text-[11px] text-muted-foreground">Parte(s) contrária(s)</p>
+                      <p className="text-[11px] text-muted-foreground">Outras partes do processo</p>
                       <div className="space-y-1 mt-1">
                         {(detailProcess.opposing_parties && detailProcess.opposing_parties.length > 0
                           ? detailProcess.opposing_parties
-                          : [{ name: detailProcess.opposing_party ?? '', cpf: detailProcess.opposing_cpf ?? '' }]
+                          : [{ name: detailProcess.opposing_party ?? '', cpf: detailProcess.opposing_cpf ?? '', role: 'reu' }]
                         ).map((op, i) => (
                           <p key={i} className="font-medium">
-                            {op.name}{op.cpf ? ` — ${op.cpf}` : ''}
+                            {op.name}{op.cpf ? ` — ${op.cpf}` : ''}{op.role ? ` (${op.role === 'autor' ? 'Autor' : 'Réu'})` : ''}
                           </p>
                         ))}
                       </div>
@@ -903,15 +912,26 @@ export default function Processos() {
             <DialogTitle className="text-lg">{editing ? 'Editar' : 'Novo'} Processo</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4">
               <div className="space-y-2">
                 <Label>Cliente</Label>
                 <ClientCombobox clients={clients} value={pf.client_id} onChange={id => setPf(f => ({ ...f, client_id: id }))} />
               </div>
               <div className="space-y-2">
-                <Label>Número do processo</Label>
-                <Input value={pf.number} onChange={e => setPf(f => ({ ...f, number: e.target.value }))} placeholder="0000000-00.0000.0.00.0000" className="h-10" />
+                <Label>Papel do cliente</Label>
+                <Select value={pf.client_role} onValueChange={v => setPf(f => ({ ...f, client_role: v }))}>
+                  <SelectTrigger className="h-10 w-[130px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="autor">Autor</SelectItem>
+                    <SelectItem value="reu">Réu</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Número do processo</Label>
+              <Input value={pf.number} onChange={e => setPf(f => ({ ...f, number: e.target.value }))} placeholder="0000000-00.0000.0.00.0000" className="h-10" />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1000,27 +1020,37 @@ export default function Processos() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Parte contrária (contra quem)</Label>
+                <Label>Outras partes do processo</Label>
                 <Button
                   type="button" variant="ghost" size="sm"
-                  onClick={() => setPf(f => ({ ...f, opposing_parties: [...f.opposing_parties, { name: '', cpf: '' }] }))}
+                  onClick={() => setPf(f => ({ ...f, opposing_parties: [...f.opposing_parties, { name: '', cpf: '', role: 'reu' }] }))}
                   className="h-7 px-2 text-xs"
                 >
                   <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar parte
                 </Button>
               </div>
               {pf.opposing_parties.map((op, i) => (
-                <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
+                <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_110px_auto] gap-2">
                   <Input
                     value={op.name}
                     onChange={e => setPf(f => ({ ...f, opposing_parties: f.opposing_parties.map((o, idx) => idx === i ? { ...o, name: e.target.value } : o) }))}
-                    placeholder="Nome do réu/autor da outra parte" className="h-10"
+                    placeholder="Nome da parte" className="h-10"
                   />
                   <Input
                     value={op.cpf}
                     onChange={e => setPf(f => ({ ...f, opposing_parties: f.opposing_parties.map((o, idx) => idx === i ? { ...o, cpf: e.target.value } : o) }))}
                     placeholder="CPF/CNPJ" className="h-10"
                   />
+                  <Select
+                    value={op.role}
+                    onValueChange={v => setPf(f => ({ ...f, opposing_parties: f.opposing_parties.map((o, idx) => idx === i ? { ...o, role: v } : o) }))}
+                  >
+                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="autor">Autor</SelectItem>
+                      <SelectItem value="reu">Réu</SelectItem>
+                    </SelectContent>
+                  </Select>
                   {pf.opposing_parties.length > 1 && (
                     <Button
                       type="button" variant="ghost" size="icon"
