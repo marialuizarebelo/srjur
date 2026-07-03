@@ -25,6 +25,7 @@ import { fmtDate, fmtBRL } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ClientCombobox } from '@/components/ClientCombobox'
+import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { searchDjen, stripHtml } from '@/lib/djen'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { DriveFileList } from '@/components/DriveFileList'
@@ -44,6 +45,7 @@ interface Process {
   status: string
   phase: string
   responsible: string | null
+  responsible_ids: string[] | null
   court: string | null
   electronic_system: string | null
   notes: string | null
@@ -155,14 +157,9 @@ function formatLabel(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
 }
 
-const RESPONSIBLE_COLORS: Record<string, string> = {
-  'Maria Luiza': '#EC4899',
-  'Juliana': '#3B82F6',
-  'Ambas': '#8B5CF6',
-}
-
 // ── Main ──
 export default function Processos() {
+  const profilesMap = useProfilesMap()
   const [processes, setProcesses] = useState<Process[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
   const [loading, setLoading] = useState(true)
@@ -188,7 +185,7 @@ export default function Processos() {
   const [editing, setEditing] = useState<Process | null>(null)
   const [pf, setPf] = useState({
     title: '', number: '', client_id: '', type: 'consultivo',
-    area: '', status: 'em_andamento', phase: 'inicial', responsible: '',
+    area: '', status: 'em_andamento', phase: 'inicial', responsible_ids: [] as string[],
     court: '', electronic_system: '', notes: '', portal_visible: true,
     access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
     client_role: 'autor',
@@ -208,7 +205,7 @@ export default function Processos() {
 
   const resetPf = () => {
     setPf({ title: '', number: '', client_id: '', type: 'consultivo',
-      area: '', status: 'em_andamento', phase: 'inicial', responsible: '',
+      area: '', status: 'em_andamento', phase: 'inicial', responsible_ids: [],
       court: '', electronic_system: '', notes: '', portal_visible: true,
       access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
       client_role: 'autor',
@@ -271,7 +268,7 @@ export default function Processos() {
   const filtered = useMemo(() => {
     return processes
       .filter(p => statusFilter === 'todos' || p.status === statusFilter)
-      .filter(p => responsibleFilter === 'todos' || p.responsible === responsibleFilter)
+      .filter(p => responsibleFilter === 'todos' || (p.responsible_ids ?? []).includes(responsibleFilter))
       .filter(p => clientFilter === 'todos' || p.client_id === clientFilter)
       .filter(p => !search || p.title.toLowerCase().includes(search.toLowerCase()) ||
         p.number?.toLowerCase().includes(search.toLowerCase()))
@@ -300,7 +297,7 @@ export default function Processos() {
     setPf({
       title: p.title, number: p.number ?? '', client_id: p.client_id ?? '',
       type: p.type, area: p.area ?? '', status: p.status, phase: p.phase,
-      responsible: p.responsible ?? '', court: p.court ?? '',
+      responsible_ids: p.responsible_ids ?? [], court: p.court ?? '',
       electronic_system: p.electronic_system ?? '', notes: p.notes ?? '',
       portal_visible: p.portal_visible,
       access_key: p.access_key ?? '', cause_value: p.cause_value ? String(p.cause_value) : '',
@@ -332,7 +329,11 @@ export default function Processos() {
       title: pf.title, number: pf.number || null, client_id: pf.client_id || null,
       client_role: pf.client_role || null,
       type: pf.type, area: pf.area || null, status: pf.status, phase: pf.phase,
-      responsible: pf.responsible || null, court: pf.court || null,
+      responsible_ids: pf.responsible_ids,
+      responsible: pf.responsible_ids.length > 1
+        ? pf.responsible_ids.map(id => profilesMap[id]?.display_name).filter(Boolean).join(' e ')
+        : (profilesMap[pf.responsible_ids[0]]?.display_name ?? null),
+      court: pf.court || null,
       electronic_system: pf.electronic_system || null, notes: pf.notes || null,
       portal_visible: pf.portal_visible, updated_at: new Date().toISOString(),
       access_key: pf.access_key || null,
@@ -492,8 +493,10 @@ export default function Processos() {
                     <button onClick={() => copyToClipboard(detailProcess.number!, 'Número do processo')} className="p-0.5 hover:bg-background rounded">
                       <Copy className="h-3 w-3 text-muted-foreground" />
                     </button>
-                    {detailProcess.responsible && (
-                      <span className="text-muted-foreground ml-2">Resp.: <span className="text-foreground">{detailProcess.responsible}</span></span>
+                    {detailProcess.responsible_ids && detailProcess.responsible_ids.length > 0 && (
+                      <span className="text-muted-foreground ml-2 flex items-center gap-1">
+                        Resp.: <ResponsibleAvatars ids={detailProcess.responsible_ids} profilesMap={profilesMap} size="xs" />
+                      </span>
                     )}
                   </div>
                 )}
@@ -542,8 +545,11 @@ export default function Processos() {
                   {dClient?.email && (
                     <FieldWithCopy label="E-mail" value={dClient.email} onCopy={() => copyToClipboard(dClient.email!, 'E-mail')} />
                   )}
-                  {detailProcess.responsible && (
-                    <div><p className="text-[11px] text-muted-foreground">Responsável</p><p className="font-medium">{detailProcess.responsible}</p></div>
+                  {detailProcess.responsible_ids && detailProcess.responsible_ids.length > 0 && (
+                    <div>
+                      <p className="text-[11px] text-muted-foreground">Responsável</p>
+                      <div className="mt-1"><ResponsibleAvatars ids={detailProcess.responsible_ids} profilesMap={profilesMap} /></div>
+                    </div>
                   )}
                   {detailProcess.court && (
                     <div className="col-span-2"><p className="text-[11px] text-muted-foreground">Vara</p><p className="font-medium">{detailProcess.court}</p></div>
@@ -783,11 +789,13 @@ export default function Processos() {
           </div>
           <Select value={responsibleFilter} onValueChange={setResponsibleFilter}>
             <SelectTrigger className="w-32 h-9">
-              <SelectValue>{responsibleFilter === 'todos' ? 'Responsável' : responsibleFilter}</SelectValue>
+              <SelectValue>{responsibleFilter === 'todos' ? 'Responsável' : (profilesMap[responsibleFilter]?.display_name ?? 'Responsável')}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos</SelectItem>
-              {Object.keys(RESPONSIBLE_COLORS).map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+              {Object.values(profilesMap).map(p => (
+                <SelectItem key={p.id} value={p.id}>{p.display_name}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={clientFilter} onValueChange={setClientFilter}>
@@ -844,12 +852,7 @@ export default function Processos() {
                             <span className="text-xs text-muted-foreground truncate">
                               {getClientName(proc.client_id)}
                             </span>
-                            {proc.responsible && (
-                              <div className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] text-white font-medium shrink-0"
-                                style={{ backgroundColor: RESPONSIBLE_COLORS[proc.responsible] ?? '#6B7280' }}>
-                                {proc.responsible.charAt(0)}
-                              </div>
-                            )}
+                            <ResponsibleAvatars ids={proc.responsible_ids} profilesMap={profilesMap} size="xs" />
                           </div>
                           {proc.area && <Badge variant="outline" className="text-[10px] mt-1.5">{proc.area}</Badge>}
                         </div>
@@ -903,12 +906,7 @@ export default function Processos() {
                     className="text-[10px] shrink-0">
                     {STATUS_MAP[proc.status]?.label}
                   </Badge>
-                  {proc.responsible && (
-                    <Badge variant="outline" className="text-[10px] shrink-0"
-                      style={{ borderColor: RESPONSIBLE_COLORS[proc.responsible], color: RESPONSIBLE_COLORS[proc.responsible] }}>
-                      {proc.responsible}
-                    </Badge>
-                  )}
+                  <ResponsibleAvatars ids={proc.responsible_ids} profilesMap={profilesMap} size="xs" />
                   <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 ml-auto sm:ml-0" onClick={e => { e.stopPropagation(); openEdit(proc) }}>
                     <Pencil className="h-3 w-3" />
                   </Button>
@@ -992,22 +990,14 @@ export default function Processos() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Responsável</Label>
-                <Select value={pf.responsible} onValueChange={v => setPf(f => ({ ...f, responsible: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Maria Luiza">Maria Luiza</SelectItem>
-                    <SelectItem value="Juliana">Juliana</SelectItem>
-                    <SelectItem value="Ambas">Ambas</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Vara</Label>
-                <Input value={pf.court} onChange={e => setPf(f => ({ ...f, court: e.target.value }))} placeholder="Ex: 8ª Vara de Família do Foro Central de Porto Alegre" className="h-10" />
-              </div>
+            <div className="space-y-2">
+              <Label>Responsável</Label>
+              <ResponsibleSelect value={pf.responsible_ids} onChange={ids => setPf(f => ({ ...f, responsible_ids: ids }))} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Vara</Label>
+              <Input value={pf.court} onChange={e => setPf(f => ({ ...f, court: e.target.value }))} placeholder="Ex: 8ª Vara de Família do Foro Central de Porto Alegre" className="h-10" />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

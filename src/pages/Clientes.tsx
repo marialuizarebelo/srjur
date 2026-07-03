@@ -36,6 +36,7 @@ import { Sensitive } from '@/components/Sensitive'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
+import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 
 // ── Types ──
 interface Client {
@@ -48,6 +49,7 @@ interface Client {
   area: string | null
   status: string
   responsible: string | null
+  responsible_ids: string[] | null
   notes: string | null
   birth_date: string | null
   address: string | null
@@ -89,6 +91,7 @@ interface Lead {
   potential_value: number | null
   notes: string | null
   responsible: string | null
+  responsible_ids: string[] | null
   next_followup: string | null
   drive_folder_id: string | null
   drive_url: string | null
@@ -113,11 +116,6 @@ interface PipelineStage {
 const AREAS = ['Família', 'Cível', 'Trabalhista', 'Empresarial', 'Consumidor', 'Sucessões', 'Criminal', 'Outro']
 const LEAD_SOURCES = ['Indicação', 'Google', 'Instagram', 'WhatsApp', 'Site', 'Evento', 'Outro']
 
-const RESPONSIBLE_COLORS: Record<string, string> = {
-  'Maria Luiza': '#EC4899',
-  'Juliana': '#3B82F6',
-  'Ambas': '#8B5CF6',
-}
 
 function getInitials(name: string) {
   return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -156,6 +154,7 @@ function LeadCard({ lead, onClick, onStatusChange, stages }: {
     : null
 
   const [zapStatus, setZapStatus] = useState<'checking' | 'pending' | 'signed' | 'not_found' | null>(null)
+  const profilesMap = useProfilesMap()
 
   useEffect(() => {
     if (lead.status !== 'contrato_enviado' || !isZapSignConfigured()) return
@@ -174,12 +173,7 @@ function LeadCard({ lead, onClick, onStatusChange, stages }: {
         {lead.client_id && (
           <Badge className="text-[9px] h-4 bg-emerald-100 text-emerald-700 hover:bg-emerald-100 shrink-0">✓ Cliente</Badge>
         )}
-        {lead.responsible && (
-          <div className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] text-white font-medium shrink-0"
-            style={{ backgroundColor: RESPONSIBLE_COLORS[lead.responsible] ?? '#6B7280' }}>
-            {lead.responsible.charAt(0)}
-          </div>
-        )}
+        <ResponsibleAvatars ids={lead.responsible_ids} profilesMap={profilesMap} size="xs" />
       </div>
       {lead.source && <p className="text-xs text-muted-foreground mt-0.5">{lead.source}</p>}
       {lead.potential_value ? (
@@ -282,6 +276,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
   onNewProcess: () => void
 }) {
   const [detail, setDetail] = useState<ClientDetail | null>(null)
+  const profilesMap = useProfilesMap()
 
   useEffect(() => {
     if (!client || !open) return
@@ -358,9 +353,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                   {client.type === 'pessoa_fisica' ? 'PF' : 'PJ'}
                 </span>
-                {client.responsible && (
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{client.responsible}</span>
-                )}
+                <ResponsibleAvatars ids={client.responsible_ids} profilesMap={profilesMap} size="xs" />
               </div>
             </div>
           </div>
@@ -428,7 +421,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
             <InfoRow label="Telefone" value={client.phone} copyable />
             <InfoRow label="Origem" value={client.origin === 'Indicação' && client.referred_by ? `Indicação (${client.referred_by})` : client.origin} />
             <InfoRow label="Área" value={client.area} />
-            <InfoRow label="Responsável" value={client.responsible} />
+            <InfoRow label="Responsável" value={(client.responsible_ids ?? []).map(id => profilesMap[id]?.display_name).filter(Boolean).join(', ') || null} />
             <InfoRow label="Nacionalidade" value={client.nationality} />
             <InfoRow label="Estado Civil" value={client.marital_status} />
             <InfoRow label="Profissão" value={client.profession} />
@@ -566,6 +559,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
 
 // ── Client Card ──
 function ClientCard({ client, onEdit }: { client: Client; onEdit: () => void }) {
+  const profilesMap = useProfilesMap()
   const color = getAvatarColor(client.name)
   return (
     <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={onEdit}>
@@ -580,13 +574,7 @@ function ClientCard({ client, onEdit }: { client: Client; onEdit: () => void }) 
           <p className="font-medium text-sm truncate"><Sensitive>{client.name}</Sensitive></p>
           <p className="text-xs text-muted-foreground truncate">{client.area ?? client.type}</p>
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
-            {client.responsible && (
-              <Badge variant="outline" className="text-[10px]"
-                style={{ borderColor: RESPONSIBLE_COLORS[client.responsible] ?? '#6B7280', color: RESPONSIBLE_COLORS[client.responsible] ?? '#6B7280' }}
-              >
-                {client.responsible}
-              </Badge>
-            )}
+            <ResponsibleAvatars ids={client.responsible_ids} profilesMap={profilesMap} size="xs" />
             <Badge variant={client.status === 'ativo' ? 'default' : 'secondary'} className="text-[10px]">
               {client.status.toUpperCase()}
             </Badge>
@@ -609,6 +597,7 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
   onMoveStage: (status: string) => void
   stages: PipelineStage[]
 }) {
+  const profilesMap = useProfilesMap()
   if (!lead) return null
   const stageInfo = stages.find(s => s.value === lead.status)
   const kanbanStages = stages.filter(s => s.show_in_kanban)
@@ -642,8 +631,11 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
             {lead.potential_value ? (
               <div><p className="text-[11px] text-muted-foreground">Valor potencial</p><p className="font-medium text-green-600">{fmtBRL(lead.potential_value)}</p></div>
             ) : null}
-            {lead.responsible && (
-              <div><p className="text-[11px] text-muted-foreground">Responsável</p><p className="font-medium">{lead.responsible}</p></div>
+            {lead.responsible_ids && lead.responsible_ids.length > 0 && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Responsável</p>
+                <div className="mt-1"><ResponsibleAvatars ids={lead.responsible_ids} profilesMap={profilesMap} size="xs" /></div>
+              </div>
             )}
             {lead.next_followup && (
               <div><p className="text-[11px] text-muted-foreground">Próximo follow-up</p><p className="font-medium">{new Date(lead.next_followup + 'T00:00').toLocaleDateString('pt-BR')}</p></div>
@@ -686,6 +678,7 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
 }
 
 export default function Clientes() {
+  const profilesMap = useProfilesMap()
   const [clients, setClients] = useState<Client[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
@@ -735,7 +728,7 @@ export default function Clientes() {
   // Lead form
   const [lf, setLf] = useState({
     name: '', email: '', phone: '', cpf_cnpj: '', source: '',
-    status: 'novo', potential_value: '', notes: '', responsible: '',
+    status: 'novo', potential_value: '', notes: '', responsible: '', responsible_ids: [] as string[],
     next_followup: '', drive_folder_id: '', drive_url: '',
     referred_by: '', referral_fee_pct: '', first_contact_at: '',
   })
@@ -747,7 +740,7 @@ export default function Clientes() {
 
   const resetLf = () => {
     setLf({ name: '', email: '', phone: '', cpf_cnpj: '', source: '',
-      status: 'novo', potential_value: '', notes: '', responsible: '', next_followup: '',
+      status: 'novo', potential_value: '', notes: '', responsible: '', responsible_ids: [], next_followup: '',
       drive_folder_id: '', drive_url: '', referred_by: '', referral_fee_pct: '', first_contact_at: '' })
     setEditingLead(null)
   }
@@ -893,7 +886,7 @@ export default function Clientes() {
       cep: c.cep ?? '', street: c.street ?? '', address_number: c.address_number ?? '',
       complement: c.complement ?? '', neighborhood: c.neighborhood ?? '',
       city: c.city ?? '', state: c.state ?? '',
-      responsible: c.responsible ?? '', origin: c.origin ?? '', referred_by: c.referred_by ?? '',
+      responsible: c.responsible ?? '', responsible_ids: c.responsible_ids ?? [], origin: c.origin ?? '', referred_by: c.referred_by ?? '',
       referral_fee_pct: c.referral_fee_pct ? String(c.referral_fee_pct) : '',
       area: c.area ?? '', areas_selected: c.area ? c.area.split(', ') : [],
       potential_value: c.potential_value ? String(c.potential_value) : '',
@@ -910,7 +903,12 @@ export default function Clientes() {
       name: cf.name, email: cf.email || null, phone: cf.phone || null,
       cpf_cnpj: cf.cpf_cnpj || null, type: cf.type,
       area: cf.areas_selected.length > 0 ? cf.areas_selected.join(', ') : null,
-      status: cf.status, responsible: cf.responsible || null, notes: cf.notes || null,
+      status: cf.status,
+      responsible_ids: cf.responsible_ids,
+      responsible: cf.responsible_ids.length > 1
+        ? cf.responsible_ids.map(id => profilesMap[id]?.display_name).filter(Boolean).join(' e ')
+        : (profilesMap[cf.responsible_ids[0]]?.display_name ?? null),
+      notes: cf.notes || null,
       birth_date: cf.birth_date || null, portal_visible: cf.portal_visible,
       gender: cf.gender || null, nationality: cf.nationality || null,
       marital_status: cf.marital_status || null, profession: cf.profession || null,
@@ -935,7 +933,7 @@ export default function Clientes() {
           description: 'Verificar e completar todos os dados do cliente: documentos, endereço, pasta no Drive',
           type: 'tarefa', status: 'pendente', priority: 'alta',
           due_date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
-          responsible: cf.responsible || null, client_id: newClient.id,
+          responsible_ids: cf.responsible_ids, client_id: newClient.id,
         })
       }
     }
@@ -955,7 +953,7 @@ export default function Clientes() {
     setLf({
       name: l.name, email: l.email ?? '', phone: l.phone ?? '', cpf_cnpj: l.cpf_cnpj ?? '',
       source: l.source ?? '', status: l.status, potential_value: l.potential_value ? String(l.potential_value) : '',
-      notes: l.notes ?? '', responsible: l.responsible ?? '', next_followup: l.next_followup ?? '',
+      notes: l.notes ?? '', responsible: l.responsible ?? '', responsible_ids: l.responsible_ids ?? [], next_followup: l.next_followup ?? '',
       drive_folder_id: l.drive_folder_id ?? '', drive_url: l.drive_url ?? '',
       referred_by: l.referred_by ?? '', referral_fee_pct: l.referral_fee_pct ? String(l.referral_fee_pct) : '', first_contact_at: l.first_contact_at ?? '',
     })
@@ -968,7 +966,11 @@ export default function Clientes() {
       name: lf.name, email: lf.email || null, phone: lf.phone || null,
       cpf_cnpj: lf.cpf_cnpj || null, source: lf.source || null, status: lf.status,
       potential_value: lf.potential_value ? parseFloat(lf.potential_value.replace(',', '.')) : null,
-      notes: lf.notes || null, responsible: lf.responsible || null,
+      notes: lf.notes || null,
+      responsible_ids: lf.responsible_ids,
+      responsible: lf.responsible_ids.length > 1
+        ? lf.responsible_ids.map(id => profilesMap[id]?.display_name).filter(Boolean).join(' e ')
+        : (profilesMap[lf.responsible_ids[0]]?.display_name ?? null),
       next_followup: lf.next_followup || null,
       drive_folder_id: lf.drive_folder_id || null, drive_url: lf.drive_url || null,
       referred_by: lf.referred_by || null, referral_fee_pct: lf.referral_fee_pct ? parseFloat(lf.referral_fee_pct) : null, first_contact_at: lf.first_contact_at || null,
@@ -1027,6 +1029,7 @@ export default function Clientes() {
     const { data: newClient } = await supabase.from('clients').insert({
       name: lead.name, email: lead.email, phone: lead.phone,
       cpf_cnpj: lead.cpf_cnpj, status: 'ativo', responsible: lead.responsible,
+      responsible_ids: lead.responsible_ids,
       notes: lead.notes, drive_folder_id: finalFolderId, drive_url: finalDriveUrl,
     }).select('id').single()
 
@@ -1048,37 +1051,37 @@ export default function Clientes() {
           title: `Boas-vindas — ${lead.name}`,
           description: 'Enviar mensagem de boas-vindas e orientações iniciais ao cliente',
           type: 'tarefa', status: 'pendente', priority: 'alta',
-          due_date: today, responsible: lead.responsible, client_id: newClient.id,
+          due_date: today, responsible_ids: lead.responsible_ids, client_id: newClient.id,
         },
         {
           title: `Coletar documentos — ${lead.name}`,
           description: 'Solicitar documentos necessários para abertura do caso',
           type: 'tarefa', status: 'pendente', priority: 'alta',
-          due_date: in3days, responsible: lead.responsible, client_id: newClient.id,
+          due_date: in3days, responsible_ids: lead.responsible_ids, client_id: newClient.id,
         },
         {
           title: `Criar caso/processo — ${lead.name}`,
           description: 'Cadastrar o processo ou caso no sistema',
           type: 'tarefa', status: 'pendente', priority: 'media',
-          due_date: in7days, responsible: lead.responsible, client_id: newClient.id,
+          due_date: in7days, responsible_ids: lead.responsible_ids, client_id: newClient.id,
         },
         {
           title: `Configurar portal do cliente — ${lead.name}`,
           description: 'Ativar acesso ao portal e compartilhar credenciais',
           type: 'tarefa', status: 'pendente', priority: 'media',
-          due_date: in7days, responsible: lead.responsible, client_id: newClient.id,
+          due_date: in7days, responsible_ids: lead.responsible_ids, client_id: newClient.id,
         },
         {
           title: `Lançar honorários — ${lead.name}`,
           description: 'Cadastrar os lançamentos financeiros do contrato',
           type: 'tarefa', status: 'pendente', priority: 'media',
-          due_date: in7days, responsible: lead.responsible, client_id: newClient.id,
+          due_date: in7days, responsible_ids: lead.responsible_ids, client_id: newClient.id,
         },
         {
           title: `Acompanhamento inicial — ${lead.name}`,
           description: 'Fazer contato de acompanhamento 15 dias após contratação',
           type: 'compromisso', status: 'pendente', priority: 'media',
-          due_date: in15days, responsible: lead.responsible, client_id: newClient.id,
+          due_date: in15days, responsible_ids: lead.responsible_ids, client_id: newClient.id,
         },
       ])
     }
@@ -1486,14 +1489,7 @@ export default function Clientes() {
               </div>
               <div className="space-y-2">
                 <Label>Responsável</Label>
-                <Select value={lf.responsible} onValueChange={v => setLf(f => ({ ...f, responsible: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Maria Luiza">Maria Luiza</SelectItem>
-                    <SelectItem value="Juliana">Juliana</SelectItem>
-                    <SelectItem value="Ambas">Ambas</SelectItem>
-                  </SelectContent>
-                </Select>
+                <ResponsibleSelect value={lf.responsible_ids} onChange={ids => setLf(f => ({ ...f, responsible_ids: ids }))} />
               </div>
             </div>
 

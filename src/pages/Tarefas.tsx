@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { toast } from 'sonner'
 import { supabase } from '@/integrations/supabase/client'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -294,7 +295,8 @@ export default function Tarefas() {
   // ── CRUD ──
   const toggleComplete = async (task: Task) => {
     const newStatus = task.status === 'pendente' ? 'concluida' : 'pendente'
-    await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
+    const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
+    if (error) { toast.error('Erro ao atualizar tarefa: ' + error.message); return }
     loadData()
   }
 
@@ -302,7 +304,8 @@ export default function Tarefas() {
     const payload: { workflow_stage: string; status?: string } = { workflow_stage: stage }
     if (stage === 'concluido') payload.status = 'concluida'
     else if (task.status === 'concluida') payload.status = 'pendente'
-    await supabase.from('tasks').update(payload).eq('id', task.id)
+    const { error } = await supabase.from('tasks').update(payload).eq('id', task.id)
+    if (error) { toast.error('Erro ao mover tarefa: ' + error.message); return }
     loadData()
   }
 

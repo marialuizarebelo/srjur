@@ -223,63 +223,54 @@ alter table public.office_settings enable row level security;
 alter table public.audit_log enable row level security;
 alter table public.intimations enable row level security;
 
+-- Função helper SECURITY DEFINER: evita "infinite recursion detected in policy for
+-- relation profiles" que ocorre quando a policy de profiles faz um SELECT na própria
+-- tabela profiles. Rodando com privilégios elevados, essa consulta não reavalia a
+-- RLS de profiles de novo.
+create or replace function public.is_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.profiles
+    where user_id = auth.uid() and role = 'admin'
+  );
+$$;
+
+grant execute on function public.is_admin() to authenticated;
+
 -- Admin policies: acesso total para admins autenticados
-create policy "admin_all_profiles" on public.profiles for all using (
-  exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin')
-);
+create policy "admin_all_profiles" on public.profiles for all using (public.is_admin());
 create policy "own_profile" on public.profiles for select using (user_id = auth.uid());
 
-create policy "admin_all_clients" on public.clients for all using (
-  exists (select 1 from public.profiles where user_id = auth.uid() and role = 'admin')
-);
+create policy "admin_all_clients" on public.clients for all using (public.is_admin());
 
-create policy "admin_all_processes" on public.processes for all using (
-  exists (select 1 from public.profiles where user_id = auth.uid() and role = 'admin')
-);
+create policy "admin_all_processes" on public.processes for all using (public.is_admin());
 
-create policy "admin_all_process_updates" on public.process_updates for all using (
-  exists (select 1 from public.profiles where user_id = auth.uid() and role = 'admin')
-);
+create policy "admin_all_process_updates" on public.process_updates for all using (public.is_admin());
 
-create policy "admin_all_tasks" on public.tasks for all using (
-  exists (select 1 from public.profiles where user_id = auth.uid() and role = 'admin')
-);
+create policy "admin_all_tasks" on public.tasks for all using (public.is_admin());
 
-create policy "admin_all_deadlines" on public.deadlines for all using (
-  exists (select 1 from public.profiles where user_id = auth.uid() and role = 'admin')
-);
+create policy "admin_all_deadlines" on public.deadlines for all using (public.is_admin());
 
-create policy "admin_all_finance" on public.finance for all using (
-  exists (select 1 from public.profiles where user_id = auth.uid() and role = 'admin')
-);
+create policy "admin_all_finance" on public.finance for all using (public.is_admin());
 
-create policy "admin_all_documents" on public.documents for all using (
-  exists (select 1 from public.profiles where user_id = auth.uid() and role = 'admin')
-);
+create policy "admin_all_documents" on public.documents for all using (public.is_admin());
 
-create policy "admin_all_communications" on public.communications for all using (
-  exists (select 1 from public.profiles where user_id = auth.uid() and role = 'admin')
-);
+create policy "admin_all_communications" on public.communications for all using (public.is_admin());
 
-create policy "admin_all_leads" on public.leads for all using (
-  exists (select 1 from public.profiles where user_id = auth.uid() and role = 'admin')
-);
+create policy "admin_all_leads" on public.leads for all using (public.is_admin());
 
-create policy "admin_all_electronic_systems" on public.electronic_systems for all using (
-  exists (select 1 from public.profiles where user_id = auth.uid() and role = 'admin')
-);
+create policy "admin_all_electronic_systems" on public.electronic_systems for all using (public.is_admin());
 
-create policy "admin_all_office_settings" on public.office_settings for all using (
-  exists (select 1 from public.profiles where user_id = auth.uid() and role = 'admin')
-);
+create policy "admin_all_office_settings" on public.office_settings for all using (public.is_admin());
 
-create policy "admin_all_audit_log" on public.audit_log for all using (
-  exists (select 1 from public.profiles where user_id = auth.uid() and role = 'admin')
-);
+create policy "admin_all_audit_log" on public.audit_log for all using (public.is_admin());
 
-create policy "admin_all_intimations" on public.intimations for all using (
-  exists (select 1 from public.profiles where user_id = auth.uid() and role = 'admin')
-);
+create policy "admin_all_intimations" on public.intimations for all using (public.is_admin());
 
 -- Client policies: só vê seus próprios dados + portal_visible
 create policy "client_own_processes" on public.processes for select using (

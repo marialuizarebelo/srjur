@@ -814,7 +814,11 @@ export default function Financeiro() {
           // mesmo dia do mês em ambos (ex: sempre dia 5) — a visão "Mês" do financeiro
           // filtra pela data de lançamento, então cada parcela precisa cair no seu
           // próprio mês, no mesmo dia fixo, não em datas erráticas.
-          const installDate = addMonthsFixedDay(form.date, i)
+          // Usa o Vencimento como base pra "Data" também — evita que a parcela caia
+          // no mês da Data de lançamento (ex: hoje) quando o vencimento real é em
+          // outro mês (ex: a pessoa preenche só o Vencimento pra novembro e a Data
+          // fica esquecida em hoje/agosto — sem isso a parcela aparecia no mês errado).
+          const installDate = addMonthsFixedDay(form.due_date || form.date, i)
           inserts.push({
             ...basePayload,
             description: `${form.description} (${i + 1}/${numInstallments})`,
@@ -1359,7 +1363,18 @@ export default function Financeiro() {
                   </div>
                   <div className="space-y-2">
                     <Label>Vencimento</Label>
-                    <Input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} className="h-10" />
+                    <Input
+                      type="date" value={form.due_date}
+                      onChange={e => setForm(f => ({
+                        ...f,
+                        due_date: e.target.value,
+                        // Em parcelamento/mensalidade o Vencimento é quem manda no mês de
+                        // cada cobrança — mantém a Data acompanhando pra não ficar
+                        // divergente (ex: Data em agosto, Vencimento em novembro).
+                        date: (Number(f.installments) > 1) ? e.target.value : f.date,
+                      }))}
+                      className="h-10"
+                    />
                   </div>
                 </div>
 

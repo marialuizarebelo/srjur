@@ -16,6 +16,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { toast } from 'sonner'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { DriveFileList } from '@/components/DriveFileList'
+import { ResponsibleSelect } from '@/components/ResponsibleSelect'
 
 // ── Áreas com cores estilo Notion ──────────────────────────────────────────────
 const AREA_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
@@ -138,7 +139,7 @@ export interface ClientFormData {
   rg_number: string; rg_issuer: string
   cep: string; street: string; address_number: string; complement: string
   neighborhood: string; city: string; state: string
-  responsible: string; origin: string; referred_by: string; referral_fee_pct: string
+  responsible: string; responsible_ids: string[]; origin: string; referred_by: string; referral_fee_pct: string
   area: string; areas_selected: string[]
   potential_value: string; drive_url: string; drive_folder_id: string; tags: string; notes: string
   status: string; portal_visible: boolean; birth_date: string
@@ -151,7 +152,7 @@ export const emptyClientForm: ClientFormData = {
   profession: '', rg_number: '', rg_issuer: '',
   cep: '', street: '', address_number: '', complement: '',
   neighborhood: '', city: '', state: '',
-  responsible: '', origin: '', referred_by: '', referral_fee_pct: '', area: '', areas_selected: [],
+  responsible: '', responsible_ids: [], origin: '', referred_by: '', referral_fee_pct: '', area: '', areas_selected: [],
   potential_value: '', drive_url: '', drive_folder_id: '', tags: '', notes: '',
   status: 'ativo', portal_visible: false, birth_date: '',
   signed_at: '', first_contact_at: '',
@@ -415,16 +416,9 @@ export function ClientFormDialog({
           {/* ── Jurídico / Comercial ── */}
           <Section title="Jurídico / Comercial">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 sm:col-span-1">
                 <Label>Responsável</Label>
-                <Select value={form.responsible} onValueChange={v => setForm(f => ({ ...f, responsible: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Maria Luiza">Maria Luiza</SelectItem>
-                    <SelectItem value="Juliana">Juliana</SelectItem>
-                    <SelectItem value="Ambas">Ambas</SelectItem>
-                  </SelectContent>
-                </Select>
+                <ResponsibleSelect value={form.responsible_ids} onChange={ids => setForm(f => ({ ...f, responsible_ids: ids }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Origem</Label>
