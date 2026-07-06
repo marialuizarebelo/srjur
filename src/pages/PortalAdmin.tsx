@@ -28,6 +28,15 @@ interface Message { id: string; title: string; body: string; sent_by: string | n
 interface Doc { id: string; title: string; drive_url: string; type: string | null; created_at: string }
 interface Finance { id: string; description: string; value: number; paid: boolean; due_date: string | null; payment_link: string | null }
 interface AgendaItem { id: string; title: string; due_date: string | null; kind: 'tarefa' | 'prazo' }
+interface CommTemplate { id: string; name: string; subject: string | null; body: string }
+
+function applyBasicVars(text: string, client: ClientLite) {
+  const firstName = client.name.trim().split(' ')[0] ?? ''
+  return text
+    .replaceAll('{{nome}}', client.name)
+    .replaceAll('{{primeiro_nome}}', firstName)
+    .replaceAll('{{email_cliente}}', client.email ?? '')
+}
 
 const DOC_TYPES = ['Documento', 'Pasta', 'Contrato', 'Petição', 'Procuração', 'Comprovante']
 
@@ -171,10 +180,28 @@ function ClientDetail({ client, onBack }: { client: ClientLite; onBack: () => vo
   const [accessOpen, setAccessOpen] = useState(false)
   const [msgModal, setMsgModal] = useState(false)
   const [msgForm, setMsgForm] = useState({ title: '', body: '' })
+  const [templates, setTemplates] = useState<CommTemplate[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [docForm, setDocForm] = useState({ title: '', drive_url: '', type: 'Documento' })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { loadAll() }, [client.id])
+
+  useEffect(() => {
+    supabase.from('communications').select('id, name, subject, body').order('name').then(({ data }) => {
+      setTemplates((data ?? []) as CommTemplate[])
+    })
+  }, [])
+
+  function applyTemplate(templateId: string) {
+    setSelectedTemplateId(templateId)
+    const tpl = templates.find(t => t.id === templateId)
+    if (!tpl) return
+    setMsgForm({
+      title: applyBasicVars(tpl.subject || tpl.name, client),
+      body: applyBasicVars(tpl.body, client),
+    })
+  }
 
   async function loadAll() {
     const cid = client.id
@@ -312,7 +339,7 @@ function ClientDetail({ client, onBack }: { client: ClientLite; onBack: () => vo
           <Button variant="outline" size="sm" onClick={() => setAccessOpen(true)}>
             <KeyRound className="h-3.5 w-3.5 mr-1.5" />Gerenciar acesso
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setMsgModal(true)}>
+          <Button variant="outline" size="sm" onClick={() => { setSelectedTemplateId(''); setMsgForm({ title: '', body: '' }); setMsgModal(true) }}>
             <Send className="h-3.5 w-3.5 mr-1.5" />Comunicar
           </Button>
           <a href={`/preview/${client.id}`} target="_blank" rel="noreferrer">
@@ -647,6 +674,17 @@ function ClientDetail({ client, onBack }: { client: ClientLite; onBack: () => vo
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Novo comunicado para {client.name}</DialogTitle></DialogHeader>
           <div className="space-y-3 pt-2">
+            {templates.length > 0 && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Template (opcional)</label>
+                <Select value={selectedTemplateId} onValueChange={applyTemplate}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Começar do zero..." /></SelectTrigger>
+                  <SelectContent>
+                    {templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Título</label>
               <Input placeholder="Ex: Atualização do processo" value={msgForm.title} onChange={e => setMsgForm(f => ({ ...f, title: e.target.value }))} />

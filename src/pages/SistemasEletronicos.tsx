@@ -19,9 +19,10 @@ import {
 import { toast } from 'sonner'
 import { fmtDate } from '@/lib/format'
 import { ClientCombobox } from '@/components/ClientCombobox'
+import { ResponsibleSelect } from '@/components/ResponsibleSelect'
 
 interface OabConfig { id: string; nome: string; numero_oab: string; uf_oab: string; ativo: boolean }
-interface ProcessOption { id: string; title: string; number: string | null }
+interface ProcessOption { id: string; title: string; number: string | null; client_id: string | null }
 
 interface Intimacao {
   id: string
@@ -102,6 +103,13 @@ export default function SistemasEletronicos() {
   const [prazoTitulo, setPrazoTitulo] = useState('')
   const [prazoData, setPrazoData] = useState('')
   const [prazoDias, setPrazoDias] = useState('15')
+  const [prazoResponsibleIds, setPrazoResponsibleIds] = useState<string[]>([])
+
+  const [tarefaOpen, setTarefaOpen] = useState(false)
+  const [tarefaSource, setTarefaSource] = useState<Intimacao | null>(null)
+  const [tarefaTitulo, setTarefaTitulo] = useState('')
+  const [tarefaData, setTarefaData] = useState('')
+  const [tarefaResponsibleIds, setTarefaResponsibleIds] = useState<string[]>([])
 
   const [processoOpen, setProcessoOpen] = useState(false)
   const [processoSource, setProcessoSource] = useState<Intimacao | null>(null)
@@ -118,7 +126,7 @@ export default function SistemasEletronicos() {
     const [{ data: oc }, { data: it }, { data: pr }, { data: cl }] = await Promise.all([
       supabase.from('oab_config').select('*').order('created_at'),
       supabase.from('intimacoes').select('*').order('data_disponibilizacao', { ascending: false }),
-      supabase.from('processes').select('id,title,number'),
+      supabase.from('processes').select('id,title,number,client_id'),
       supabase.from('clients').select('id,name').order('name'),
     ])
     setConfigs((oc as OabConfig[]) ?? [])
@@ -206,8 +214,8 @@ export default function SistemasEletronicos() {
         toast.success(totalNew > 0 ? `${totalNew} nova(s) intimação(ões) encontrada(s)!` : 'Nenhuma intimação nova')
       }
       loadData()
-    } catch (e) {
-      if (!silent) toast.error('Erro ao sincronizar com o DJEN. Tente novamente em instantes.')
+    } catch (e: any) {
+      if (!silent) toast.error('Erro ao sincronizar com o DJEN: ' + (e?.message ?? String(e)), { duration: 8000 })
     } finally {
       setSyncing(false)
     }
@@ -306,6 +314,7 @@ export default function SistemasEletronicos() {
     base.setDate(base.getDate() + 15)
     setPrazoData(base.toISOString().slice(0, 10))
     setPrazoDias('15')
+    setPrazoResponsibleIds([])
     setPrazoOpen(true)
   }
   function recalcPrazoData(dias: string) {
@@ -325,6 +334,7 @@ export default function SistemasEletronicos() {
       status: 'pendente',
       source: 'Intimação',
       notes: prazoSource.texto?.slice(0, 500),
+      responsible_ids: prazoResponsibleIds,
     }).select().single()
 
     await supabase.from('intimacoes').update({
@@ -346,6 +356,50 @@ export default function SistemasEletronicos() {
 
     toast.success('Prazo criado a partir da intimação!')
     setPrazoOpen(false)
+    loadData()
+  }
+
+  function openTarefa(i: Intimacao) {
+    setTarefaSource(i)
+    setTarefaTitulo(`Tarefa — ${i.tipo_comunicacao ?? 'Intimação'}`)
+    const base = new Date()
+    base.setDate(base.getDate() + 7)
+    setTarefaData(base.toISOString().slice(0, 10))
+    setTarefaResponsibleIds([])
+    setTarefaOpen(true)
+  }
+  async function createTarefa() {
+    if (!tarefaSource) return
+    const match = findMatchingProcess(tarefaSource.numero_processo)
+    const linkedProcessId = match?.id ?? tarefaSource.process_id
+    await supabase.from('tasks').insert({
+      title: tarefaTitulo,
+      due_date: tarefaData,
+      status: 'pendente',
+      type: 'tarefa',
+      process_id: linkedProcessId,
+      client_id: match?.client_id ?? null,
+      responsible_ids: tarefaResponsibleIds,
+      description: tarefaSource.texto?.slice(0, 500),
+    })
+
+    await supabase.from('intimacoes').update({
+      status: 'vinculado',
+      process_id: linkedProcessId ?? tarefaSource.process_id,
+      lida: true,
+    }).eq('id', tarefaSource.id)
+
+    if (linkedProcessId) {
+      await supabase.from('process_updates').insert({
+        process_id: linkedProcessId,
+        text: `[${tarefaSource.tipo_comunicacao ?? 'Intimação'}] ${tarefaSource.texto ?? ''}`,
+        author: 'DJEN (automático)',
+        portal_visible: false,
+      })
+    }
+
+    toast.success('Tarefa criada a partir da intimação!')
+    setTarefaOpen(false)
     loadData()
   }
 
@@ -469,6 +523,9 @@ export default function SistemasEletronicos() {
                 <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => openPrazo(i)}>
                   <Plus className="h-3 w-3 mr-1" />Criar prazo
                 </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => openTarefa(i)}>
+                  <Plus className="h-3 w-3 mr-1" />Criar tarefa
+                </Button>
                 {i.link && (
                   <a href={i.link} target="_blank" rel="noreferrer">
                     <Button size="sm" variant="ghost" className="h-7 text-xs rounded-lg">
@@ -576,6 +633,10 @@ export default function SistemasEletronicos() {
                 <Input type="date" value={prazoData} onChange={e => setPrazoData(e.target.value)} className="h-10" />
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label>Responsável</Label>
+              <ResponsibleSelect value={prazoResponsibleIds} onChange={setPrazoResponsibleIds} />
+            </div>
             {prazoSource && findMatchingProcess(prazoSource.numero_processo) && (
               <p className="text-[11px] text-primary flex items-center gap-1">
                 <Link2 className="h-3 w-3" />Será vinculado automaticamente ao processo correspondente
@@ -585,6 +646,36 @@ export default function SistemasEletronicos() {
           <DialogFooter className="pt-4">
             <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
             <Button onClick={createPrazo} disabled={!prazoTitulo || !prazoData}>Criar prazo</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Create Tarefa Dialog ── */}
+      <Dialog open={tarefaOpen} onOpenChange={setTarefaOpen}>
+        <DialogContent className="max-w-[520px] w-[96vw] p-6">
+          <DialogHeader><DialogTitle>Criar tarefa a partir da intimação</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>Título</Label>
+              <Input value={tarefaTitulo} onChange={e => setTarefaTitulo(e.target.value)} className="h-10" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Data</Label>
+              <Input type="date" value={tarefaData} onChange={e => setTarefaData(e.target.value)} className="h-10" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Responsável</Label>
+              <ResponsibleSelect value={tarefaResponsibleIds} onChange={setTarefaResponsibleIds} />
+            </div>
+            {tarefaSource && findMatchingProcess(tarefaSource.numero_processo) && (
+              <p className="text-[11px] text-primary flex items-center gap-1">
+                <Link2 className="h-3 w-3" />Será vinculada automaticamente ao processo correspondente
+              </p>
+            )}
+          </div>
+          <DialogFooter className="pt-4">
+            <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+            <Button onClick={createTarefa} disabled={!tarefaTitulo || !tarefaData}>Criar tarefa</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

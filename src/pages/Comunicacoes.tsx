@@ -18,6 +18,8 @@ import {
   ChevronDown, ChevronUp, Smartphone, Tag, X, Check, Globe,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useAuth } from '@/contexts/AuthContext'
+import { fmtBRL, fmtDate } from '@/lib/format'
 
 // ── Label colors (soft/muted palette) ────────────────────────────────────
 const LABEL_COLORS = [
@@ -202,6 +204,8 @@ const DEFAULT_TEMPLATES: Omit<Template, 'id' | 'created_at'>[] = [
 
 // ── Component ─────────────────────────────────────────────────────────────
 export default function Comunicacoes() {
+  const { profile } = useAuth()
+  const [officeDefaults, setOfficeDefaults] = useState<Record<string, string>>(OFFICE_DEFAULTS)
   const [templates, setTemplates] = useState<Template[]>([])
   const [clients, setClients]     = useState<Client[]>([])
   const [labels, setLabels]       = useState<LabelTag[]>([])
@@ -234,6 +238,18 @@ export default function Comunicacoes() {
 
   useEffect(() => { loadData() }, [])
 
+  useEffect(() => {
+    supabase.from('office_settings').select('name').limit(1).maybeSingle().then(({ data }) => {
+      const respName = profile?.nickname || profile?.display_name || ''
+      setOfficeDefaults({
+        ...OFFICE_DEFAULTS,
+        '{{escritorio}}': data?.name ?? OFFICE_DEFAULTS['{{escritorio}}'],
+        '{{responsavel}}': respName,
+        '{{primeiro_nome_responsavel}}': respName.split(' ')[0] ?? '',
+      })
+    })
+  }, [profile])
+
   async function loadData() {
     const [{ data: t }, { data: c }] = await Promise.all([
       supabase.from('communications').select('*').order('created_at', { ascending: false }),
@@ -245,7 +261,8 @@ export default function Comunicacoes() {
       const toInsert = DEFAULT_TEMPLATES.map(t => ({
         ...t, variables: extractVars(t.body, t.subject), tag_ids: [],
       }))
-      const { data: ins } = await supabase.from('communications').insert(toInsert).select()
+      const { data: ins, error } = await supabase.from('communications').insert(toInsert).select()
+      if (error) { toast.error('Erro ao criar templates padrão: ' + error.message) }
       tpls = (ins as Template[]) ?? []
     }
     setTemplates(tpls)
@@ -319,8 +336,11 @@ export default function Comunicacoes() {
     const vars = extractVars(form.body, form.subject)
     const payload = { name: form.name, category: form.category, channel: form.channel,
       subject: form.subject || null, body: form.body, variables: vars, tag_ids: form.tag_ids }
-    if (editing) await supabase.from('communications').update(payload).eq('id', editing.id)
-    else await supabase.from('communications').insert(payload)
+    const { error } = editing
+      ? await supabase.from('communications').update(payload).eq('id', editing.id)
+      : await supabase.from('communications').insert(payload)
+    if (error) { toast.error('Erro ao salvar template: ' + error.message); return }
+    toast.success(editing ? 'Template atualizado!' : 'Template criado!')
     setEditorOpen(false)
     loadData()
   }
@@ -345,18 +365,65 @@ export default function Comunicacoes() {
   function openSend(t: Template) {
     setSendTpl(t)
     setSendClient('')
-    const defaults: Record<string, string> = { ...OFFICE_DEFAULTS }
+    const defaults: Record<string, string> = { ...officeDefaults }
     for (const v of t.variables ?? []) { if (!defaults[v]) defaults[v] = '' }
     setVarVals(defaults)
     setPreviewOpen(false)
     setSendOpen(true)
   }
-  function autofill(clientId: string) {
+  async function autofill(clientId: string) {
     setSendClient(clientId)
     const c = clients.find(cl => cl.id === clientId)
     if (!c) return
     const parts = c.name.trim().split(' ')
-    setVarVals(prev => ({ ...prev, '{{nome}}': c.name, '{{primeiro_nome}}': parts[0] ?? '' }))
+    const filled: Record<string, string> = {
+      '{{nome}}': c.name, '{{primeiro_nome}}': parts[0] ?? '',
+      '{{email_cliente}}': c.email ?? '', '{{telefone_cliente}}': c.phone ?? '',
+    }
+
+    // Puxa dados reais vinculados a esse cliente pra preencher o resto das
+    // variáveis sozinho, sem precisar digitar tudo de novo — processo mais
+    // recente, próximo lançamento em aberto e próximo compromisso da agenda.
+    const [{ data: proc }, { data: fin }, { data: task }, { data: deadline }] = await Promise.all([
+      supabase.from('clients').select('cpf_cnpj').eq('id', clientId).maybeSingle(),
+      supabase.from('finance').select('value, description, due_date, payment_link, current_installment, installments')
+        .eq('client_id', clientId).eq('paid', false).order('due_date').limit(1).maybeSingle(),
+      supabase.from('tasks').select('title, due_date, due_time, type')
+        .eq('client_id', clientId).eq('status', 'pendente').order('due_date').limit(1).maybeSingle(),
+      supabase.from('deadlines').select('title, due_date')
+        .eq('status', 'pendente').order('due_date').limit(1).maybeSingle(),
+    ])
+    const { data: process } = await supabase.from('processes')
+      .select('number, title, phase, court, electronic_system, access_key')
+      .eq('client_id', clientId).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+
+    if (proc?.cpf_cnpj) filled['{{cpf_cnpj}}'] = proc.cpf_cnpj
+    if (process) {
+      filled['{{numero_processo}}'] = process.number ?? ''
+      filled['{{nome_processo}}'] = process.title ?? ''
+      filled['{{fase_processo}}'] = process.phase ?? ''
+      filled['{{vara}}'] = process.court ?? ''
+      filled['{{sistema}}'] = process.electronic_system ?? ''
+      filled['{{chave_acesso}}'] = process.access_key ?? ''
+    }
+    if (fin) {
+      filled['{{valor}}'] = fmtBRL(Number(fin.value))
+      filled['{{descricao_financeiro}}'] = fin.description ?? ''
+      filled['{{link_pagamento}}'] = fin.payment_link ?? ''
+      filled['{{vencimento}}'] = fin.due_date ? fmtDate(fin.due_date) : ''
+      filled['{{parcela}}'] = fin.current_installment && fin.installments ? `${fin.current_installment}/${fin.installments}` : ''
+    }
+    if (task) {
+      filled['{{data_agenda}}'] = task.due_date ? fmtDate(task.due_date) : ''
+      filled['{{hora_agenda}}'] = task.due_time ?? ''
+      filled['{{tipo_agenda}}'] = task.type ?? ''
+    }
+    if (deadline) {
+      filled['{{prazo}}'] = deadline.due_date ? fmtDate(deadline.due_date) : ''
+      filled['{{titulo_prazo}}'] = deadline.title ?? ''
+    }
+
+    setVarVals(prev => ({ ...prev, ...filled }))
   }
   const preview = useMemo(() => ({
     subject: applyVars(sendTpl?.subject ?? '', varVals),

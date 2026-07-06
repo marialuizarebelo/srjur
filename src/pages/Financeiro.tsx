@@ -669,12 +669,17 @@ export default function Financeiro() {
   const despesas = filtered.filter(r => r.type === 'despesa')
   const totalReceitas = receitas.reduce((s, r) => s + Number(r.value), 0)
   const totalDespesas = despesas.reduce((s, r) => s + Number(r.value), 0)
-  const receitasPagas = receitas.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
-  const receitasPendentes = receitas.reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
-  const despesasPagas = despesas.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
-  const despesasPendentes = despesas.reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
+  // "Recebido"/"Pago"/"Saldo" representam o caixa de fato — lançamentos marcados
+  // como "não impacta caixa" (ex: repasses, valores só de registro) precisam
+  // ficar de fora dessas contas, senão o caixa mostrado não bate com a realidade.
+  const receitasCaixa = receitas.filter(r => r.impacts_cash !== false)
+  const despesasCaixa = despesas.filter(r => r.impacts_cash !== false)
+  const receitasPagas = receitasCaixa.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
+  const receitasPendentes = receitasCaixa.reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
+  const despesasPagas = despesasCaixa.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
+  const despesasPendentes = despesasCaixa.reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
   const saldo = receitasPagas - despesasPagas
-  const inadimplencia = receitas
+  const inadimplencia = receitasCaixa
     .filter(r => rowStatus(r, paymentsMap) !== 'pago' && r.due_date && r.due_date < today)
     .reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
   const proximosVencimentos = rows
@@ -1005,11 +1010,11 @@ export default function Financeiro() {
   const getCardRows = () => {
     switch (activeCard) {
       case 'receitas': return receitas
-      case 'receitas-pagas': return receitas.filter(r => r.paid)
-      case 'receitas-pendentes': return receitas.filter(r => !r.paid)
+      case 'receitas-pagas': return receitasCaixa.filter(r => r.paid)
+      case 'receitas-pendentes': return receitasCaixa.filter(r => !r.paid)
       case 'despesas': return despesas
-      case 'despesas-pagas': return despesas.filter(r => r.paid)
-      case 'despesas-pendentes': return despesas.filter(r => !r.paid)
+      case 'despesas-pagas': return despesasCaixa.filter(r => r.paid)
+      case 'despesas-pendentes': return despesasCaixa.filter(r => !r.paid)
       case 'inadimplencia': return receitas.filter(r => !r.paid && r.due_date && r.due_date < today)
       case 'saldo': return filtered
       default: return []

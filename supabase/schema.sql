@@ -136,8 +136,14 @@ create table if not exists public.documents (
 -- 9. COMMUNICATIONS (templates de mensagem)
 create table if not exists public.communications (
   id uuid primary key default gen_random_uuid(),
-  title text not null,
+  title text,
+  name text,
+  category text,
+  channel text default 'whatsapp',
+  subject text,
   body text not null,
+  variables text[] default '{}',
+  tag_ids text[] default '{}',
   tag text,
   whatsapp_url text,
   created_at timestamptz default now(),
