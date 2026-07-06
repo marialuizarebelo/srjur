@@ -227,6 +227,14 @@ export default function SistemasEletronicos() {
   async function confirmLink() {
     if (!linking || !linkProcessId) return
     await supabase.from('intimacoes').update({ process_id: linkProcessId, status: 'vinculado', lida: true }).eq('id', linking.id)
+    // Toda intimação vinculada a um processo já cadastrado precisa aparecer
+    // na linha do tempo de andamentos dele — senão o histórico fica incompleto.
+    await supabase.from('process_updates').insert({
+      process_id: linkProcessId,
+      text: `[${linking.tipo_comunicacao ?? 'Intimação'}] ${linking.texto ?? ''}`,
+      author: 'DJEN (automático)',
+      portal_visible: false,
+    })
     setLinkOpen(false)
     loadData()
   }
@@ -261,6 +269,15 @@ export default function SistemasEletronicos() {
     await supabase.from('intimacoes').update({
       process_id: proc?.id ?? null, status: 'vinculado', lida: true,
     }).eq('id', processoSource.id)
+
+    if (proc?.id) {
+      await supabase.from('process_updates').insert({
+        process_id: proc.id,
+        text: `[${processoSource.tipo_comunicacao ?? 'Intimação'}] ${processoSource.texto ?? ''}`,
+        author: 'DJEN (automático)',
+        portal_visible: false,
+      })
+    }
 
     toast.success('Processo criado e vinculado à intimação!')
     setProcessoOpen(false)
@@ -301,6 +318,16 @@ export default function SistemasEletronicos() {
       process_id: match?.id ?? prazoSource.process_id,
       lida: true,
     }).eq('id', prazoSource.id)
+
+    const linkedProcessId = match?.id ?? prazoSource.process_id
+    if (linkedProcessId) {
+      await supabase.from('process_updates').insert({
+        process_id: linkedProcessId,
+        text: `[${prazoSource.tipo_comunicacao ?? 'Intimação'}] ${prazoSource.texto ?? ''}`,
+        author: 'DJEN (automático)',
+        portal_visible: false,
+      })
+    }
 
     toast.success('Prazo criado a partir da intimação!')
     setPrazoOpen(false)

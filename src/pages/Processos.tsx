@@ -393,6 +393,7 @@ export default function Processos() {
           continue
         }
         const adv = item.destinatarioadvogados?.[0]
+        const textoLimpo = stripHtml(item.texto)
         await supabase.from('intimacoes').insert({
           djen_id: item.id,
           numero_processo: item.numero_processo,
@@ -400,7 +401,7 @@ export default function Processos() {
           tribunal: item.siglaTribunal,
           orgao: item.nomeOrgao,
           tipo_comunicacao: item.tipoComunicacao,
-          texto: stripHtml(item.texto),
+          texto: textoLimpo,
           data_disponibilizacao: item.data_disponibilizacao,
           link: item.link,
           advogado_nome: adv?.advogado.nome ?? null,
@@ -409,6 +410,15 @@ export default function Processos() {
           process_id: processId,
           status: 'vinculado',
           lida: false,
+        })
+        // Toda intimação/movimentação encontrada no DJEN também vira um
+        // andamento na linha do tempo do processo — sem isso a aba
+        // "Andamentos" ficava incompleta, sem refletir o que o DJEN trouxe.
+        await supabase.from('process_updates').insert({
+          process_id: processId,
+          text: `[${item.tipoComunicacao}] ${textoLimpo}`,
+          author: 'DJEN (automático)',
+          portal_visible: false,
         })
         novas++
       }
