@@ -166,6 +166,11 @@ export default function SistemasEletronicos() {
           if (exists) continue
 
           const adv = item.destinatarioadvogados?.find(d => d.advogado.numero_oab === c.numero_oab) ?? item.destinatarioadvogados?.[0]
+          const textoLimpo = stripHtml(item.texto)
+          // Se o número do processo da intimação já bate com um processo cadastrado,
+          // vincula automaticamente — sem isso, toda intimação nascia solta e só
+          // aparecia nos andamentos depois de alguém vincular manualmente.
+          const match = findMatchingProcess(item.numero_processo)
 
           await supabase.from('intimacoes').insert({
             djen_id: item.id,
@@ -174,14 +179,24 @@ export default function SistemasEletronicos() {
             tribunal: item.siglaTribunal,
             orgao: item.nomeOrgao,
             tipo_comunicacao: item.tipoComunicacao,
-            texto: stripHtml(item.texto),
+            texto: textoLimpo,
             data_disponibilizacao: item.data_disponibilizacao,
             link: item.link,
             advogado_nome: adv?.advogado.nome ?? c.nome,
             advogado_oab: adv?.advogado.numero_oab ?? c.numero_oab,
             advogado_uf: adv?.advogado.uf_oab ?? c.uf_oab,
-            status: 'novo',
+            process_id: match?.id ?? null,
+            status: match ? 'vinculado' : 'novo',
           })
+
+          if (match) {
+            await supabase.from('process_updates').insert({
+              process_id: match.id,
+              text: `[${item.tipoComunicacao ?? 'Intimação'}] ${textoLimpo}`,
+              author: 'DJEN (automático)',
+              portal_visible: false,
+            })
+          }
           totalNew++
         }
       }
