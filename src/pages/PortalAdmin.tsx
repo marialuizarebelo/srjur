@@ -342,9 +342,6 @@ function ClientDetail({ client, onBack }: { client: ClientLite; onBack: () => vo
           <Button variant="outline" size="sm" onClick={() => { setSelectedTemplateId(''); setMsgForm({ title: '', body: '' }); setMsgModal(true) }}>
             <Send className="h-3.5 w-3.5 mr-1.5" />Comunicar
           </Button>
-          <a href={`/preview/${client.id}`} target="_blank" rel="noreferrer">
-            <Button variant="outline" size="sm"><Eye className="h-3.5 w-3.5 mr-1.5" />Prévia do portal</Button>
-          </a>
           <ExportMenu
             label="Exportar"
             onExcelExport={() => exportExcel(
