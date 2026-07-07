@@ -159,14 +159,26 @@ export default function SistemasEletronicos() {
     if (list.length === 0) { if (!silent) toast.error('Cadastre ao menos uma OAB para sincronizar'); return }
     setSyncing(true)
     let totalNew = 0
-    try {
-      for (const c of list.filter(c => c.ativo)) {
-        // Busca o histórico completo (sem filtro de data) — a API pagina
-        // automaticamente até esgotar os resultados dessa OAB
+    const erros: string[] = []
+    // Buscar o histórico inteiro sem filtro de data (como era antes) faz o DJEN
+    // paginar dezenas de vezes a cada sincronização, o que sobrecarrega a API
+    // pública deles e derruba com erro 500. Limita a uma janela — desde a
+    // última sincronização (ou os últimos 90 dias, na primeira vez).
+    const lastSyncMs = Number(localStorage.getItem('djen_last_sync') ?? 0)
+    const inicio = lastSyncMs
+      ? new Date(lastSyncMs - 3 * 86400000) // com 3 dias de folga, pra não perder nada por atraso de publicação
+      : new Date(Date.now() - 90 * 86400000)
+    const dataDisponibilizacaoInicio = inicio.toISOString().slice(0, 10)
+    const dataDisponibilizacaoFim = new Date().toISOString().slice(0, 10)
+
+    for (const c of list.filter(c => c.ativo)) {
+      try {
         const items: DjenItem[] = await searchDjen({
           numeroOab: c.numero_oab,
           ufOab: c.uf_oab,
           itensPorPagina: 100,
+          dataDisponibilizacaoInicio,
+          dataDisponibilizacaoFim,
         })
 
         for (const item of items) {
@@ -207,18 +219,23 @@ export default function SistemasEletronicos() {
           }
           totalNew++
         }
+      } catch (e: any) {
+        // Uma OAB falhando (ex: DJEN devolvendo 500 pra ela especificamente)
+        // não pode travar a sincronização das outras.
+        erros.push(`${c.nome} (${c.numero_oab}/${c.uf_oab}): ${e?.message ?? String(e)}`)
       }
-      localStorage.setItem('djen_last_sync', String(Date.now()))
-      setLastSyncLabel(new Date().toLocaleString('pt-BR'))
-      if (!silent || totalNew > 0) {
-        toast.success(totalNew > 0 ? `${totalNew} nova(s) intimação(ões) encontrada(s)!` : 'Nenhuma intimação nova')
-      }
-      loadData()
-    } catch (e: any) {
-      if (!silent) toast.error('Erro ao sincronizar com o DJEN: ' + (e?.message ?? String(e)), { duration: 8000 })
-    } finally {
-      setSyncing(false)
     }
+
+    localStorage.setItem('djen_last_sync', String(Date.now()))
+    setLastSyncLabel(new Date().toLocaleString('pt-BR'))
+    if (erros.length > 0) {
+      toast.error('Erro ao sincronizar: ' + erros.join(' · '), { duration: 10000 })
+    }
+    if (!silent || totalNew > 0) {
+      toast.success(totalNew > 0 ? `${totalNew} nova(s) intimação(ões) encontrada(s)!` : 'Nenhuma intimação nova')
+    }
+    loadData()
+    setSyncing(false)
   }
 
   const filtered = useMemo(() => intimacoes.filter(i => {
