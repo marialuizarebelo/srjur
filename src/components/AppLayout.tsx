@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { GlobalSearch } from '@/components/GlobalSearch'
 import { NotificationsPanel } from '@/components/NotificationsPanel'
 import { applyThemeColor } from '@/lib/themeColor'
+import { setPdfOfficeName } from '@/lib/exportData'
 
 function useDynamicFavicon() {
   useEffect(() => {
@@ -19,7 +20,7 @@ function useDynamicFavicon() {
       .maybeSingle()
       .then(({ data }) => {
         if (!data) return
-        if (data.name) document.title = data.name
+        if (data.name) { document.title = data.name; setPdfOfficeName(data.name) }
         if (data.logo_url) {
           const link = document.querySelector<HTMLLinkElement>("link[rel='icon']")
           if (link) link.href = data.logo_url

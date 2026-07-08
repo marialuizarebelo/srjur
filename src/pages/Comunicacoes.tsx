@@ -106,10 +106,12 @@ const VARIABLE_GROUPS = [
   },
 ]
 
+// Fallback só até a busca real do office_settings completar (ver useEffect
+// que popula officeDefaults) — nunca deveria "vazar" pro envio de verdade.
 const OFFICE_DEFAULTS: Record<string, string> = {
-  '{{escritorio}}': 'Scartezzini & Rebelo Advocacia',
+  '{{escritorio}}': 'SRJUR',
   '{{data_hoje}}': new Date().toLocaleDateString('pt-BR'),
-  '{{email_escritorio}}': 'contato@sradvocacia.com.br',
+  '{{email_escritorio}}': '',
 }
 
 const ALL_VARIABLES = VARIABLE_GROUPS.flatMap(g => g.vars)

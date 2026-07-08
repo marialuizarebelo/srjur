@@ -2,6 +2,14 @@ import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
+// Nome do escritório usado no cabeçalho dos PDFs exportados — cada instância
+// (cada escritório contratante) tem o seu próprio, nunca fixo no código.
+// AppLayout chama setPdfOfficeName() assim que carrega office_settings.
+let pdfOfficeName = 'SRJUR'
+export function setPdfOfficeName(name: string) {
+  pdfOfficeName = name || 'SRJUR'
+}
+
 // ── Excel ──────────────────────────────────────────────────────────────────────
 export function exportExcel(rows: Record<string, unknown>[], filename: string) {
   const ws = XLSX.utils.json_to_sheet(rows)
@@ -39,7 +47,7 @@ export function exportPDF(
   doc.text('SRJUR', 12, 10)
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
-  doc.text('Scartezzini & Rebelo Advocacia', 12, 16)
+  doc.text(pdfOfficeName, 12, 16)
 
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(12)
