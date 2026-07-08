@@ -24,8 +24,8 @@ import { fmtBRL, fmtDate, fmtDateLong, getDaysDiff } from '@/lib/format'
 import { ClientCombobox } from '@/components/ClientCombobox'
 import {
   Users, Scale, ClipboardList, AlertTriangle, ChevronRight,
-  Calendar, DollarSign, Bell,
-  ChevronLeft, Clock, Plus, ArrowRight, Loader2,
+  DollarSign, Bell,
+  Clock, Plus, ArrowRight, Loader2,
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer } from 'recharts'
 
@@ -207,49 +207,20 @@ function AttentionColumn({
   )
 }
 
-/* ---------- MiniWeekCalendar ---------- */
+/* ---------- QuickActionsCard ---------- */
 
-function MiniWeekCalendar() {
-  const today = new Date()
-  const dayOfWeek = today.getDay()
-  const monday = new Date(today)
-  monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7))
-
-  const days = ['SEG', 'TER', 'QUA', 'QUI', 'SEX']
-  const dates = days.map((_, i) => {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    return d
-  })
-
+function QuickActionsCard({ onLead, onClient, onProcess, onTask }: { onLead: () => void; onClient: () => void; onProcess: () => void; onTask: () => void }) {
   return (
     <Card className="p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-primary" />
-          <span className="font-semibold text-sm">Semana</span>
-        </div>
-        <div className="flex gap-1">
-          <Button variant="ghost" size="icon" className="h-6 w-6"><ChevronLeft className="h-3 w-3" /></Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6"><ChevronRight className="h-3 w-3" /></Button>
-        </div>
+      <div className="flex items-center gap-2 mb-3">
+        <Plus className="h-4 w-4 text-primary" />
+        <span className="font-semibold text-sm">Adicionar rápido</span>
       </div>
-      <div className="grid grid-cols-5 gap-1 text-center">
-        {days.map((day, i) => {
-          const isToday = dates[i].toDateString() === today.toDateString()
-          return (
-            <div key={day} className="flex flex-col items-center">
-              <span className="text-[10px] text-muted-foreground uppercase">{day}</span>
-              <div
-                className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium mt-1 ${
-                  isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'
-                }`}
-              >
-                {dates[i].getDate()}
-              </div>
-            </div>
-          )
-        })}
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="outline" size="sm" className="justify-start text-xs" onClick={onLead}>+ Lead</Button>
+        <Button variant="outline" size="sm" className="justify-start text-xs" onClick={onClient}>+ Cliente</Button>
+        <Button variant="outline" size="sm" className="justify-start text-xs" onClick={onProcess}>+ Processo</Button>
+        <Button variant="outline" size="sm" className="justify-start text-xs" onClick={onTask}>+ Tarefa</Button>
       </div>
     </Card>
   )
@@ -257,7 +228,7 @@ function MiniWeekCalendar() {
 
 /* ---------- WeekAgendaView ---------- */
 
-function WeekAgendaView({ weekByDay, onItemClick }: { weekByDay: AttentionItem[][]; onItemClick: (item: AttentionItem) => void }) {
+function WeekAgendaView({ weekByDay, onItemClick, onAddDay }: { weekByDay: AttentionItem[][]; onItemClick: (item: AttentionItem) => void; onAddDay: (date: string) => void }) {
   const today = new Date()
   const dayOfWeek = today.getDay()
   const monday = new Date(today)
@@ -275,16 +246,28 @@ function WeekAgendaView({ weekByDay, onItemClick }: { weekByDay: AttentionItem[]
       {labels.map((label, i) => {
         const isToday = dates[i].toDateString() === today.toDateString()
         const items = weekByDay[i] ?? []
+        const isoDate = dates[i].toISOString().slice(0, 10)
         return (
           <div
             key={label}
-            className={`rounded-2xl p-3 min-h-[160px] border ${isToday ? 'border-primary bg-primary/5' : 'border-border/60 bg-muted/20'}`}
+            className={`group rounded-2xl p-3 min-h-[260px] border ${isToday ? 'border-primary bg-primary/5' : 'border-border/60 bg-muted/20'}`}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-[10px] font-semibold uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>{label}</span>
-              <span className={`text-xs font-bold h-5 w-5 rounded-full flex items-center justify-center ${isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'}`}>
-                {dates[i].getDate()}
-              </span>
+              <span className={`text-[11px] font-semibold uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>{label}</span>
+              <div className="flex items-center gap-1">
+                <span className={`text-xs font-bold h-5 w-5 rounded-full flex items-center justify-center ${isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'}`}>
+                  {dates[i].getDate()}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => onAddDay(isoDate)}
+                  title="Adicionar tarefa neste dia"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
             <div className="space-y-1.5">
               {items.length === 0 ? (
@@ -395,6 +378,7 @@ export default function Dashboard() {
   const [quickTaskOpen, setQuickTaskOpen] = useState(false)
   const [quickTask, setQuickTask] = useState({ title: '', due_date: '', responsible_ids: [] as string[] })
   const [saving, setSaving] = useState(false)
+  const [reloadTick, setReloadTick] = useState(0)
 
   async function saveQuickLead() {
     if (!quickLead.name.trim() || saving) return
@@ -405,6 +389,7 @@ export default function Dashboard() {
       toast.success('Lead criado!')
       setQuickLeadOpen(false)
       setQuickLead({ name: '', phone: '', source: '' })
+      setReloadTick(t => t + 1)
     } finally {
       setSaving(false)
     }
@@ -419,6 +404,7 @@ export default function Dashboard() {
       toast.success('Cliente criado!')
       setQuickClientOpen(false)
       setQuickClient({ name: '', email: '', phone: '', type: 'pessoa_fisica' })
+      setReloadTick(t => t + 1)
     } finally {
       setSaving(false)
     }
@@ -433,6 +419,7 @@ export default function Dashboard() {
       toast.success('Processo criado!')
       setQuickProcessOpen(false)
       setQuickProcess({ title: '', client_id: '', area: '' })
+      setReloadTick(t => t + 1)
     } finally {
       setSaving(false)
     }
@@ -450,6 +437,7 @@ export default function Dashboard() {
       toast.success('Tarefa criada!')
       setQuickTaskOpen(false)
       setQuickTask({ title: '', due_date: '', responsible_ids: [] })
+      setReloadTick(t => t + 1)
     } finally {
       setSaving(false)
     }
@@ -577,7 +565,7 @@ export default function Dashboard() {
     }
 
     load()
-  }, [])
+  }, [reloadTick])
 
   /* ---------- Modal openers ---------- */
 
@@ -906,7 +894,11 @@ export default function Dashboard() {
               </div>
               <span className="text-xs text-muted-foreground">{fmtDate(new Date().toISOString().slice(0, 10))}</span>
             </div>
-            <WeekAgendaView weekByDay={weekByDay} onItemClick={item => openAttentionItem(item, 'Tarefa')} />
+            <WeekAgendaView
+              weekByDay={weekByDay}
+              onItemClick={item => openAttentionItem(item, 'Tarefa')}
+              onAddDay={date => { setQuickTask({ title: '', due_date: date, responsible_ids: [] }); setQuickTaskOpen(true) }}
+            />
           </div>
 
           {/* Finance summary cards */}
@@ -1003,7 +995,12 @@ export default function Dashboard() {
 
         {/* Right sidebar */}
         <div className="space-y-4 hidden xl:block">
-          <MiniWeekCalendar />
+          <QuickActionsCard
+            onLead={() => setQuickLeadOpen(true)}
+            onClient={() => setQuickClientOpen(true)}
+            onProcess={() => setQuickProcessOpen(true)}
+            onTask={() => { setQuickTask({ title: '', due_date: '', responsible_ids: [] }); setQuickTaskOpen(true) }}
+          />
 
           <PortalActivityCard />
 
