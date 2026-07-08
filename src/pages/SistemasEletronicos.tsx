@@ -144,6 +144,7 @@ export default function SistemasEletronicos() {
 
   async function addConfig() {
     if (!newNome.trim() || !newOab.trim()) return
+    if (configs.length >= 3) { toast.error('Limite de 3 OABs monitoradas atingido'); return }
     await supabase.from('oab_config').insert({ nome: newNome, numero_oab: newOab.replace(/\D/g,''), uf_oab: newUf })
     setNewNome(''); setNewOab(''); setNewUf('RS')
     loadData()
@@ -586,20 +587,26 @@ export default function SistemasEletronicos() {
             {configs.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Nenhuma OAB cadastrada</p>}
           </div>
 
-          <div className="border rounded-xl p-4 space-y-3 mt-2 bg-muted/20">
-            <p className="text-sm font-medium">Nova OAB</p>
-            <Input placeholder="Nome da advogada" value={newNome} onChange={e => setNewNome(e.target.value)} className="h-9" />
-            <div className="grid grid-cols-[1fr_100px] gap-2">
-              <Input placeholder="Número OAB" value={newOab} onChange={e => setNewOab(e.target.value)} className="h-9" inputMode="numeric" />
-              <Select value={newUf} onValueChange={setNewUf}>
-                <SelectTrigger className="h-9"><SelectValue>{newUf}</SelectValue></SelectTrigger>
-                <SelectContent>{UFS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
-              </Select>
+          {configs.length >= 3 ? (
+            <p className="text-xs text-muted-foreground text-center py-3 border rounded-xl mt-2 bg-muted/20">
+              Limite de 3 OABs monitoradas atingido. Remova uma para adicionar outra.
+            </p>
+          ) : (
+            <div className="border rounded-xl p-4 space-y-3 mt-2 bg-muted/20">
+              <p className="text-sm font-medium">Nova OAB</p>
+              <Input placeholder="Nome da advogada" value={newNome} onChange={e => setNewNome(e.target.value)} className="h-9" />
+              <div className="grid grid-cols-[1fr_100px] gap-2">
+                <Input placeholder="Número OAB" value={newOab} onChange={e => setNewOab(e.target.value)} className="h-9" inputMode="numeric" />
+                <Select value={newUf} onValueChange={setNewUf}>
+                  <SelectTrigger className="h-9"><SelectValue>{newUf}</SelectValue></SelectTrigger>
+                  <SelectContent>{UFS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <Button size="sm" className="w-full" onClick={addConfig} disabled={!newNome.trim() || !newOab.trim()}>
+                <Plus className="h-3.5 w-3.5 mr-1.5" />Adicionar
+              </Button>
             </div>
-            <Button size="sm" className="w-full" onClick={addConfig} disabled={!newNome.trim() || !newOab.trim()}>
-              <Plus className="h-3.5 w-3.5 mr-1.5" />Adicionar
-            </Button>
-          </div>
+          )}
 
           <DialogFooter className="pt-2">
             <DialogClose render={<Button variant="outline" />}>Fechar</DialogClose>

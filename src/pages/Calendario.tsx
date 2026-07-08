@@ -88,7 +88,10 @@ export default function Calendario() {
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [quickOpen, setQuickOpen] = useState(false)
-  const [qf, setQf] = useState({ tipo: 'tarefa' as 'tarefa' | 'compromisso' | 'prazo', title: '', date: '', time: '', responsible_ids: [] as string[] })
+  const [qf, setQf] = useState({
+    tipo: 'tarefa' as 'tarefa' | 'compromisso' | 'prazo', title: '', date: '', time: '',
+    endDate: '', endTime: '', description: '', link: '', responsible_ids: [] as string[],
+  })
   const [editOpen, setEditOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<CalEvent | null>(null)
   const [ef, setEf] = useState({ title: '', date: '', time: '', responsible_ids: [] as string[], status: '' })
@@ -114,7 +117,7 @@ export default function Calendario() {
   }
 
   function openQuickCreate(date: string) {
-    setQf({ tipo: 'tarefa', title: '', date, time: '', responsible_ids: [] })
+    setQf({ tipo: 'tarefa', title: '', date, time: '', endDate: '', endTime: '', description: '', link: '', responsible_ids: [] })
     setQuickOpen(true)
   }
 
@@ -126,10 +129,13 @@ export default function Calendario() {
         await supabase.from('deadlines').insert({
           title: qf.title, due_date: qf.date, status: 'pendente',
           responsible_ids: qf.responsible_ids, responsible: namesFor(qf.responsible_ids), source: 'Manual',
+          notes: qf.description || null, drive_url: qf.link || null,
         })
       } else {
         await supabase.from('tasks').insert({
           title: qf.title, due_date: qf.date, due_time: qf.time || null,
+          end_date: qf.endDate || null, end_time: qf.endTime || null,
+          description: qf.description || null, link: qf.link || null,
           type: qf.tipo, status: 'pendente',
           responsible_ids: qf.responsible_ids, responsible: namesFor(qf.responsible_ids),
         })
@@ -939,15 +945,39 @@ export default function Calendario() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Data</Label>
+                <Label>Data de início</Label>
                 <Input type="date" value={qf.date} onChange={e => setQf(f => ({ ...f, date: e.target.value }))} className="h-10" />
               </div>
               {qf.tipo !== 'prazo' && (
                 <div className="space-y-1.5">
-                  <Label>Hora (opcional)</Label>
+                  <Label>Horário de início</Label>
                   <Input type="time" value={qf.time} onChange={e => setQf(f => ({ ...f, time: e.target.value }))} className="h-10" />
                 </div>
               )}
+            </div>
+            {qf.tipo !== 'prazo' && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Data de fim (opcional)</Label>
+                  <Input type="date" value={qf.endDate} onChange={e => setQf(f => ({ ...f, endDate: e.target.value }))} className="h-10" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Horário de fim (opcional)</Label>
+                  <Input type="time" value={qf.endTime} onChange={e => setQf(f => ({ ...f, endTime: e.target.value }))} className="h-10" />
+                </div>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label>Descrição (opcional)</Label>
+              <textarea
+                className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm min-h-[80px] resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                value={qf.description}
+                onChange={e => setQf(f => ({ ...f, description: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Link (opcional)</Label>
+              <Input value={qf.link} onChange={e => setQf(f => ({ ...f, link: e.target.value }))} placeholder="https://..." className="h-10" />
             </div>
             <div className="space-y-1.5">
               <Label>Responsável (selecionar mais de um envia ao escritório)</Label>

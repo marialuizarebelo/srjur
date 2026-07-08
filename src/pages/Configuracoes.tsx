@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select'
 import {
   Building2, Users, Shield, Palette, Plus, Pencil, Trash2,
-  Save, Eye, EyeOff, Link2, KeyRound, CalendarDays, Unlink, Bell, BellOff, BellRing,
+  Save, Eye, EyeOff, Link2, KeyRound, CalendarDays, Unlink, Bell, BellOff, BellRing, Lock,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ImageUploadCrop } from '@/components/ImageUploadCrop'
@@ -310,9 +310,13 @@ export default function Configuracoes() {
       {/* ── Usuários ── */}
       {tab === 'usuarios' && (
         <div className="space-y-3">
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-4">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-4 space-y-1">
             <p className="text-xs text-amber-700 dark:text-amber-400">
               Novos usuários são criados diretamente no painel do Supabase (Authentication → Users). Aqui você edita nome, cargo e cor de exibição de quem já tem acesso.
+            </p>
+            <p className={`text-xs font-medium ${users.filter(u => u.role === 'admin').length >= 3 ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
+              {users.filter(u => u.role === 'admin').length}/3 administradoras
+              {users.filter(u => u.role === 'admin').length >= 3 && ' — limite atingido, não crie mais usuárias admin no Supabase'}
             </p>
           </div>
 
@@ -333,6 +337,11 @@ export default function Configuracoes() {
                     </p>
                     <p className="text-xs text-muted-foreground">{u.role_title ?? (u.role === 'admin' ? 'Administradora' : 'Cliente')}</p>
                   </div>
+                  {u.display_name === 'Suporte SRJUR' && (
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex items-center gap-1">
+                      <Lock className="h-2.5 w-2.5" />Protegido
+                    </span>
+                  )}
                   <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
                     u.role === 'admin' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
                   }`}>

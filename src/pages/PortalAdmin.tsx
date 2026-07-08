@@ -18,7 +18,7 @@ import { fmtBRL, fmtDate } from '@/lib/format'
 import {
   Users, Scale, FileText, MessageSquare, DollarSign, CalendarDays,
   Plus, ExternalLink, Trash2, Eye, ChevronDown, Search, ArrowLeft,
-  KeyRound, Send,
+  KeyRound, Send, LayoutGrid, List,
 } from 'lucide-react'
 
 interface ClientLite { id: string; name: string; email: string | null; status: string }
@@ -45,6 +45,7 @@ function ClientList({ onSelect }: { onSelect: (c: ClientLite) => void }) {
   const [clients, setClients] = useState<ClientLite[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [view, setView] = useState<'cards' | 'table'>('cards')
 
   useEffect(() => {
     supabase.from('clients').select('id, name, email, status').order('name').then(({ data }) => {
@@ -62,9 +63,19 @@ function ClientList({ onSelect }: { onSelect: (c: ClientLite) => void }) {
         <p className="text-sm text-muted-foreground">Selecione um cliente para gerenciar o acesso e o conteúdo do portal dele</p>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-10" />
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Buscar cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-10" />
+        </div>
+        <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5 shrink-0">
+          <Button variant={view === 'cards' ? 'default' : 'ghost'} size="icon" className="h-9 w-9" onClick={() => setView('cards')}>
+            <LayoutGrid className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant={view === 'table' ? 'default' : 'ghost'} size="icon" className="h-9 w-9" onClick={() => setView('table')}>
+            <List className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -73,6 +84,29 @@ function ClientList({ onSelect }: { onSelect: (c: ClientLite) => void }) {
         <Card className="p-12 text-center text-muted-foreground">
           <Users className="h-10 w-10 mx-auto mb-3 opacity-20" />
           <p className="text-sm font-medium">Nenhum cliente encontrado</p>
+        </Card>
+      ) : view === 'table' ? (
+        <Card className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-[11px] text-muted-foreground uppercase tracking-wide">
+                <th className="px-4 py-2.5 font-medium">Nome</th>
+                <th className="px-4 py-2.5 font-medium">E-mail</th>
+                <th className="px-4 py-2.5 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(c => (
+                <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => onSelect(c)}>
+                  <td className="px-4 py-2.5 font-medium">{c.name}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{c.email ?? '—'}</td>
+                  <td className="px-4 py-2.5">
+                    <Badge variant={c.status === 'ativo' ? 'default' : 'secondary'} className="text-[10px]">{c.status.toUpperCase()}</Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

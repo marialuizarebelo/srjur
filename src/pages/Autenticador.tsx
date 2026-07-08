@@ -274,9 +274,16 @@ export default function Autenticador() {
               <Label>Chave secreta 2FA (TOTP)</Label>
               <Input value={form.totp_secret} onChange={e => setForm(f => ({ ...f, totp_secret: e.target.value }))}
                 className="h-10 font-mono" placeholder="Ex: JBSWY3DPEHPK3PXP" />
-              <p className="text-[10px] text-muted-foreground">
-                Ao ativar 2FA no sistema do tribunal, escolha "configurar manualmente" / "não consigo escanear o QR code" — ele mostra essa chave em texto.
-              </p>
+              <div className="text-[11px] text-muted-foreground bg-muted/40 rounded-lg p-3 space-y-1.5 mt-1">
+                <p className="font-medium text-foreground">Como pegar essa chave no site do tribunal:</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>No site do tribunal, vá em Segurança / Autenticação em duas etapas e escolha ativar o 2FA.</li>
+                  <li>Quando aparecer o QR code, procure a opção "Não consigo ler o QR code" ou "Configurar manualmente".</li>
+                  <li>O site vai mostrar um código de texto (algo como <span className="font-mono">JBSWY3DPEHPK3PXP</span>) — copie ele.</li>
+                  <li>Cole esse código aqui no campo acima e salve.</li>
+                  <li>Depois de salvo, este sistema já gera o código de 6 dígitos sozinho — é só copiar o número que aparecer aqui na hora de logar no tribunal.</li>
+                </ol>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Cor</Label>
