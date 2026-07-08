@@ -92,16 +92,26 @@ async function handleCallback(req: Request) {
   // Não usamos upsert com onConflict aqui porque profile_id=NULL (caso "office")
   // quebra a comparação de unicidade do Postgres (NULL nunca é igual a NULL).
   // Em vez disso, apagamos qualquer conexão existente e inserimos uma nova.
+  let selQ = adminClient.from('google_calendar_connections').select('refresh_token').eq('owner_type', owner_type)
+  selQ = owner_type === 'office' ? selQ.is('profile_id', null) : selQ.eq('profile_id', profile_id)
+  const { data: existing } = await selQ.maybeSingle()
+
   let delQ = adminClient.from('google_calendar_connections').delete().eq('owner_type', owner_type)
   delQ = owner_type === 'office' ? delQ.is('profile_id', null) : delQ.eq('profile_id', profile_id)
   await delQ
+
+  // O Google só devolve refresh_token na primeira vez que a conta autoriza
+  // este app (mesmo com prompt=consent, em alguns casos de reconexão ele
+  // pode vir vazio) — se vier vazio aqui, mantemos o token antigo em vez de
+  // sobrescrever com null, senão a reconexão "quebra" a sincronização.
+  const refreshToken = tokens.refresh_token ?? existing?.refresh_token ?? null
 
   await adminClient.from('google_calendar_connections').insert({
     owner_type,
     profile_id: owner_type === 'office' ? null : profile_id,
     google_email: userInfo.email ?? null,
     access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
+    refresh_token: refreshToken,
     token_expiry: expiry,
     updated_at: new Date().toISOString(),
   })
