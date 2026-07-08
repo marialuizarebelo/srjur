@@ -21,6 +21,7 @@ import {
 import { fmtDate, getDaysDiff } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
+import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
 
@@ -34,6 +35,7 @@ interface Deadline {
   responsible_ids: string[] | null
   notes: string | null
   source: string | null
+  drive_url: string | null
   portal_visible: boolean
   stage_id: string | null
   created_at: string
@@ -222,12 +224,12 @@ export default function Prazos() {
 
   const [df, setDf] = useState({
     title: '', due_date: '', process_id: '', status: 'pendente',
-    responsible_ids: [] as string[], notes: '', source: 'Manual', portal_visible: false, stage_id: '',
+    responsible_ids: [] as string[], notes: '', source: 'Manual', portal_visible: false, stage_id: '', drive_url: '',
   })
 
   const resetDf = () => {
     setDf({ title: '', due_date: '', process_id: '', status: 'pendente',
-      responsible_ids: [], notes: '', source: 'Manual', portal_visible: false, stage_id: '' })
+      responsible_ids: [], notes: '', source: 'Manual', portal_visible: false, stage_id: '', drive_url: '' })
     setEditing(null)
   }
 
@@ -294,6 +296,7 @@ export default function Prazos() {
       title: d.title, due_date: d.due_date, process_id: d.process_id ?? '',
       status: d.status, responsible_ids: d.responsible_ids ?? [], notes: d.notes ?? '',
       source: d.source ?? 'Manual', portal_visible: d.portal_visible, stage_id: d.stage_id ?? '',
+      drive_url: d.drive_url ?? '',
     })
     setEditing(d)
     setDialogOpen(true)
@@ -309,6 +312,7 @@ export default function Prazos() {
         responsible_ids: df.responsible_ids,
         responsible: df.responsible_ids.length > 1 ? 'Ambas' : (profilesMap[df.responsible_ids[0]]?.display_name ?? null),
         source: df.source || null, portal_visible: df.portal_visible, stage_id: df.stage_id || null,
+        drive_url: df.drive_url || null,
       }
       if (editing) {
         await supabase.from('deadlines').update(payload).eq('id', editing.id)
@@ -567,7 +571,7 @@ export default function Prazos() {
         const targetStageId = columnId === '__unassigned__' ? null : columnId
         if (deadline && deadline.stage_id !== targetStageId) moveToStage(deadlineId, targetStageId)
       }}>
-        <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto scrollbar-thin pb-4">
+        <KanbanScrollRow className="gap-3 md:gap-4 pb-4">
           {/* Sem etapa column */}
           {(() => {
             const collapsed = collapsedStages.has('__unassigned__')
@@ -625,7 +629,7 @@ export default function Prazos() {
               <Plus className="h-4 w-4" /> Nova etapa
             </button>
           </div>
-        </div>
+        </KanbanScrollRow>
       </KanbanDndContext>
     )
   }
@@ -792,7 +796,14 @@ export default function Prazos() {
               <div className="space-y-2">
                 <Label>Processo vinculado</Label>
                 <Select value={df.process_id} onValueChange={v => setDf(f => ({ ...f, process_id: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Nenhum">
+                      {(() => {
+                        const p = processes.find(pr => pr.id === df.process_id)
+                        return p ? (p.number ? `${p.number} — ${p.title}` : p.title) : 'Nenhum'
+                      })()}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Nenhum</SelectItem>
                     {processes.map(p => (
@@ -826,7 +837,11 @@ export default function Prazos() {
               <div className="space-y-2">
                 <Label>Etapa (Kanban)</Label>
                 <Select value={df.stage_id} onValueChange={v => setDf(f => ({ ...f, stage_id: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Sem etapa" /></SelectTrigger>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Sem etapa">
+                      {stages.find(s => s.id === df.stage_id)?.name ?? 'Sem etapa'}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Sem etapa</SelectItem>
                     {stages.map(s => (
@@ -845,6 +860,16 @@ export default function Prazos() {
             <div className="space-y-2">
               <Label>Observações</Label>
               <Textarea value={df.notes} onChange={e => setDf(f => ({ ...f, notes: e.target.value }))} rows={2} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Documento do Drive (opcional)</Label>
+              <Input
+                value={df.drive_url}
+                onChange={e => setDf(f => ({ ...f, drive_url: e.target.value }))}
+                placeholder="https://drive.google.com/..."
+                className="h-10"
+              />
             </div>
 
             <div className="flex items-center gap-2 pt-2 border-t">

@@ -31,6 +31,7 @@ import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { DriveFileList } from '@/components/DriveFileList'
 import { toast } from 'sonner'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
+import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
 
@@ -88,7 +89,12 @@ interface ProcessTask {
 }
 
 // ── Constants ──
-const PHASES = [
+interface StageOption { value: string; label: string; color: string }
+
+// Usadas como ponto de partida (semente) enquanto a tabela process_stages não
+// foi migrada/carregada — depois disso as etapas de verdade vêm do banco e
+// passam a ser editáveis pela usuária (botão "Etapas").
+const DEFAULT_PHASES: StageOption[] = [
   { value: 'inicial', label: 'Inicial', color: '#8B5CF6' },
   { value: 'citacao', label: 'Citação', color: '#3B82F6' },
   { value: 'instrucao', label: 'Instrução', color: '#F59E0B' },
@@ -98,7 +104,7 @@ const PHASES = [
   { value: 'encerrado', label: 'Encerrado', color: '#6B7280' },
 ]
 
-const EXTRAJUDICIAL_PHASES = [
+const DEFAULT_EXTRAJUDICIAL_PHASES: StageOption[] = [
   { value: 'notificacao', label: 'Notificação enviada', color: '#8B5CF6' },
   { value: 'aguardando_resposta', label: 'Aguardando resposta', color: '#3B82F6' },
   { value: 'negociacao', label: 'Negociação', color: '#F59E0B' },
@@ -107,10 +113,7 @@ const EXTRAJUDICIAL_PHASES = [
   { value: 'encerrado', label: 'Encerrado', color: '#6B7280' },
 ]
 
-const phasesForType = (type: string) => type === 'extrajudicial' ? EXTRAJUDICIAL_PHASES : PHASES
-
-// coluna única com todas as fases (judiciais + extrajudiciais), sem duplicar "encerrado"
-const ALL_PHASES = [...PHASES, ...EXTRAJUDICIAL_PHASES.filter(ep => !PHASES.some(p => p.value === ep.value))]
+const STAGE_COLORS = ['#8B5CF6', '#3B82F6', '#F59E0B', '#EC4899', '#F97316', '#14B8A6', '#6B7280', '#EF4444', '#10B981', '#06B6D4']
 
 const AREAS = [
   'Cível', 'Trabalhista', 'Família', 'Sucessões', 'Empresarial',
@@ -152,7 +155,7 @@ export function FieldWithCopy({ label, value, onCopy, className = '' }: { label:
 
 function formatLabel(value: string): string {
   if (STATUS_MAP[value]) return STATUS_MAP[value].label
-  const phase = ALL_PHASES.find(p => p.value === value)
+  const phase = [...DEFAULT_PHASES, ...DEFAULT_EXTRAJUDICIAL_PHASES].find(p => p.value === value)
   if (phase) return phase.label
   return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
 }
@@ -166,6 +169,74 @@ export default function Processos() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
+
+  // ── Etapas do kanban (editáveis) ──
+  const [judicialStages, setJudicialStages] = useState<StageOption[]>(DEFAULT_PHASES)
+  const [extraStages, setExtraStages] = useState<StageOption[]>(DEFAULT_EXTRAJUDICIAL_PHASES)
+  const phasesForType = (type: string) => type === 'extrajudicial' ? extraStages : judicialStages
+  const allPhases = [...judicialStages, ...extraStages.filter(ep => !judicialStages.some(p => p.value === ep.value))]
+
+  const [stagesDialogOpen, setStagesDialogOpen] = useState(false)
+  const [stagesTab, setStagesTab] = useState<'judicial' | 'extrajudicial'>('judicial')
+  const [stageFormOpen, setStageFormOpen] = useState(false)
+  const [stageEditingValue, setStageEditingValue] = useState<string | null>(null)
+  const [stageName, setStageName] = useState('')
+  const [stageColor, setStageColor] = useState(STAGE_COLORS[0])
+  const [stageSaving, setStageSaving] = useState(false)
+
+  async function loadStages() {
+    const { data } = await supabase.from('process_stages').select('*').order('position')
+    if (!data || data.length === 0) return
+    const j = data.filter((s: any) => s.type === 'judicial').map((s: any) => ({ value: s.value, label: s.name, color: s.color }))
+    const e = data.filter((s: any) => s.type === 'extrajudicial').map((s: any) => ({ value: s.value, label: s.name, color: s.color }))
+    if (j.length > 0) setJudicialStages(j)
+    if (e.length > 0) setExtraStages(e)
+  }
+
+  function slugify(s: string) {
+    return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `etapa_${Date.now()}`
+  }
+
+  function openNewStage() {
+    setStageEditingValue(null)
+    setStageName('')
+    setStageColor(STAGE_COLORS[0])
+    setStageFormOpen(true)
+  }
+  function openEditStage(s: StageOption) {
+    setStageEditingValue(s.value)
+    setStageName(s.label)
+    setStageColor(s.color)
+    setStageFormOpen(true)
+  }
+  async function saveStage() {
+    if (!stageName.trim() || stageSaving) return
+    setStageSaving(true)
+    try {
+      const list = stagesTab === 'judicial' ? judicialStages : extraStages
+      if (stageEditingValue) {
+        await supabase.from('process_stages').update({ name: stageName, color: stageColor })
+          .eq('type', stagesTab).eq('value', stageEditingValue)
+      } else {
+        const value = slugify(stageName)
+        await supabase.from('process_stages').insert({
+          type: stagesTab, value, name: stageName, color: stageColor, position: list.length,
+        })
+      }
+      await loadStages()
+      setStageFormOpen(false)
+    } catch (err: any) {
+      toast.error('Erro ao salvar etapa: ' + (err?.message ?? String(err)))
+    } finally {
+      setStageSaving(false)
+    }
+  }
+  async function deleteStage(value: string) {
+    if (!confirm('Excluir esta etapa? Processos nela ficarão sem etapa até serem movidos.')) return
+    await supabase.from('process_stages').delete().eq('type', stagesTab).eq('value', value)
+    await loadStages()
+  }
   const pinnedView = usePinnedView('processos_view', 'kanban')
   useEffect(() => { if (pinnedView.loaded && pinnedView.isPinned) setViewMode(pinnedView.pinnedValue as any) }, [pinnedView.loaded])
   const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set())
@@ -253,7 +324,7 @@ export default function Processos() {
     toast.success(`${label} copiado!`)
   }
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData(); loadStages() }, [])
 
   // Abre o formulário de novo processo quando vem de um atalho "+ Novo" (ex: Dashboard)
   useEffect(() => {
@@ -277,7 +348,7 @@ export default function Processos() {
 
   const byPhase = useMemo(() => {
     const map = new Map<string, Process[]>()
-    ALL_PHASES.forEach(ph => map.set(ph.value, []))
+    allPhases.forEach(ph => map.set(ph.value, []))
     filtered.forEach(p => {
       const arr = map.get(p.phase) ?? []
       arr.push(p)
@@ -483,7 +554,7 @@ export default function Processos() {
                     <Badge style={{ backgroundColor: STATUS_MAP[detailProcess.status]?.color, color: '#fff' }}>
                       {STATUS_MAP[detailProcess.status]?.label}
                     </Badge>
-                    <Badge variant="outline">{phasesForType(detailProcess.type).find(p => p.value === detailProcess.phase)?.label ?? ALL_PHASES.find(p => p.value === detailProcess.phase)?.label}</Badge>
+                    <Badge variant="outline">{phasesForType(detailProcess.type).find(p => p.value === detailProcess.phase)?.label ?? allPhases.find(p => p.value === detailProcess.phase)?.label}</Badge>
                     {detailProcess.confidential && (
                       <Badge variant="outline" className="border-amber-400 text-amber-600">🔒 Segredo de justiça</Badge>
                     )}
@@ -780,6 +851,9 @@ export default function Processos() {
               )
             }}
           />
+          <Button variant="outline" size="sm" onClick={() => { setStagesTab('judicial'); setStageFormOpen(false); setStagesDialogOpen(true) }}>
+            Etapas
+          </Button>
           <Button size="sm" onClick={() => { resetPf(); setDialogOpen(true) }}>
             <Plus className="h-3 w-3 mr-1" />Novo Processo
           </Button>
@@ -842,8 +916,8 @@ export default function Processos() {
           const proc = processes.find(p => p.id === processId)
           if (proc && proc.phase !== phaseValue) updatePhase(processId, phaseValue)
         }}>
-          <div className="flex flex-col md:flex-row gap-4 md:overflow-x-auto scrollbar-thin pb-4">
-            {ALL_PHASES.filter(ph => ph.value !== 'encerrado' || statusFilter === 'todos').map(phase => {
+          <KanbanScrollRow className="gap-4 pb-4">
+            {allPhases.filter(ph => ph.value !== 'encerrado' || statusFilter === 'todos').map(phase => {
               const phaseProcesses = byPhase.get(phase.value) ?? []
               const collapsed = collapsedPhases.has(phase.value)
               return (
@@ -883,7 +957,7 @@ export default function Processos() {
                 </div>
               )
             })}
-          </div>
+          </KanbanScrollRow>
         </KanbanDndContext>
       )}
 
@@ -901,7 +975,7 @@ export default function Processos() {
                 className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 p-3 sm:p-4 rounded-lg border hover:shadow-sm transition-shadow cursor-pointer"
                 onClick={() => openDetail(proc)}>
                 <div className="flex items-start gap-2 sm:contents">
-                  <div className="h-2.5 w-2.5 rounded-full shrink-0 mt-1.5 sm:mt-0" style={{ backgroundColor: ALL_PHASES.find(p => p.value === proc.phase)?.color }} />
+                  <div className="h-2.5 w-2.5 rounded-full shrink-0 mt-1.5 sm:mt-0" style={{ backgroundColor: allPhases.find(p => p.value === proc.phase)?.color }} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium truncate">{proc.title}</p>
@@ -915,7 +989,7 @@ export default function Processos() {
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap pl-[18px] sm:pl-0">
                   <Badge variant="outline" className="text-[10px] shrink-0">
-                    {ALL_PHASES.find(p => p.value === proc.phase)?.label}
+                    {allPhases.find(p => p.value === proc.phase)?.label}
                   </Badge>
                   <Badge style={{ backgroundColor: STATUS_MAP[proc.status]?.color + '20', color: STATUS_MAP[proc.status]?.color }}
                     className="text-[10px] shrink-0">
@@ -947,7 +1021,7 @@ export default function Processos() {
               <div className="space-y-2">
                 <Label>Papel do cliente</Label>
                 <Select value={pf.client_role} onValueChange={v => setPf(f => ({ ...f, client_role: v }))}>
-                  <SelectTrigger className="h-10 w-[130px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-10 w-[130px]"><SelectValue>{pf.client_role === 'autor' ? 'Autor' : 'Réu'}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="autor">Autor</SelectItem>
                     <SelectItem value="reu">Réu</SelectItem>
@@ -1064,7 +1138,7 @@ export default function Processos() {
                     value={op.role}
                     onValueChange={v => setPf(f => ({ ...f, opposing_parties: f.opposing_parties.map((o, idx) => idx === i ? { ...o, role: v } : o) }))}
                   >
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-10"><SelectValue>{op.role === 'autor' ? 'Autor' : 'Réu'}</SelectValue></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="autor">Autor</SelectItem>
                       <SelectItem value="reu">Réu</SelectItem>
@@ -1188,6 +1262,66 @@ export default function Processos() {
             <DialogClose render={<Button variant="outline" size="lg" />}>Cancelar</DialogClose>
             <Button size="lg" onClick={saveProcess} disabled={!pf.title || saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Stages management dialog ── */}
+      <Dialog open={stagesDialogOpen} onOpenChange={setStagesDialogOpen}>
+        <DialogContent className="max-w-[500px] w-[96vw] max-h-[80vh] overflow-y-auto p-6">
+          <DialogHeader>
+            <DialogTitle>Gerenciar Etapas</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 mt-2">
+            <Button variant={stagesTab === 'judicial' ? 'default' : 'ghost'} size="sm" className="flex-1"
+              onClick={() => { setStagesTab('judicial'); setStageFormOpen(false) }}>
+              Judicial
+            </Button>
+            <Button variant={stagesTab === 'extrajudicial' ? 'default' : 'ghost'} size="sm" className="flex-1"
+              onClick={() => { setStagesTab('extrajudicial'); setStageFormOpen(false) }}>
+              Extrajudicial
+            </Button>
+          </div>
+          <div className="space-y-2 pt-2">
+            {(stagesTab === 'judicial' ? judicialStages : extraStages).map(s => (
+              <div key={s.value} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/20">
+                <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                <span className="text-sm flex-1">{s.label}</span>
+                <button onClick={() => openEditStage(s)} className="p-1 hover:bg-muted rounded">
+                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+                <button onClick={() => deleteStage(s.value)} className="p-1 hover:bg-muted rounded">
+                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {stageFormOpen ? (
+            <div className="border rounded-xl p-4 space-y-3 mt-2 bg-muted/20">
+              <p className="text-sm font-medium">{stageEditingValue ? 'Editar etapa' : 'Nova etapa'}</p>
+              <Input placeholder="Nome da etapa" value={stageName} onChange={e => setStageName(e.target.value)} className="h-9" />
+              <div className="space-y-1.5">
+                <Label className="text-xs">Cor</Label>
+                <div className="flex flex-wrap gap-2">
+                  {STAGE_COLORS.map(c => (
+                    <button key={c} onClick={() => setStageColor(c)}
+                      className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${stageColor === c ? 'border-foreground scale-110' : 'border-transparent'}`}
+                      style={{ backgroundColor: c }} />
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button size="sm" variant="outline" className="flex-1" onClick={() => setStageFormOpen(false)}>Cancelar</Button>
+                <Button size="sm" className="flex-1" onClick={saveStage} disabled={!stageName.trim() || stageSaving}>
+                  {stageSaving ? 'Salvando...' : 'Salvar'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="outline" className="w-full mt-2" size="sm" onClick={openNewStage}>
+              <Plus className="h-3.5 w-3.5 mr-1.5" />Nova etapa
+            </Button>
+          )}
         </DialogContent>
       </Dialog>
     </div>

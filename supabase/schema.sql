@@ -93,6 +93,7 @@ create table if not exists public.deadlines (
   responsible text,
   notes text,
   source text,
+  drive_url text,
   portal_visible boolean default false,
   created_at timestamptz default now()
 );

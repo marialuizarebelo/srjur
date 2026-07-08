@@ -34,6 +34,7 @@ import { updateDriveFolder, DRIVE_COLOR_RED, DRIVE_COLOR_GREEN } from '@/lib/goo
 import { toast } from 'sonner'
 import { Sensitive } from '@/components/Sensitive'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
+import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
@@ -1114,6 +1115,24 @@ export default function Clientes() {
         <div className="flex items-center gap-2 flex-wrap">
           <ExportMenu
             onExcelExport={() => {
+              if (tab === 'crm') {
+                const leadRows = leads.map(l => ({
+                  'Nome': l.name,
+                  'Status': l.status,
+                  'Origem': l.source ?? '',
+                  'Valor potencial (R$)': l.potential_value ?? '',
+                  'Telefone': l.phone ?? '',
+                  'E-mail': l.email ?? '',
+                  'CPF/CNPJ': l.cpf_cnpj ?? '',
+                  'Responsável': l.responsible ?? '',
+                  'Próximo follow-up': fmtDateBR(l.next_followup),
+                  'Indicado por': l.referred_by ?? '',
+                  'Convertido em cliente': l.client_id ? 'Sim' : 'Não',
+                  'Cadastrado em': fmtDateBR(l.created_at),
+                }))
+                exportExcel(leadRows, `leads_${new Date().toISOString().slice(0,10)}`)
+                return
+              }
               const rows = clients.map(c => ({
                 'Nome': c.name,
                 'Tipo': c.type === 'pessoa_fisica' ? 'Pessoa Física' : 'Pessoa Jurídica',
@@ -1150,31 +1169,57 @@ export default function Clientes() {
               }))
               exportExcel(rows, `clientes_${new Date().toISOString().slice(0,10)}`)
             }}
-            onPdfExport={() => exportPDF(
-              'Clientes',
-              `${clients.filter(c=>c.status==='ativo').length} ativos`,
-              [
-                { header: 'Nome', key: 'Nome', width: 50 },
-                { header: 'Tipo', key: 'Tipo', width: 18 },
-                { header: 'Status', key: 'Status', width: 18 },
-                { header: 'Área', key: 'Área', width: 30 },
-                { header: 'Telefone', key: 'Telefone', width: 28 },
-                { header: 'E-mail', key: 'E-mail', width: 50 },
-                { header: 'Responsável', key: 'Responsável', width: 25 },
-                { header: 'Origem', key: 'Origem', width: 22 },
-              ],
-              clients.map(c => ({
-                'Nome': c.name,
-                'Tipo': c.type === 'pessoa_fisica' ? 'PF' : 'PJ',
-                'Status': c.status,
-                'Área': c.area ?? '—',
-                'Telefone': c.phone ?? '—',
-                'E-mail': c.email ?? '—',
-                'Responsável': c.responsible ?? '—',
-                'Origem': c.origin ?? '—',
-              })),
-              `clientes_${new Date().toISOString().slice(0,10)}`
-            )}
+            onPdfExport={() => {
+              if (tab === 'crm') {
+                exportPDF(
+                  'Leads (CRM)',
+                  `${leads.length} leads no pipeline`,
+                  [
+                    { header: 'Nome', key: 'Nome', width: 50 },
+                    { header: 'Status', key: 'Status', width: 25 },
+                    { header: 'Origem', key: 'Origem', width: 22 },
+                    { header: 'Valor potencial', key: 'Valor potencial', width: 25 },
+                    { header: 'Telefone', key: 'Telefone', width: 28 },
+                    { header: 'Responsável', key: 'Responsável', width: 25 },
+                  ],
+                  leads.map(l => ({
+                    'Nome': l.name,
+                    'Status': l.status,
+                    'Origem': l.source ?? '—',
+                    'Valor potencial': l.potential_value ? fmtBRL(l.potential_value) : '—',
+                    'Telefone': l.phone ?? '—',
+                    'Responsável': l.responsible ?? '—',
+                  })),
+                  `leads_${new Date().toISOString().slice(0,10)}`
+                )
+                return
+              }
+              exportPDF(
+                'Clientes',
+                `${clients.filter(c=>c.status==='ativo').length} ativos`,
+                [
+                  { header: 'Nome', key: 'Nome', width: 50 },
+                  { header: 'Tipo', key: 'Tipo', width: 18 },
+                  { header: 'Status', key: 'Status', width: 18 },
+                  { header: 'Área', key: 'Área', width: 30 },
+                  { header: 'Telefone', key: 'Telefone', width: 28 },
+                  { header: 'E-mail', key: 'E-mail', width: 50 },
+                  { header: 'Responsável', key: 'Responsável', width: 25 },
+                  { header: 'Origem', key: 'Origem', width: 22 },
+                ],
+                clients.map(c => ({
+                  'Nome': c.name,
+                  'Tipo': c.type === 'pessoa_fisica' ? 'PF' : 'PJ',
+                  'Status': c.status,
+                  'Área': c.area ?? '—',
+                  'Telefone': c.phone ?? '—',
+                  'E-mail': c.email ?? '—',
+                  'Responsável': c.responsible ?? '—',
+                  'Origem': c.origin ?? '—',
+                })),
+                `clientes_${new Date().toISOString().slice(0,10)}`
+              )
+            }}
           />
           {tab === 'crm' ? (
             <div className="flex items-center gap-2">
@@ -1271,7 +1316,7 @@ export default function Clientes() {
           const lead = leads.find(l => l.id === leadId)
           if (lead && lead.status !== stageValue) updateLeadStatus(leadId, stageValue)
         }}>
-          <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto scrollbar-thin pb-4">
+          <KanbanScrollRow className="gap-3 md:gap-4 pb-4">
             {stages.filter(s => s.show_in_kanban).map(stage => {
               const stageLeads = leadsByStage.get(stage.value) ?? []
               const collapsed = collapsedStages.has(stage.value)
@@ -1306,7 +1351,7 @@ export default function Clientes() {
                 </div>
               )
             })}
-          </div>
+          </KanbanScrollRow>
         </KanbanDndContext>
       )}
 
@@ -1495,7 +1540,7 @@ export default function Clientes() {
               <div className="space-y-2">
                 <Label>Etapa</Label>
                 <Select value={lf.status} onValueChange={v => setLf(f => ({ ...f, status: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue>{stages.find(s => s.value === lf.status)?.label ?? lf.status}</SelectValue></SelectTrigger>
                   <SelectContent>
                     {stages.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                   </SelectContent>

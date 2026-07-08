@@ -24,6 +24,7 @@ import { fmtDate, getDaysDiff, humanize } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
+import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
 
@@ -48,7 +49,7 @@ interface Task {
 }
 
 interface ClientOption { id: string; name: string }
-interface ProcessOption { id: string; title: string }
+interface ProcessOption { id: string; title: string; number: string | null; client_id: string | null }
 
 const WORKFLOW_STAGES = [
   { value: 'backlog', label: 'Backlog', color: '#6B7280' },
@@ -246,7 +247,7 @@ export default function Tarefas() {
     const [{ data: t }, { data: c }, { data: p }] = await Promise.all([
       supabase.from('tasks').select('*').order('due_date', { ascending: true }),
       supabase.from('clients').select('id, name').order('name'),
-      supabase.from('processes').select('id, title').eq('status', 'em_andamento').order('title'),
+      supabase.from('processes').select('id, title, number, client_id').eq('status', 'em_andamento').order('title'),
     ])
     setTasks((t as Task[]) ?? [])
     setClients((c as ClientOption[]) ?? [])
@@ -576,7 +577,7 @@ export default function Tarefas() {
           const task = tasks.find(t => t.id === taskId)
           if (task && (task.workflow_stage ?? 'a_fazer') !== stageValue) moveWorkflowStage(task, stageValue)
         }}>
-          <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto scrollbar-thin pb-4">
+          <KanbanScrollRow className="gap-3 md:gap-4 pb-4">
             {WORKFLOW_STAGES.map(stage => {
               const stageTasks = filtered.filter(t => (t.workflow_stage ?? 'a_fazer') === stage.value)
               const collapsed = collapsedStages.has(stage.value)
@@ -641,7 +642,7 @@ export default function Tarefas() {
                 </div>
               )
             })}
-          </div>
+          </KanbanScrollRow>
         </KanbanDndContext>
       )}
 
@@ -732,15 +733,26 @@ export default function Tarefas() {
               </div>
               <div className="space-y-2">
                 <Label>Cliente</Label>
-                <ClientCombobox clients={clients} value={tf.client_id} onChange={id => setTf(f => ({ ...f, client_id: id }))} />
+                <ClientCombobox clients={clients} value={tf.client_id} onChange={id => setTf(f => ({ ...f, client_id: id, process_id: '' }))} />
               </div>
               <div className="space-y-2">
                 <Label>Processo</Label>
                 <Select value={tf.process_id} onValueChange={v => setTf(f => ({ ...f, process_id: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Nenhum">
+                      {tf.process_id
+                        ? (() => {
+                            const p = processes.find(pr => pr.id === tf.process_id)
+                            return p ? `${p.title}${p.number ? ` — ${p.number}` : ''}` : 'Nenhum'
+                          })()
+                        : 'Nenhum'}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Nenhum</SelectItem>
-                    {processes.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                    {processes
+                      .filter(p => !tf.client_id || p.client_id === tf.client_id)
+                      .map(p => <SelectItem key={p.id} value={p.id}>{p.title}{p.number ? ` — ${p.number}` : ''}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

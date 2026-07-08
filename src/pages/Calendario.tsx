@@ -16,6 +16,7 @@ import { syncGoogleCalendar, type SyncResult } from '@/lib/googleCalendar'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { toast } from 'sonner'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
+import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { Badge } from '@/components/ui/badge'
 import { Columns3, CalendarDays } from 'lucide-react'
 import { usePinnedView } from '@/hooks/usePinnedView'
@@ -285,7 +286,7 @@ export default function Calendario() {
         const ev = evs.find(e => e.id === evId)
         if (ev && ev.workflowStage !== stageValue) moveEventStage(ev, stageValue)
       }}>
-        <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:overflow-x-auto scrollbar-thin pb-2">
+        <KanbanScrollRow className="gap-3 md:gap-4 pb-2">
           {WORKFLOW_STAGES.map(stage => {
             const stageEvs = evs.filter(e => e.workflowStage === stage.value)
             return (
@@ -322,7 +323,7 @@ export default function Calendario() {
               </div>
             )
           })}
-        </div>
+        </KanbanScrollRow>
       </KanbanDndContext>
     )
   }
@@ -842,7 +843,7 @@ export default function Calendario() {
             <div className="space-y-1.5">
               <Label>Status</Label>
               <Select value={ef.status} onValueChange={v => setEf(f => ({ ...f, status: v }))}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-10"><SelectValue>{{ pendente: 'Pendente', cumprido: 'Cumprido', perdido: 'Perdido', concluida: 'Concluída', cancelada: 'Cancelada' }[ef.status] ?? ef.status}</SelectValue></SelectTrigger>
                 <SelectContent>
                   {editTarget?.type === 'prazo' ? (
                     <>

@@ -288,7 +288,7 @@ export function ClientFormDialog({
               <div className="space-y-1.5">
                 <Label>Tipo</Label>
                 <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v, cpf_cnpj: '' }))}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue>{form.type === 'pessoa_fisica' ? 'Pessoa Física' : 'Pessoa Jurídica'}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pessoa_fisica">Pessoa Física</SelectItem>
                     <SelectItem value="pessoa_juridica">Pessoa Jurídica</SelectItem>
@@ -431,7 +431,7 @@ export function ClientFormDialog({
               <div className="space-y-1.5">
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue>{{ ativo: 'Ativo', inativo: 'Encerrado', prospecto: 'Prospecto' }[form.status] ?? form.status}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ativo">Ativo</SelectItem>
                     <SelectItem value="inativo">Encerrado</SelectItem>
