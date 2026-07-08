@@ -68,6 +68,7 @@ interface FinanceRow {
   recurrence: string | null
   payment_link: string | null
   card_fee_percent: number | null
+  series_id: string | null
 }
 
 interface ClientOption { id: string; name: string }
@@ -817,6 +818,9 @@ export default function Financeiro() {
         // Boleto/outras formas parceladas: gera uma cobrança por mês, refletindo
         // que o cliente precisa pagar (e a gente precisa cobrar) todo mês.
         const inserts = []
+        // Mesmo id em todas as linhas da série — permite excluir "só este /
+        // este e os próximos / todos" com segurança depois.
+        const seriesId = crypto.randomUUID()
         for (let i = 0; i < numInstallments; i++) {
           // Data e Vencimento de cada parcela SEMPRE vêm da mesma base (o campo único
           // "Primeiro vencimento" da série) — não existe mais um par de datas
@@ -829,6 +833,7 @@ export default function Financeiro() {
             date: installDate,
             due_date: installDate,
             current_installment: i + 1,
+            series_id: seriesId,
             // primeira parcela pode já ser real (se for hoje/passado); as futuras são sempre previstas
             nature: (i === 0 ? autoNature : (installDate <= todayStr ? 'real' : 'previsto')),
           })
@@ -960,9 +965,29 @@ export default function Financeiro() {
     setDialogOpen(true)
   }
 
+  const [deleteTarget, setDeleteTarget] = useState<FinanceRow | null>(null)
+
   const handleDelete = async (id: string) => {
+    const row = rows.find(r => r.id === id)
+    if (row?.series_id) { setDeleteTarget(row); return }
     if (!confirm('Excluir este lançamento?')) return
     await supabase.from('finance').delete().eq('id', id)
+    loadData()
+  }
+
+  async function deleteSeriesChoice(scope: 'one' | 'future' | 'all') {
+    if (!deleteTarget) return
+    if (scope === 'one') {
+      await supabase.from('finance').delete().eq('id', deleteTarget.id)
+    } else if (scope === 'future') {
+      await supabase.from('finance').delete()
+        .eq('series_id', deleteTarget.series_id)
+        .gte('current_installment', deleteTarget.current_installment ?? 0)
+    } else {
+      await supabase.from('finance').delete().eq('series_id', deleteTarget.series_id)
+    }
+    setDeleteTarget(null)
+    toast.success('Excluído!')
     loadData()
   }
 
@@ -1059,6 +1084,32 @@ export default function Financeiro() {
         clients={clients}
         paymentsMap={paymentsMap}
       />
+
+      {/* ── Excluir parcela/mensalidade recorrente ── */}
+      <Dialog open={!!deleteTarget} onOpenChange={o => !o && setDeleteTarget(null)}>
+        <DialogContent className="max-w-[440px] w-[96vw] p-6">
+          <DialogHeader>
+            <DialogTitle>Excluir "{deleteTarget?.description}"</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground pt-1">
+            Esse lançamento faz parte de uma série de {deleteTarget?.installments ?? '?'} parcelas/meses. O que você quer excluir?
+          </p>
+          <div className="space-y-2 pt-2">
+            <Button variant="outline" className="w-full justify-start" onClick={() => deleteSeriesChoice('one')}>
+              Só esta parcela ({deleteTarget?.current_installment}/{deleteTarget?.installments})
+            </Button>
+            <Button variant="outline" className="w-full justify-start" onClick={() => deleteSeriesChoice('future')}>
+              Esta e as próximas
+            </Button>
+            <Button variant="destructive" className="w-full justify-start" onClick={() => deleteSeriesChoice('all')}>
+              Todas as parcelas da série
+            </Button>
+          </div>
+          <DialogFooter className="pt-2">
+            <DialogClose render={<Button variant="ghost" />}>Cancelar</DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Cobrança Asaas ── */}
       <Dialog open={asaasOpen} onOpenChange={o => { setAsaasOpen(o); if (!o) resetAf() }}>
@@ -1334,8 +1385,8 @@ export default function Financeiro() {
                     <Select value={form.category} onValueChange={v => setForm(f => ({
                       ...f,
                       category: v,
-                      // Mensalidade é sempre recorrente — assume mensal e projeta os próximos
-                      // 12 meses como previsto, pra não depender de lembrar de configurar isso.
+                      // Mensalidade (receita) é sempre recorrente — assume mensal e projeta os
+                      // próximos 12 meses como previsto, pra não depender de lembrar de configurar.
                       recurrence: v === 'Mensalidade' ? 'Mensal' : f.recurrence,
                       installments: v === 'Mensalidade' && f.installments === '1' ? '12' : f.installments,
                     }))}>
@@ -1349,19 +1400,19 @@ export default function Financeiro() {
                   </div>
                 </div>
 
-                {form.category === 'Mensalidade' && (
+                {form.recurrence === 'Mensal' && (
                   <div className="p-3 rounded-xl bg-muted/30 space-y-2">
-                    <Label className="text-xs">Como a mensalidade é cobrada?</Label>
+                    <Label className="text-xs">Como {form.type === 'receita' ? 'a mensalidade é cobrada' : 'essa despesa é paga'}?</Label>
                     <Select value={form.payment_method} onValueChange={v => setForm(f => ({ ...f, payment_method: v }))}>
                       <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Boleto">Boleto — a pessoa precisa pagar todo mês</SelectItem>
-                        <SelectItem value="PIX/Transferência">PIX/Transferência — a pessoa precisa mandar todo mês</SelectItem>
+                        <SelectItem value="Boleto">Boleto — {form.type === 'receita' ? 'a pessoa precisa pagar' : 'você precisa pagar'} todo mês</SelectItem>
+                        <SelectItem value="PIX/Transferência">PIX/Transferência — {form.type === 'receita' ? 'a pessoa precisa mandar' : 'você precisa mandar'} todo mês</SelectItem>
                         <SelectItem value="Cartão de Crédito">Cartão de Crédito recorrente (assinatura) — debita automático todo mês</SelectItem>
                       </SelectContent>
                     </Select>
                     <p className="text-[11px] text-muted-foreground">
-                      Isso vai lançar {form.installments || 12} meses como previsto, um por mês, no mesmo dia do vencimento — cada mês precisa ser confirmado como pago conforme for entrando.
+                      Isso vai lançar {form.installments || 12} meses como previsto, um por mês, no mesmo dia do vencimento (o valor se repete inteiro em cada mês, não é dividido) — cada mês precisa ser confirmado como pago conforme for entrando.
                     </p>
                   </div>
                 )}
@@ -1415,7 +1466,13 @@ export default function Financeiro() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Recorrência</Label>
-                    <Select value={form.recurrence} onValueChange={v => setForm(f => ({ ...f, recurrence: v }))}>
+                    <Select value={form.recurrence} onValueChange={v => setForm(f => ({
+                      ...f,
+                      recurrence: v,
+                      // Vale pra receita e despesa: virou recorrente mensal, projeta 12
+                      // meses como previsto (usuária pode ajustar o número depois).
+                      installments: v === 'Mensal' && f.installments === '1' ? '12' : f.installments,
+                    }))}>
                       <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {RECURRENCE_OPTIONS.map(r => (
