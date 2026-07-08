@@ -239,11 +239,21 @@ export default function Configuracoes() {
 
   async function saveUser() {
     if (!editingUser) return
-    await supabase.from('profiles').update({
+    const baseFields = {
       display_name: uf.display_name, full_name: uf.full_name || null, nickname: uf.nickname || null, role_title: uf.role_title || null, color: uf.color, role: uf.role,
       photo_url: uf.photo_url || null,
+    }
+    let { error } = await supabase.from('profiles').update({
+      ...baseFields,
       allowed_modules: uf.fullAccess ? null : uf.allowed_modules,
     }).eq('id', editingUser.id)
+    // Instâncias sem a migração de permissões por módulo (coluna allowed_modules
+    // ainda não existe) não podem perder o resto do formulário por causa disso —
+    // tenta salvar de novo sem esse campo.
+    if (error?.message.includes('allowed_modules')) {
+      ({ error } = await supabase.from('profiles').update(baseFields).eq('id', editingUser.id))
+    }
+    if (error) { toast.error('Erro ao salvar: ' + error.message); return }
     setUserDialogOpen(false)
     toast.success('Usuário atualizado!')
     loadData()
