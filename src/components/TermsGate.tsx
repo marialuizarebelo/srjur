@@ -106,7 +106,12 @@ export function TermsGate({ children }: { children: React.ReactNode }) {
     if (loading || !user) return
     supabase.from('terms_acceptances')
       .select('id').eq('user_id', user.id).eq('terms_version', TERMS_VERSION).maybeSingle()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        // Se a tabela não existir ainda nessa instância (migração não aplicada)
+        // ou qualquer outro erro técnico, nunca bloqueia o acesso por causa
+        // disso — só loga pra diagnóstico. Bloquear login por um problema de
+        // infraestrutura seria pior do que não pedir o aceite.
+        if (error) { console.error('TermsGate check failed:', error.message); setNeedsAccept(false); setChecked(true); return }
         setNeedsAccept(!data)
         setChecked(true)
       })
@@ -121,7 +126,10 @@ export function TermsGate({ children }: { children: React.ReactNode }) {
       user_agent: navigator.userAgent,
     })
     setAccepting(false)
-    if (error) return
+    // Mesmo se o registro do aceite falhar tecnicamente, deixa a pessoa
+    // continuar usando o sistema — nunca trava alguém numa tela por causa
+    // de uma falha de infraestrutura em segundo plano.
+    if (error) console.error('TermsGate accept failed:', error.message)
     setNeedsAccept(false)
   }
 
