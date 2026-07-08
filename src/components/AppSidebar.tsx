@@ -15,6 +15,18 @@ import {
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 
+// Módulos sempre visíveis independente de restrição (dashboard e as próprias
+// configurações — nunca faz sentido travar uma usuária fora da tela onde ela
+// troca a própria senha).
+const ALWAYS_ALLOWED = ['/', '/configuracoes']
+
+export function isModuleAllowed(url: string, allowedModules: string[] | null | undefined) {
+  if (!allowedModules || allowedModules.length === 0) return true // null/vazio = acesso total
+  if (ALWAYS_ALLOWED.includes(url)) return true
+  const key = url.replace(/^\//, '')
+  return allowedModules.includes(key)
+}
+
 const sections = [
   {
     label: 'Geral',
@@ -59,13 +71,13 @@ export function AppSidebar() {
   const location = useLocation()
 
   const [office, setOffice] = useState<{ name: string; logo_url: string | null }>({
-    name: 'Scartezzini & Rebelo', logo_url: null,
+    name: 'SRJUR', logo_url: null,
   })
 
   useEffect(() => {
     const load = async () => {
       const { data } = await supabase.from('office_settings').select('name, logo_url').limit(1).maybeSingle()
-      if (data) setOffice({ name: data.name ?? 'Scartezzini & Rebelo', logo_url: data.logo_url })
+      if (data) setOffice({ name: data.name ?? 'SRJUR', logo_url: data.logo_url })
     }
     load()
     window.addEventListener('office-settings-updated', load)
@@ -105,14 +117,17 @@ export function AppSidebar() {
 
         {/* Nav */}
         <div className="flex-1 overflow-y-auto py-2">
-          {sections.map(section => (
+          {sections.map(section => {
+            const visibleItems = section.items.filter(item => isModuleAllowed(item.url, profile?.allowed_modules))
+            if (visibleItems.length === 0) return null
+            return (
             <SidebarGroup key={section.label}>
               <SidebarGroupLabel className="text-[var(--sidebar-foreground)] opacity-60 text-xs uppercase tracking-wider">
                 {!collapsed && section.label}
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {section.items.map(item => {
+                  {visibleItems.map(item => {
                     const isActive = location.pathname === item.url ||
                       (item.url !== '/' && location.pathname.startsWith(item.url))
                     return (
@@ -131,7 +146,8 @@ export function AppSidebar() {
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
-          ))}
+            )
+          })}
         </div>
 
         <Separator className="bg-[var(--sidebar-border)]" />

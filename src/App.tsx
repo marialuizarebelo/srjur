@@ -7,6 +7,8 @@ import { ThemeProvider } from '@/contexts/ThemeContext'
 import { PrivacyProvider } from '@/contexts/PrivacyContext'
 import { ClientProvider, ClientPreviewProvider } from '@/contexts/ClientContext'
 import { AppLayout } from '@/components/AppLayout'
+import { isModuleAllowed } from '@/components/AppSidebar'
+import { TermsGate } from '@/components/TermsGate'
 import { PortalLayout } from '@/components/PortalLayout'
 import PortalDashboard from '@/pages/portal/PortalDashboard'
 import PortalProcessos from '@/pages/portal/PortalProcessos'
@@ -59,23 +61,29 @@ function PortalPreviewRoutes() {
   )
 }
 
+function ModuleGuard({ url, children }: { url: string; children: React.ReactNode }) {
+  const { profile } = useAuth()
+  if (!isModuleAllowed(url, profile?.allowed_modules)) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
 function AdminRoutes() {
   return (
     <AppLayout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/clientes" element={<Clientes />} />
-        <Route path="/processos" element={<Processos />} />
-        <Route path="/tarefas" element={<Tarefas />} />
-        <Route path="/prazos" element={<Prazos />} />
-        <Route path="/calendario" element={<Calendario />} />
-        <Route path="/financeiro" element={<Financeiro />} />
-        <Route path="/calculadora" element={<Calculadora />} />
-        <Route path="/marketing" element={<Marketing />} />
-        <Route path="/comunicacoes" element={<Comunicacoes />} />
-        <Route path="/sistemas" element={<SistemasEletronicos />} />
-        <Route path="/autenticador" element={<Autenticador />} />
-        <Route path="/portal-admin" element={<PortalAdmin />} />
+        <Route path="/clientes" element={<ModuleGuard url="/clientes"><Clientes /></ModuleGuard>} />
+        <Route path="/processos" element={<ModuleGuard url="/processos"><Processos /></ModuleGuard>} />
+        <Route path="/tarefas" element={<ModuleGuard url="/tarefas"><Tarefas /></ModuleGuard>} />
+        <Route path="/prazos" element={<ModuleGuard url="/prazos"><Prazos /></ModuleGuard>} />
+        <Route path="/calendario" element={<ModuleGuard url="/calendario"><Calendario /></ModuleGuard>} />
+        <Route path="/financeiro" element={<ModuleGuard url="/financeiro"><Financeiro /></ModuleGuard>} />
+        <Route path="/calculadora" element={<ModuleGuard url="/calculadora"><Calculadora /></ModuleGuard>} />
+        <Route path="/marketing" element={<ModuleGuard url="/marketing"><Marketing /></ModuleGuard>} />
+        <Route path="/comunicacoes" element={<ModuleGuard url="/comunicacoes"><Comunicacoes /></ModuleGuard>} />
+        <Route path="/sistemas" element={<ModuleGuard url="/sistemas"><SistemasEletronicos /></ModuleGuard>} />
+        <Route path="/autenticador" element={<ModuleGuard url="/autenticador"><Autenticador /></ModuleGuard>} />
+        <Route path="/portal-admin" element={<ModuleGuard url="/portal-admin"><PortalAdmin /></ModuleGuard>} />
         <Route path="/configuracoes" element={<Configuracoes />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -121,9 +129,11 @@ function ProtectedRoutes() {
 
   if (role === 'admin' && location.pathname.startsWith('/preview/')) return <PortalPreviewRoutes />
 
-  if (role === 'client') return <PortalRoutes />
-
-  return <AdminRoutes />
+  return (
+    <TermsGate>
+      {role === 'client' ? <PortalRoutes /> : <AdminRoutes />}
+    </TermsGate>
+  )
 }
 
 function AppRoutes() {

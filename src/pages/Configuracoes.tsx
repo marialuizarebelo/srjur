@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from '@/components/ui/dialog'
@@ -12,7 +13,7 @@ import {
 } from '@/components/ui/select'
 import {
   Building2, Users, Shield, Palette, Plus, Pencil, Trash2,
-  Save, Eye, EyeOff, Link2, KeyRound, CalendarDays, Unlink, Bell, BellOff, BellRing, Lock,
+  Save, Eye, EyeOff, Link2, KeyRound, CalendarDays, Unlink, Bell, BellOff, BellRing, Lock, Check,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ImageUploadCrop } from '@/components/ImageUploadCrop'
@@ -51,9 +52,29 @@ interface ProfileRow {
   role_title: string | null
   photo_url: string | null
   color: string | null
+  allowed_modules: string[] | null
 }
 
 const USER_COLORS = ['#EC4899', '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#14B8A6', '#6366F1']
+
+const MAX_ADMIN_USERS = 3
+
+// Espelha as rotas/itens do menu lateral (AppSidebar.tsx) — usado pros toggles
+// de "quais módulos essa usuária pode acessar".
+const MODULES = [
+  { key: 'clientes', label: 'Clientes' },
+  { key: 'processos', label: 'Processos' },
+  { key: 'tarefas', label: 'Compromissos & Tarefas' },
+  { key: 'prazos', label: 'Prazos' },
+  { key: 'calendario', label: 'Calendário' },
+  { key: 'financeiro', label: 'Financeiro' },
+  { key: 'calculadora', label: 'Calculadora' },
+  { key: 'marketing', label: 'Marketing' },
+  { key: 'portal-admin', label: 'Portal do Cliente' },
+  { key: 'comunicacoes', label: 'Comunicações' },
+  { key: 'sistemas', label: 'Intimações' },
+  { key: 'autenticador', label: 'Autenticador' },
+]
 
 const TABS = [
   { key: 'escritorio', label: 'Escritório', icon: Building2 },
@@ -92,7 +113,12 @@ export default function Configuracoes() {
   const [users, setUsers] = useState<ProfileRow[]>([])
   const [userDialogOpen, setUserDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<ProfileRow | null>(null)
-  const [uf, setUf] = useState({ display_name: '', full_name: '', nickname: '', role_title: '', color: USER_COLORS[0], role: 'admin' as 'admin' | 'client', photo_url: '' })
+  const [uf, setUf] = useState({
+    display_name: '', full_name: '', nickname: '', role_title: '', color: USER_COLORS[0],
+    role: 'admin' as 'admin' | 'client', photo_url: '', email: '', password: '',
+    fullAccess: true, allowed_modules: [] as string[],
+  })
+  const [creatingUser, setCreatingUser] = useState(false)
 
   // Security
   const [newPassword, setNewPassword] = useState('')
@@ -185,8 +211,30 @@ export default function Configuracoes() {
 
   function openEditUser(u: ProfileRow) {
     setEditingUser(u)
-    setUf({ display_name: u.display_name ?? '', full_name: u.full_name ?? '', nickname: u.nickname ?? '', role_title: u.role_title ?? '', color: u.color ?? USER_COLORS[0], role: u.role, photo_url: u.photo_url ?? '' })
+    setUf({
+      display_name: u.display_name ?? '', full_name: u.full_name ?? '', nickname: u.nickname ?? '',
+      role_title: u.role_title ?? '', color: u.color ?? USER_COLORS[0], role: u.role, photo_url: u.photo_url ?? '',
+      email: '', password: '',
+      fullAccess: !u.allowed_modules || u.allowed_modules.length === 0,
+      allowed_modules: u.allowed_modules ?? [],
+    })
     setUserDialogOpen(true)
+  }
+
+  function openNewUser() {
+    setEditingUser(null)
+    setUf({
+      display_name: '', full_name: '', nickname: '', role_title: '', color: USER_COLORS[0], role: 'admin',
+      photo_url: '', email: '', password: '', fullAccess: true, allowed_modules: [],
+    })
+    setUserDialogOpen(true)
+  }
+
+  function toggleModule(key: string) {
+    setUf(f => ({
+      ...f,
+      allowed_modules: f.allowed_modules.includes(key) ? f.allowed_modules.filter(m => m !== key) : [...f.allowed_modules, key],
+    }))
   }
 
   async function saveUser() {
@@ -194,11 +242,41 @@ export default function Configuracoes() {
     await supabase.from('profiles').update({
       display_name: uf.display_name, full_name: uf.full_name || null, nickname: uf.nickname || null, role_title: uf.role_title || null, color: uf.color, role: uf.role,
       photo_url: uf.photo_url || null,
+      allowed_modules: uf.fullAccess ? null : uf.allowed_modules,
     }).eq('id', editingUser.id)
     setUserDialogOpen(false)
     toast.success('Usuário atualizado!')
     loadData()
     await refreshProfile()
+  }
+
+  async function createUser() {
+    if (!uf.email.trim() || !uf.password.trim()) { toast.error('Preencha e-mail e senha'); return }
+    if (users.filter(u => u.role === 'admin').length >= MAX_ADMIN_USERS) {
+      toast.error(`Limite de ${MAX_ADMIN_USERS} usuárias administradoras atingido`); return
+    }
+    setCreatingUser(true)
+    try {
+      const { data: { session: s } } = await supabase.auth.getSession()
+      const { data, error } = await supabase.functions.invoke('create-team-user', {
+        body: {
+          email: uf.email.trim(),
+          password: uf.password,
+          display_name: uf.display_name || uf.email,
+          role_title: uf.role_title || null,
+          allowed_modules: uf.fullAccess ? null : uf.allowed_modules,
+        },
+        headers: s ? { Authorization: `Bearer ${s.access_token}` } : undefined,
+      })
+      if (error || data?.error) throw new Error(data?.error ?? error?.message ?? 'Falha ao criar usuária')
+      toast.success('Usuária criada com sucesso!')
+      setUserDialogOpen(false)
+      loadData()
+    } catch (err: any) {
+      toast.error('Erro: ' + (err?.message ?? String(err)))
+    } finally {
+      setCreatingUser(false)
+    }
   }
 
   async function changePassword() {
@@ -310,14 +388,16 @@ export default function Configuracoes() {
       {/* ── Usuários ── */}
       {tab === 'usuarios' && (
         <div className="space-y-3">
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-4 space-y-1">
-            <p className="text-xs text-amber-700 dark:text-amber-400">
-              Novos usuários são criados diretamente no painel do Supabase (Authentication → Users). Aqui você edita nome, cargo e cor de exibição de quem já tem acesso.
-            </p>
-            <p className={`text-xs font-medium ${users.filter(u => u.role === 'admin').length >= 3 ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
-              {users.filter(u => u.role === 'admin').length}/3 administradoras
-              {users.filter(u => u.role === 'admin').length >= 3 && ' — limite atingido, não crie mais usuárias admin no Supabase'}
-            </p>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-4 space-y-2">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className={`text-xs font-medium ${users.filter(u => u.role === 'admin').length >= MAX_ADMIN_USERS ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                {users.filter(u => u.role === 'admin').length}/{MAX_ADMIN_USERS} administradoras
+                {users.filter(u => u.role === 'admin').length >= MAX_ADMIN_USERS && ' — limite atingido'}
+              </p>
+              <Button size="sm" onClick={openNewUser} disabled={users.filter(u => u.role === 'admin').length >= MAX_ADMIN_USERS}>
+                <Plus className="h-3.5 w-3.5 mr-1.5" />Adicionar usuária
+              </Button>
+            </div>
           </div>
 
           {users.map(u => {
@@ -516,9 +596,21 @@ export default function Configuracoes() {
 
       {/* ── User Edit Dialog ── */}
       <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
-        <DialogContent className="max-w-[440px] w-[96vw] p-6">
-          <DialogHeader><DialogTitle>Editar usuário</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-[440px] w-[96vw] max-h-[90vh] overflow-y-auto p-6">
+          <DialogHeader><DialogTitle>{editingUser ? 'Editar usuário' : 'Nova usuária'}</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-2">
+            {!editingUser && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>E-mail de acesso</Label>
+                  <Input type="email" value={uf.email} onChange={e => setUf(f => ({ ...f, email: e.target.value }))} placeholder="nome@exemplo.com" className="h-10" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Senha provisória</Label>
+                  <Input type="text" value={uf.password} onChange={e => setUf(f => ({ ...f, password: e.target.value }))} placeholder="Defina uma senha (ela pode trocar depois)" className="h-10" />
+                </div>
+              </>
+            )}
             <ImageUploadCrop
               value={uf.photo_url || null}
               onChange={url => setUf(f => ({ ...f, photo_url: url }))}
@@ -545,16 +637,18 @@ export default function Configuracoes() {
               <Input value={uf.role_title} onChange={e => setUf(f => ({ ...f, role_title: e.target.value }))}
                 placeholder="Ex: Advogada, Sócia-fundadora..." className="h-10" />
             </div>
-            <div className="space-y-1.5">
-              <Label>Perfil de acesso</Label>
-              <Select value={uf.role} onValueChange={v => setUf(f => ({ ...f, role: v as 'admin' | 'client' }))}>
-                <SelectTrigger className="h-10"><SelectValue>{uf.role === 'admin' ? 'Administradora' : 'Cliente'}</SelectValue></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Administradora</SelectItem>
-                  <SelectItem value="client">Cliente</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {editingUser && (
+              <div className="space-y-1.5">
+                <Label>Perfil de acesso</Label>
+                <Select value={uf.role} onValueChange={v => setUf(f => ({ ...f, role: v as 'admin' | 'client' }))}>
+                  <SelectTrigger className="h-10"><SelectValue>{uf.role === 'admin' ? 'Administradora' : 'Cliente'}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Administradora</SelectItem>
+                    <SelectItem value="client">Cliente</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Cor de identificação</Label>
               <div className="flex flex-wrap gap-2">
@@ -565,10 +659,36 @@ export default function Configuracoes() {
                 ))}
               </div>
             </div>
+
+            <div className="space-y-2 pt-2 border-t border-border/40">
+              <div className="flex items-center gap-2">
+                <Switch checked={uf.fullAccess} onCheckedChange={v => setUf(f => ({ ...f, fullAccess: v }))} />
+                <Label>Acesso total ao sistema</Label>
+              </div>
+              {!uf.fullAccess && (
+                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  {MODULES.map(m => (
+                    <button key={m.key} type="button" onClick={() => toggleModule(m.key)}
+                      className={`flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-medium border text-left transition-all ${
+                        uf.allowed_modules.includes(m.key)
+                          ? 'bg-primary/10 border-primary text-primary'
+                          : 'border-border/60 text-muted-foreground hover:border-border'
+                      }`}>
+                      {uf.allowed_modules.includes(m.key) && <Check className="h-3 w-3 shrink-0" />}
+                      <span className="truncate">{m.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter className="pt-4">
             <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-            <Button onClick={saveUser}>Salvar</Button>
+            {editingUser ? (
+              <Button onClick={saveUser}>Salvar</Button>
+            ) : (
+              <Button onClick={createUser} disabled={creatingUser}>{creatingUser ? 'Criando...' : 'Criar usuária'}</Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -12,6 +12,7 @@ interface Profile {
   role: Role
   photo_url: string | null
   role_title: string | null
+  allowed_modules: string[] | null
 }
 
 interface AuthContextType {
@@ -35,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase
       .from('profiles')
-      .select('id, display_name, full_name, nickname, role, photo_url, role_title')
+      .select('id, display_name, full_name, nickname, role, photo_url, role_title, allowed_modules')
       .eq('user_id', userId)
       .maybeSingle()
     setProfile(data as Profile | null)

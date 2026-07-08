@@ -184,7 +184,7 @@ create table if not exists public.electronic_systems (
 -- 12. OFFICE_SETTINGS (configurações do escritório)
 create table if not exists public.office_settings (
   id uuid primary key default gen_random_uuid(),
-  name text default 'Scartezzini e Rebelo Advocacia',
+  name text default 'SRJUR',
   logo_url text,
   whatsapp_url text default 'https://web.whatsapp.com/',
   created_at timestamptz default now(),
@@ -338,5 +338,5 @@ create trigger on_auth_user_created
 -- SEED: configurações iniciais
 -- ============================================
 insert into public.office_settings (name, whatsapp_url)
-values ('Scartezzini e Rebelo Advocacia', 'https://web.whatsapp.com/')
+values ('SRJUR', 'https://web.whatsapp.com/')
 on conflict do nothing;
