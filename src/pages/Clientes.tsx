@@ -928,9 +928,11 @@ export default function Clientes() {
       drive_url: cf.drive_url || null, drive_folder_id: cf.drive_folder_id || null, tags: cf.tags || null,
     }
     if (editingClient) {
-      await supabase.from('clients').update(payload).eq('id', editingClient.id)
+      const { error } = await supabase.from('clients').update(payload).eq('id', editingClient.id)
+      if (error) { toast.error('Erro ao salvar cliente: ' + error.message); return }
     } else {
-      const { data: newClient } = await supabase.from('clients').insert(payload).select('id').single()
+      const { data: newClient, error } = await supabase.from('clients').insert(payload).select('id').single()
+      if (error) { toast.error('Erro ao criar cliente: ' + error.message); return }
       // If new client, create task to complete registration
       if (newClient) {
         await supabase.from('tasks').insert({
@@ -942,6 +944,7 @@ export default function Clientes() {
         })
       }
     }
+    toast.success(editingClient ? 'Cliente atualizado!' : 'Cliente criado!')
     setDialogOpen(false)
     resetCf()
     loadData()
