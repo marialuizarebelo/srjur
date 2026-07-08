@@ -255,6 +255,60 @@ function MiniWeekCalendar() {
   )
 }
 
+/* ---------- WeekAgendaView ---------- */
+
+function WeekAgendaView({ weekByDay, onItemClick }: { weekByDay: AttentionItem[][]; onItemClick: (item: AttentionItem) => void }) {
+  const today = new Date()
+  const dayOfWeek = today.getDay()
+  const monday = new Date(today)
+  monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7))
+
+  const labels = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM']
+  const dates = labels.map((_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return d
+  })
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
+      {labels.map((label, i) => {
+        const isToday = dates[i].toDateString() === today.toDateString()
+        const items = weekByDay[i] ?? []
+        return (
+          <div
+            key={label}
+            className={`rounded-2xl p-3 min-h-[160px] border ${isToday ? 'border-primary bg-primary/5' : 'border-border/60 bg-muted/20'}`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className={`text-[10px] font-semibold uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>{label}</span>
+              <span className={`text-xs font-bold h-5 w-5 rounded-full flex items-center justify-center ${isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'}`}>
+                {dates[i].getDate()}
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {items.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground/70 pt-1">Sem itens</p>
+              ) : (
+                items.map(item => (
+                  <div
+                    key={item.id}
+                    className="bg-background/70 dark:bg-white/5 rounded-lg p-1.5 cursor-pointer hover:bg-background transition-colors"
+                    onClick={() => onItemClick(item)}
+                  >
+                    <p className="text-[11px] font-medium truncate leading-snug">{item.title}</p>
+                    {item.subtitle && <p className="text-[10px] text-muted-foreground truncate">{item.subtitle}</p>}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /* ---------- PortalActivityCard ---------- */
 
 interface PortalActivity {
@@ -325,6 +379,7 @@ export default function Dashboard() {
   const [overdueTasks, setOverdueTasks] = useState<AttentionItem[]>([])
   const [todayTasks, setTodayTasks] = useState<AttentionItem[]>([])
   const [upcomingTasks, setUpcomingTasks] = useState<AttentionItem[]>([])
+  const [weekByDay, setWeekByDay] = useState<AttentionItem[][]>([[], [], [], [], [], [], []])
   const [chartData, setChartData] = useState<{ month: string; receitas: number; despesas: number }[]>([])
   const [nextTasks, setNextTasks] = useState<{ id: string; title: string; responsible?: string; due_date?: string; priority?: string }[]>([])
   const [modal, setModal] = useState<QuickViewState>(CLOSED_MODAL)
@@ -471,6 +526,9 @@ export default function Dashboard() {
         const overdue: AttentionItem[] = []
         const todayItems: AttentionItem[] = []
         const upcoming: AttentionItem[] = []
+        const week: AttentionItem[][] = [[], [], [], [], [], [], []]
+        // Segunda = índice 0 ... Domingo = índice 6
+        const todayWeekdayMondayFirst = (new Date().getDay() + 6) % 7
 
         allTasks.forEach(t => {
           if (!t.due_date) return
@@ -485,11 +543,15 @@ export default function Dashboard() {
           if (diff < 0) overdue.push(item)
           else if (diff === 0) todayItems.push(item)
           else if (diff <= 7) upcoming.push(item)
+
+          const targetWeekday = todayWeekdayMondayFirst + diff
+          if (targetWeekday >= 0 && targetWeekday <= 6) week[targetWeekday].push(item)
         })
 
         setOverdueTasks(overdue)
         setTodayTasks(todayItems)
         setUpcomingTasks(upcoming)
+        setWeekByDay(week)
         setNextTasks(allTasks.filter(t => t.due_date).slice(0, 5))
       }
 
@@ -835,44 +897,16 @@ export default function Dashboard() {
             />
           </div>
 
-          {/* Attention section */}
+          {/* Week agenda section */}
           <div>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-primary" />
-                <h2 className="font-semibold">O que precisa da sua atenção hoje</h2>
+                <h2 className="font-semibold">Sua semana</h2>
               </div>
               <span className="text-xs text-muted-foreground">{fmtDate(new Date().toISOString().slice(0, 10))}</span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <AttentionColumn
-                title="Atrasados"
-                icon={AlertTriangle}
-                items={overdueTasks}
-                color="#f87171"
-                bgColor="rgba(239,68,68,0.08)"
-                count={overdueTasks.length}
-                onItemClick={item => openAttentionItem(item, 'Tarefa Atrasada')}
-              />
-              <AttentionColumn
-                title="Hoje"
-                icon={Clock}
-                items={todayTasks}
-                color="#60a5fa"
-                bgColor="rgba(59,130,246,0.08)"
-                count={todayTasks.length}
-                onItemClick={item => openAttentionItem(item, 'Tarefa para Hoje')}
-              />
-              <AttentionColumn
-                title="Próximos 7 dias"
-                icon={ChevronRight}
-                items={upcomingTasks}
-                color="#94a3b8"
-                bgColor="rgba(148,163,184,0.06)"
-                count={upcomingTasks.length}
-                onItemClick={item => openAttentionItem(item, 'Próxima Tarefa')}
-              />
-            </div>
+            <WeekAgendaView weekByDay={weekByDay} onItemClick={item => openAttentionItem(item, 'Tarefa')} />
           </div>
 
           {/* Finance summary cards */}
@@ -976,28 +1010,28 @@ export default function Dashboard() {
           <Card className="p-4">
             <div className="flex items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
-                <Scale className="h-4 w-4 text-primary" />
-                <span className="font-semibold text-sm">Processos ativos</span>
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                <span className="font-semibold text-sm">Atrasados</span>
               </div>
-              <Button variant="ghost" size="sm" className="text-xs h-6 px-2" onClick={() => navigate('/processos')}>
+              <Button variant="ghost" size="sm" className="text-xs h-6 px-2" onClick={openTasks}>
                 Ver todos <ArrowRight className="h-3 w-3 ml-1" />
               </Button>
             </div>
             <div className="space-y-3">
-              {recentProcesses.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Nenhum processo ativo</p>
+              {overdueTasks.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nada atrasado — tudo em dia!</p>
               ) : (
-                recentProcesses.map(p => (
+                overdueTasks.slice(0, 5).map(item => (
                   <div
-                    key={p.id}
+                    key={item.id}
                     className="cursor-pointer rounded-lg p-1.5 -mx-1.5 hover:bg-muted/50 transition-colors"
-                    onClick={() => navigate('/processos')}
+                    onClick={() => openAttentionItem(item, 'Tarefa Atrasada')}
                   >
-                    <p className="text-sm font-medium">{p.title}</p>
-                    <p className="text-xs text-muted-foreground">{p.responsible}</p>
-                    <Badge className="mt-1 text-[10px]" variant="outline">
-                      {statusLabel[p.status] ?? p.status}
-                    </Badge>
+                    <p className="text-sm font-medium truncate">{item.title}</p>
+                    {item.subtitle && <p className="text-xs text-muted-foreground">{item.subtitle}</p>}
+                    {item.days !== undefined && (
+                      <span className="text-[11px] text-red-500 font-medium">{Math.abs(item.days)}d atrás</span>
+                    )}
                   </div>
                 ))
               )}
