@@ -282,9 +282,9 @@ export default function Configuracoes() {
           </Button>
 
           <div className="pt-2 border-t border-border/40 space-y-3">
-            <Label className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Google Agenda do escritório</Label>
+            <Label className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Conta Google do escritório</Label>
             <p className="text-[11px] text-muted-foreground -mt-2">
-              Usada para compromissos vinculados a clientes (audiências, reuniões, prazos com cliente associado).
+              Uma única conexão libera Agenda (compromissos vinculados a clientes: audiências, reuniões, prazos) e Google Drive (pastas de clientes e documentos) ao mesmo tempo.
             </p>
             {googleConns.office ? (
               <div className="flex items-center justify-between rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 px-4 py-3">
@@ -300,7 +300,7 @@ export default function Configuracoes() {
               <Button variant="outline" size="sm" className="rounded-xl" disabled={connectingKey === 'office'}
                 onClick={() => handleConnectGoogle('office', null)}>
                 <CalendarDays className="h-3.5 w-3.5 mr-1.5" />
-                {connectingKey === 'office' ? 'Abrindo Google...' : 'Conectar Google Agenda'}
+                {connectingKey === 'office' ? 'Abrindo Google...' : 'Conectar conta Google (Agenda + Drive)'}
               </Button>
             )}
           </div>
