@@ -19,6 +19,7 @@ import PortalComunicados from '@/pages/portal/PortalComunicados'
 import PortalPerfil from '@/pages/portal/PortalPerfil'
 import Dashboard from '@/pages/Dashboard'
 import Login from '@/pages/Login'
+import ResetPassword from '@/pages/ResetPassword'
 import Clientes from '@/pages/Clientes'
 import Processos from '@/pages/Processos'
 import Tarefas from '@/pages/Tarefas'
@@ -141,6 +142,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/redefinir-senha" element={<ResetPassword />} />
       <Route path="/*" element={<ProtectedRoutes />} />
     </Routes>
   )
