@@ -2,6 +2,13 @@ import { supabase } from '@/integrations/supabase/client'
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/asaas`
 
+// Permite desligar a integração com Asaas por instância (ex: clientes que não
+// usam essa cobrança), sem precisar remover código — só definir
+// VITE_ENABLE_ASAAS=false nas variáveis de ambiente daquele deploy.
+export function isAsaasEnabled(): boolean {
+  return import.meta.env.VITE_ENABLE_ASAAS !== 'false'
+}
+
 async function authHeader() {
   const { data } = await supabase.auth.getSession()
   return `Bearer ${data.session?.access_token ?? ''}`

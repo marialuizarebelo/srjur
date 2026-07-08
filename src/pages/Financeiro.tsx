@@ -39,7 +39,7 @@ import { getAdminProfiles } from '@/components/ResponsibleSelect'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ImportExtrato } from '@/components/ImportExtrato'
-import { createAsaasCharge, syncAsaasCharges } from '@/lib/asaas'
+import { createAsaasCharge, syncAsaasCharges, isAsaasEnabled } from '@/lib/asaas'
 import { toast } from 'sonner'
 import { usePrivacy } from '@/contexts/PrivacyContext'
 
@@ -1232,13 +1232,17 @@ export default function Financeiro() {
           <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
             <Upload className="h-3 w-3 mr-1" />Importar Extrato
           </Button>
-          <Button variant="outline" size="sm" onClick={handleSyncAsaas} disabled={asaasSyncing}>
-            <RefreshCw className={`h-3 w-3 mr-1 ${asaasSyncing ? 'animate-spin' : ''}`} />
-            {asaasSyncing ? 'Sincronizando...' : 'Sincronizar Asaas'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => { resetAf(); setAsaasOpen(true) }}>
-            <Plus className="h-3 w-3 mr-1" />Cobrança Asaas
-          </Button>
+          {isAsaasEnabled() && (
+            <>
+              <Button variant="outline" size="sm" onClick={handleSyncAsaas} disabled={asaasSyncing}>
+                <RefreshCw className={`h-3 w-3 mr-1 ${asaasSyncing ? 'animate-spin' : ''}`} />
+                {asaasSyncing ? 'Sincronizando...' : 'Sincronizar Asaas'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => { resetAf(); setAsaasOpen(true) }}>
+                <Plus className="h-3 w-3 mr-1" />Cobrança Asaas
+              </Button>
+            </>
+          )}
           <ExportMenu
             onExcelExport={() => {
               const clientMap = Object.fromEntries(clients.map(c => [c.id, c.name]))
