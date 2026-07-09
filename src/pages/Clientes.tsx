@@ -249,6 +249,50 @@ function fmtAddr(c: Client) {
   return parts.filter(Boolean).join(', ') || null
 }
 
+// Gera o texto de qualificação jurídica padrão (pessoa física) a partir dos
+// dados já cadastrados do cliente. Concordância de gênero (nacionalidade,
+// estado civil, "residente e domiciliado(a)") segue o campo Gênero — quando
+// não informado, assume masculino (convenção mais comum nos modelos usados).
+function generateQualification(c: Client): string | null {
+  if (c.type !== 'pessoa_fisica') return null
+  const feminino = c.gender === 'Feminino'
+
+  // Normaliza pra raiz (remove -o/-a final) antes de aplicar o gênero certo,
+  // já que o cadastro guarda "brasileira" como padrão mesmo pra clientes
+  // homens até alguém editar o campo manualmente.
+  const nationalityRoot = (c.nationality || 'brasileiro').trim().toLowerCase().replace(/[oa]$/, '')
+  const nationality = nationalityRoot + (feminino ? 'a' : 'o')
+
+  const maritalBase = (c.marital_status || '').replace(/\s*\(a\)\s*$/i, '').trim()
+  const marital = maritalBase
+    ? (feminino ? maritalBase.replace(/o$/, 'a') : maritalBase).toLowerCase()
+    : null
+
+  const profession = c.profession?.trim() || null
+  const cpf = c.cpf_cnpj?.trim() || null
+  const addrParts = [
+    c.street,
+    c.address_number ? `nº ${c.address_number}` : null,
+    c.complement,
+    c.neighborhood ? `Bairro ${c.neighborhood}` : null,
+    c.city && c.state ? `${c.city}/${c.state}` : c.city ?? c.state,
+    c.cep ? `CEP ${c.cep}` : null,
+  ]
+  const addr = addrParts.filter(Boolean).join(', ') || null
+  const email = c.email?.trim() || null
+
+  const bits: string[] = [c.name.toUpperCase()]
+  bits.push(nationality)
+  if (marital) bits.push(marital)
+  if (profession) bits.push(profession)
+  if (cpf) bits.push(`inscrito${feminino ? 'a' : ''} no CPF sob o nº ${cpf}`)
+  if (addr) bits.push(`residente e domiciliado${feminino ? 'a' : ''} na ${addr}`)
+  if (email) bits.push(`endereço eletrônico ${email}`)
+
+  if (bits.length <= 1) return null
+  return bits.join(', ') + '.'
+}
+
 function InfoRow({ label, value, copyable }: { label: string; value?: string | null; copyable?: boolean }) {
   if (!value) return null
   return (
@@ -277,11 +321,13 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
   onNewProcess: () => void
 }) {
   const [detail, setDetail] = useState<ClientDetail | null>(null)
+  const [qualification, setQualification] = useState<string | null>(null)
   const profilesMap = useProfilesMap()
 
   useEffect(() => {
     if (!client || !open) return
     setDetail(null)
+    setQualification(null)
     Promise.all([
       supabase.from('processes').select('id, title, number, type, status').eq('client_id', client.id).order('created_at', { ascending: false }),
       supabase.from('tasks').select('id, title, priority, status, due_date').eq('client_id', client.id).order('due_date', { ascending: true }),
@@ -438,6 +484,35 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
             <div className="text-sm">
               <span className="text-muted-foreground">Endereço: </span>
               <span className="font-medium">{addr}</span>
+            </div>
+          )}
+
+          {client.type === 'pessoa_fisica' && (
+            <div className="rounded-lg border px-4 py-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Qualificação</p>
+                <Button
+                  variant="outline" size="sm" className="h-7 text-xs"
+                  onClick={() => {
+                    const q = generateQualification(client)
+                    if (!q) { toast.error('Preencha CPF, nacionalidade, estado civil ou endereço para gerar a qualificação.'); return }
+                    setQualification(q)
+                  }}
+                >
+                  Gerar qualificação
+                </Button>
+              </div>
+              {qualification && (
+                <div className="flex items-start gap-2">
+                  <p className="text-sm flex-1 whitespace-pre-wrap">{qualification}</p>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(qualification); toast.success('Qualificação copiada!') }}
+                    className="p-1 hover:bg-muted rounded shrink-0" title="Copiar qualificação"
+                  >
+                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
