@@ -623,7 +623,14 @@ export default function SistemasEletronicos() {
               Processo na intimação: <strong>{linking?.numero_processo_mascara}</strong>
             </p>
             <Select value={linkProcessId} onValueChange={setLinkProcessId}>
-              <SelectTrigger className="h-10"><SelectValue placeholder="Selecione o processo..." /></SelectTrigger>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Selecione o processo...">
+                  {(() => {
+                    const p = processes.find(pr => pr.id === linkProcessId)
+                    return p ? (p.number ? `${p.number} — ${p.title}` : p.title) : ''
+                  })()}
+                </SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 {processes.map(p => (
                   <SelectItem key={p.id} value={p.id}>{p.number ? `${p.number} — ${p.title}` : p.title}</SelectItem>

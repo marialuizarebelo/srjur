@@ -761,7 +761,11 @@ export default function Comunicacoes() {
             <div className="space-y-1.5">
               <Label>Cliente (preenche variáveis automaticamente)</Label>
               <Select value={sendClient} onValueChange={autofill}>
-                <SelectTrigger className="h-10"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Selecione...">
+                    {sendClient ? clients.find(c => c.id === sendClient)?.name ?? '' : 'Nenhum'}
+                  </SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Nenhum</SelectItem>
                   {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
