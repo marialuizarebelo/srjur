@@ -751,6 +751,7 @@ export default function SistemasEletronicos() {
                     <SelectItem value="PJe">PJe</SelectItem>
                     <SelectItem value="ESAJ">ESAJ</SelectItem>
                     <SelectItem value="Projudi">Projudi</SelectItem>
+                    <SelectItem value="SEEU">SEEU</SelectItem>
                     <SelectItem value="Outro">Outro</SelectItem>
                   </SelectContent>
                 </Select>

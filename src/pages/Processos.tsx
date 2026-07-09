@@ -135,6 +135,7 @@ const ELECTRONIC_SYSTEMS = [
   { value: 'PJe', label: 'PJe' },
   { value: 'ESAJ', label: 'ESAJ' },
   { value: 'Projudi', label: 'Projudi' },
+  { value: 'SEEU', label: 'SEEU' },
   { value: 'Outro', label: 'Outro' },
 ]
 
@@ -1105,6 +1106,7 @@ export default function Processos() {
                     <SelectItem value="PJe">PJe</SelectItem>
                     <SelectItem value="ESAJ">ESAJ</SelectItem>
                     <SelectItem value="Projudi">Projudi</SelectItem>
+                    <SelectItem value="SEEU">SEEU</SelectItem>
                     <SelectItem value="Outro">Outro</SelectItem>
                   </SelectContent>
                 </Select>

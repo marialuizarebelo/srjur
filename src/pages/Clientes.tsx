@@ -70,6 +70,8 @@ interface Client {
   profession: string | null
   rg_number: string | null
   rg_issuer: string | null
+  mother_name: string | null
+  father_name: string | null
   gender: string | null
   cep: string | null
   street: string | null
@@ -285,6 +287,11 @@ function generateQualification(c: Client): string | null {
   bits.push(nationality)
   if (marital) bits.push(marital)
   if (profession) bits.push(profession)
+  const mother = c.mother_name?.trim() || null
+  const father = c.father_name?.trim() || null
+  if (mother && father) bits.push(`filho${feminino ? 'a' : ''} de ${mother} e ${father}`)
+  else if (mother) bits.push(`filho${feminino ? 'a' : ''} de ${mother}`)
+  else if (father) bits.push(`filho${feminino ? 'a' : ''} de ${father}`)
   if (cpf) bits.push(`inscrito${feminino ? 'a' : ''} no CPF sob o nº ${cpf}`)
   if (addr) bits.push(`residente e domiciliado${feminino ? 'a' : ''} na ${addr}`)
   if (email) bits.push(`endereço eletrônico ${email}`)
@@ -476,6 +483,8 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
             {client.rg_number && (
               <InfoRow label="RG" value={`${client.rg_number}${client.rg_issuer ? ` / ${client.rg_issuer}` : ''}`} />
             )}
+            <InfoRow label="Filiação (mãe)" value={client.mother_name} />
+            <InfoRow label="Filiação (pai)" value={client.father_name} />
             {client.potential_value && <InfoRow label="Potencial" value={fmtBRL(Number(client.potential_value))} />}
             {client.tags && <InfoRow label="Tags" value={client.tags} />}
           </div>
@@ -960,6 +969,7 @@ export default function Clientes() {
       email: c.email ?? '', phone: c.phone ?? '', gender: c.gender ?? 'Não informado',
       nationality: c.nationality ?? 'brasileira', marital_status: c.marital_status ?? 'Não informado',
       profession: c.profession ?? '', rg_number: c.rg_number ?? '', rg_issuer: c.rg_issuer ?? '',
+      mother_name: c.mother_name ?? '', father_name: c.father_name ?? '',
       cep: c.cep ?? '', street: c.street ?? '', address_number: c.address_number ?? '',
       complement: c.complement ?? '', neighborhood: c.neighborhood ?? '',
       city: c.city ?? '', state: c.state ?? '',
@@ -993,6 +1003,7 @@ export default function Clientes() {
       gender: cf.gender || null, nationality: cf.nationality || null,
       marital_status: cf.marital_status || null, profession: cf.profession || null,
       rg_number: cf.rg_number || null, rg_issuer: cf.rg_issuer || null,
+      mother_name: cf.mother_name || null, father_name: cf.father_name || null,
       cep: cf.cep || null, street: cf.street || null,
       address_number: cf.address_number || null, complement: cf.complement || null,
       neighborhood: cf.neighborhood || null, city: cf.city || null, state: cf.state || null,
@@ -1228,6 +1239,8 @@ export default function Clientes() {
                 'Nacionalidade': c.nationality ?? '',
                 'Profissão': c.profession ?? '',
                 'RG': c.rg_number ?? '',
+                'Filiação (mãe)': c.mother_name ?? '',
+                'Filiação (pai)': c.father_name ?? '',
                 'Órgão RG': c.rg_issuer ?? '',
                 'CEP': c.cep ?? '',
                 'Rua': c.street ?? '',

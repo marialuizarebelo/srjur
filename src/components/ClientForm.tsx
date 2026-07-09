@@ -136,7 +136,7 @@ function maskCEP(v: string) {
 export interface ClientFormData {
   name: string; type: string; cpf_cnpj: string; email: string; phone: string
   gender: string; nationality: string; marital_status: string; profession: string
-  rg_number: string; rg_issuer: string
+  rg_number: string; rg_issuer: string; mother_name: string; father_name: string
   cep: string; street: string; address_number: string; complement: string
   neighborhood: string; city: string; state: string
   responsible: string; responsible_ids: string[]; origin: string; referred_by: string; referral_fee_pct: string
@@ -149,7 +149,7 @@ export interface ClientFormData {
 export const emptyClientForm: ClientFormData = {
   name: '', type: 'pessoa_fisica', cpf_cnpj: '', email: '', phone: '',
   gender: 'Não informado', nationality: 'brasileira', marital_status: 'Não informado',
-  profession: '', rg_number: '', rg_issuer: '',
+  profession: '', rg_number: '', rg_issuer: '', mother_name: '', father_name: '',
   cep: '', street: '', address_number: '', complement: '',
   neighborhood: '', city: '', state: '',
   responsible: '', responsible_ids: [], origin: '', referred_by: '', referral_fee_pct: '', area: '', areas_selected: [],
@@ -361,6 +361,17 @@ export function ClientFormDialog({
                   <Input value={form.rg_number} onChange={e => setForm(f => ({ ...f, rg_number: e.target.value }))} placeholder="Número" className="h-10 flex-1" />
                   <Input value={form.rg_issuer} onChange={e => setForm(f => ({ ...f, rg_issuer: e.target.value }))} placeholder="Órgão" className="h-10 w-20" />
                 </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Filiação — Nome da mãe</Label>
+                <Input value={form.mother_name} onChange={e => setForm(f => ({ ...f, mother_name: e.target.value }))} className="h-10" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Filiação — Nome do pai</Label>
+                <Input value={form.father_name} onChange={e => setForm(f => ({ ...f, father_name: e.target.value }))} className="h-10" />
               </div>
             </div>
           </Section>
