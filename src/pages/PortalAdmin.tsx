@@ -709,7 +709,11 @@ function ClientDetail({ client, onBack }: { client: ClientLite; onBack: () => vo
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Template (opcional)</label>
                 <Select value={selectedTemplateId} onValueChange={applyTemplate}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Começar do zero..." /></SelectTrigger>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Começar do zero...">
+                      {selectedTemplateId ? templates.find(t => t.id === selectedTemplateId)?.name ?? '' : 'Começar do zero...'}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     {templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                   </SelectContent>
