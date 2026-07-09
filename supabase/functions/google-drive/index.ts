@@ -39,9 +39,12 @@ async function getCallerProfile(authHeader: string) {
 }
 
 async function getOfficeConnection() {
+  // Usa order+limit(1) em vez de maybeSingle(): se sobrar mais de uma linha
+  // 'office' (duplicata deixada por uma reconexão anterior), maybeSingle()
+  // lança erro e a conexao passa a parecer inexistente mesmo estando la.
   const { data } = await adminClient.from('google_calendar_connections')
-    .select('*').eq('owner_type', 'office').maybeSingle()
-  return data
+    .select('*').eq('owner_type', 'office').order('created_at', { ascending: false }).limit(1)
+  return data?.[0] ?? null
 }
 
 async function ensureFreshToken(conn: any) {

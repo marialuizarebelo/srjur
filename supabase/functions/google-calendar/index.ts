@@ -94,7 +94,8 @@ async function handleCallback(req: Request) {
   // Em vez disso, apagamos qualquer conexão existente e inserimos uma nova.
   let selQ = adminClient.from('google_calendar_connections').select('refresh_token').eq('owner_type', owner_type)
   selQ = owner_type === 'office' ? selQ.is('profile_id', null) : selQ.eq('profile_id', profile_id)
-  const { data: existing } = await selQ.maybeSingle()
+  const { data: existingRows } = await selQ.order('created_at', { ascending: false }).limit(1)
+  const existing = existingRows?.[0] ?? null
 
   let delQ = adminClient.from('google_calendar_connections').delete().eq('owner_type', owner_type)
   delQ = owner_type === 'office' ? delQ.is('profile_id', null) : delQ.eq('profile_id', profile_id)
