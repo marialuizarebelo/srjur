@@ -21,6 +21,8 @@ import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
+import { ActivityTimeline } from '@/components/ActivityTimeline'
+import { logActivity } from '@/lib/activityLog'
 import { toast } from 'sonner'
 
 interface MarketingItem {
@@ -139,6 +141,10 @@ function MarketingViewDialog({ item, open, onClose, onEdit, onDelete, onMoveStat
               <p className="text-sm whitespace-pre-wrap">{item.notes}</p>
             </div>
           )}
+
+          <div className="pt-2 border-t">
+            <ActivityTimeline entityType="marketing" entityId={item.id} />
+          </div>
         </div>
 
         <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2 mx-0 mb-0 rounded-none border-t-0">
@@ -248,6 +254,7 @@ export default function Marketing() {
 
   async function moveStatus(id: string, status: string) {
     await supabase.from('marketing_content').update({ status }).eq('id', id)
+    logActivity('marketing', id, `Status alterado para "${STATUSES.find(s => s.value === status)?.label ?? status}"`)
     loadData()
   }
 
