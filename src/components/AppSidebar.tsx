@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { UserAvatar } from '@/components/UserAvatar'
 
 // Módulos sempre visíveis independente de restrição (dashboard e as próprias
 // configurações — nunca faz sentido travar uma usuária fora da tela onde ela
@@ -156,9 +157,12 @@ export function AppSidebar() {
         <div className="p-3 space-y-2">
           {!collapsed && profile && (
             <div className="flex items-center gap-2 px-2 py-1">
-              <div className="h-7 w-7 rounded-full bg-[var(--sidebar-primary)] flex items-center justify-center text-white text-xs font-medium">
-                {(profile.nickname || profile.display_name)?.charAt(0)?.toUpperCase() ?? '?'}
-              </div>
+              <UserAvatar
+                name={profile.nickname || profile.display_name}
+                photoUrl={profile.photo_url}
+                color="var(--sidebar-primary)"
+                className="h-7 w-7 text-xs"
+              />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-[var(--sidebar-accent-foreground)] truncate">
                   {profile.nickname || profile.display_name}

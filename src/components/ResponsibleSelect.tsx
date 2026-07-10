@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { Check } from 'lucide-react'
+import { UserAvatar } from '@/components/UserAvatar'
 
-export interface ProfileOption { id: string; display_name: string | null; color: string | null }
+export interface ProfileOption { id: string; display_name: string | null; color: string | null; photo_url: string | null }
 
 let cachedProfiles: ProfileOption[] | null = null
 
 export async function getAdminProfiles(): Promise<ProfileOption[]> {
   if (cachedProfiles) return cachedProfiles
-  const { data } = await supabase.from('profiles').select('id, display_name, nickname, color').eq('role', 'admin').order('display_name')
+  const { data } = await supabase.from('profiles').select('id, display_name, nickname, color, photo_url').eq('role', 'admin').order('display_name')
   // Prioriza o apelido sobre o nome/e-mail cadastrado — é o que deve aparecer em toda a UI
   cachedProfiles = ((data ?? []) as any[]).map(p => ({
-    id: p.id, color: p.color, display_name: p.nickname || p.display_name,
+    id: p.id, color: p.color, display_name: p.nickname || p.display_name, photo_url: p.photo_url,
   }))
   return cachedProfiles!
 }
@@ -69,12 +70,7 @@ export function ResponsibleAvatars({ ids, profilesMap, size = 'sm' }: { ids: str
     <div className="flex items-center -space-x-1.5">
       {ids.map(id => {
         const p = profilesMap[id]
-        return (
-          <div key={id} className={`${dim} rounded-full flex items-center justify-center text-white font-bold shrink-0 ring-2 ring-background`}
-            style={{ backgroundColor: p?.color ?? '#6B7280' }} title={p?.display_name ?? ''}>
-            {(p?.display_name ?? '?').charAt(0).toUpperCase()}
-          </div>
-        )
+        return <UserAvatar key={id} name={p?.display_name} photoUrl={p?.photo_url} color={p?.color} className={dim} />
       })}
     </div>
   )
