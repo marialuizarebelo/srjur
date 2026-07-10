@@ -6,12 +6,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { MessageSquare, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EntityType } from '@/lib/activityLog'
+import { UserAvatar } from '@/components/UserAvatar'
+import { useProfilesMap } from '@/components/ResponsibleSelect'
 
 interface Entry {
   id: string
   kind: 'comment' | 'activity'
   text: string
   author: string | null
+  user_id: string | null
   created_at: string
 }
 
@@ -20,12 +23,9 @@ function fmtWhen(iso: string) {
   return `${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
 }
 
-function getInitials(name: string) {
-  return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
-}
-
 export function ActivityTimeline({ entityType, entityId }: { entityType: EntityType; entityId: string }) {
   const { profile, user } = useAuth()
+  const profilesMap = useProfilesMap()
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
   const [text, setText] = useState('')
@@ -34,7 +34,7 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: EntityT
   const load = async () => {
     const { data, error } = await supabase
       .from('activity_log')
-      .select('id, kind, text, author, created_at')
+      .select('id, kind, text, author, user_id, created_at')
       .eq('entity_type', entityType)
       .eq('entity_id', entityId)
       .order('created_at', { ascending: false })
@@ -92,25 +92,21 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: EntityT
         <p className="text-xs text-muted-foreground py-2">Nenhuma movimentação ainda.</p>
       ) : (
         <div className="space-y-3 pt-1">
-          {entries.map(e => (
-            <div key={e.id} className="flex gap-2.5">
-              {e.kind === 'comment' ? (
-                <div className="h-6 w-6 rounded-full bg-primary/15 text-primary text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                  {getInitials(e.author ?? '?')}
+          {entries.map(e => {
+            const p = e.user_id ? profilesMap[e.user_id] : undefined
+            const authorName = p?.display_name ?? e.author
+            return (
+              <div key={e.id} className="flex gap-2.5">
+                <UserAvatar name={authorName} photoUrl={p?.photo_url} color={p?.color} className="h-6 w-6 text-[10px] mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm ${e.kind === 'activity' ? 'text-muted-foreground italic' : ''}`}>{e.text}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {authorName ? `${authorName} · ` : ''}{fmtWhen(e.created_at)}
+                  </p>
                 </div>
-              ) : (
-                <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
-                  <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm ${e.kind === 'activity' ? 'text-muted-foreground italic' : ''}`}>{e.text}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  {e.kind === 'comment' && e.author ? `${e.author} · ` : ''}{fmtWhen(e.created_at)}
-                </p>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
