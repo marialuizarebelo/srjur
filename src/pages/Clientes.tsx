@@ -23,7 +23,7 @@ import {
   ChevronUp, ChevronDown, X, ExternalLink, Scale, ClipboardList, FileText,
   ArrowUp, ArrowDown, ArrowUpDown, Copy,
 } from 'lucide-react'
-import { fmtBRL } from '@/lib/format'
+import { fmtBRL, fmtDate } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ClientFormDialog, emptyClientForm, type ClientFormData } from '@/components/ClientForm'
@@ -37,7 +37,7 @@ import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/D
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
-import { ActivityTimeline } from '@/components/ActivityTimeline'
+import { ActivityTimeline, type ExternalEntry } from '@/components/ActivityTimeline'
 import { logActivity } from '@/lib/activityLog'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 
@@ -334,23 +334,30 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
 }) {
   const [detail, setDetail] = useState<ClientDetail | null>(null)
   const [qualification, setQualification] = useState<string | null>(null)
+  const [activityExtras, setActivityExtras] = useState<ExternalEntry[]>([])
   const profilesMap = useProfilesMap()
 
   useEffect(() => {
     if (!client || !open) return
     setDetail(null)
     setQualification(null)
+    setActivityExtras([])
     Promise.all([
       supabase.from('processes').select('id, title, number, type, status').eq('client_id', client.id).order('created_at', { ascending: false }),
-      supabase.from('tasks').select('id, title, priority, status, due_date').eq('client_id', client.id).order('due_date', { ascending: true }),
-      supabase.from('finance').select('amount, paid, due_date').eq('client_id', client.id),
+      supabase.from('tasks').select('id, title, priority, status, due_date, created_at').eq('client_id', client.id).order('due_date', { ascending: true }),
+      supabase.from('finance').select('id, description, value, paid, due_date, type, created_at').eq('client_id', client.id),
       supabase.from('leads').select('created_at').eq('client_id', client.id).limit(1).maybeSingle(),
-      isZapSignConfigured() ? findDocsByName(client.name) : Promise.resolve([]),
-    ]).then(([procs, tasks, fin, lead, zapDocs]) => {
+      supabase.from('deadlines').select('id, title, due_date, created_at').eq('client_id', client.id),
+      // Se o ZapSign falhar (rede, CORS, token expirado etc.) isso não pode
+      // derrubar o resto do painel do cliente — antes, um erro aqui fazia o
+      // Promise.all inteiro rejeitar e nada carregava (financeiro, tarefas,
+      // prazos ficavam todos em branco silenciosamente).
+      isZapSignConfigured() ? findDocsByName(client.name).catch(() => []) : Promise.resolve([]),
+    ]).then(([procs, tasks, fin, lead, deadlines, zapDocs]) => {
       const now = new Date().toISOString().slice(0, 10)
-      const paid = (fin.data ?? []).filter(f => f.paid).reduce((s, f) => s + f.amount, 0)
-      const pending = (fin.data ?? []).filter(f => !f.paid && f.due_date >= now).reduce((s, f) => s + f.amount, 0)
-      const overdue = (fin.data ?? []).filter(f => !f.paid && f.due_date < now).reduce((s, f) => s + f.amount, 0)
+      const paid = (fin.data ?? []).filter(f => f.paid).reduce((s, f) => s + f.value, 0)
+      const pending = (fin.data ?? []).filter(f => !f.paid && f.due_date >= now).reduce((s, f) => s + f.value, 0)
+      const overdue = (fin.data ?? []).filter(f => !f.paid && f.due_date < now).reduce((s, f) => s + f.value, 0)
       setDetail({
         ...client,
         processes: procs.data ?? [],
@@ -359,6 +366,39 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
         leadCreatedAt: lead.data?.created_at ?? null,
         zapDocs: Array.isArray(zapDocs) ? (zapDocs as any[]).map(d => ({ name: d.name ?? d.original_file ?? '—', status: d.status, created_at: d.created_at ?? '' })) : [],
       })
+
+      // Linha do tempo completa: tudo que já existe ligado a esse cliente
+      // (financeiro, tarefas, prazos, andamentos dos processos dele) misturado
+      // com os comentários, cada um com sua tag colorida.
+      const processIds = (procs.data ?? []).map(p => p.id)
+      const extras: ExternalEntry[] = [
+        ...(tasks.data ?? []).map(t => ({
+          id: `task-${t.id}`, text: `Tarefa: ${t.title}${t.due_date ? ` (${fmtDate(t.due_date)})` : ''}`,
+          created_at: t.created_at, tag: { label: 'Tarefa', color: '#3B82F6' },
+        })),
+        ...(deadlines.data ?? []).map(d => ({
+          id: `deadline-${d.id}`, text: `Prazo: ${d.title} — ${fmtDate(d.due_date)}`,
+          created_at: d.created_at, tag: { label: 'Prazo', color: '#EF4444' },
+        })),
+        ...(fin.data ?? []).map(f => ({
+          id: `fin-${f.id}`, text: `${f.type === 'receita' ? 'Receita' : 'Despesa'}: ${f.description ?? ''} — ${fmtBRL(f.value)}`,
+          created_at: f.created_at, tag: { label: 'Financeiro', color: '#10B981' },
+        })),
+      ]
+      setActivityExtras(extras)
+
+      if (processIds.length > 0) {
+        supabase.from('process_updates').select('id, text, author, created_at').in('process_id', processIds)
+          .then(({ data: updates }) => {
+            setActivityExtras(prev => [
+              ...prev,
+              ...((updates ?? []).map(u => ({
+                id: `pu-${u.id}`, text: u.text, author: u.author, created_at: u.created_at,
+                tag: { label: 'Andamento', color: '#8B5CF6' },
+              }))),
+            ])
+          })
+      }
     })
   }, [client, open])
 
@@ -640,7 +680,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
           </div>
 
           <div className="pt-2 border-t">
-            <ActivityTimeline entityType="client" entityId={client.id} createdAt={client.created_at} />
+            <ActivityTimeline entityType="client" entityId={client.id} createdAt={client.created_at} externalEntries={activityExtras} />
           </div>
         </div>
 
