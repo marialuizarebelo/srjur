@@ -24,6 +24,7 @@ import {
   Mail, Phone, IdCard, FolderOpen, ArrowRight,
 } from 'lucide-react'
 import { getAreaColor } from '@/lib/areaColors'
+import { getTagColor } from '@/lib/deadlineTypes'
 import { fmtDate, fmtBRL } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
@@ -91,6 +92,10 @@ interface ClientOption {
 
 interface ProcessTask {
   id: string; title: string; status: string; priority: string; due_date: string | null
+}
+
+interface ProcessDeadline {
+  id: string; title: string; status: string; due_date: string; tipo: string | null
 }
 
 // ── Constants ──
@@ -282,7 +287,9 @@ export default function Processos() {
   const [loadingUpdates, setLoadingUpdates] = useState(false)
   const [processTasks, setProcessTasks] = useState<ProcessTask[]>([])
   const [loadingTasks, setLoadingTasks] = useState(false)
-  const [detailTab, setDetailTab] = useState<'dados' | 'tarefas' | 'andamentos'>('dados')
+  const [processDeadlines, setProcessDeadlines] = useState<ProcessDeadline[]>([])
+  const [loadingDeadlines, setLoadingDeadlines] = useState(false)
+  const [detailTab, setDetailTab] = useState<'dados' | 'tarefas' | 'prazos' | 'andamentos'>('dados')
 
   const resetPf = () => {
     setPf({ title: '', number: '', client_id: '', type: 'consultivo',
@@ -327,6 +334,17 @@ export default function Processos() {
       .order('due_date', { ascending: true })
     setProcessTasks((data as ProcessTask[]) ?? [])
     setLoadingTasks(false)
+  }
+
+  const loadProcessDeadlines = async (processId: string) => {
+    setLoadingDeadlines(true)
+    const { data } = await supabase
+      .from('deadlines')
+      .select('id, title, status, due_date, tipo')
+      .eq('process_id', processId)
+      .order('due_date', { ascending: true })
+    setProcessDeadlines((data as ProcessDeadline[]) ?? [])
+    setLoadingDeadlines(false)
   }
 
   function copyToClipboard(value: string, label: string) {
@@ -409,6 +427,7 @@ export default function Processos() {
     setDetailTab('dados')
     loadUpdates(p.id)
     loadProcessTasks(p.id)
+    loadProcessDeadlines(p.id)
   }
 
   const saveProcess = async () => {
@@ -626,10 +645,10 @@ export default function Processos() {
 
               {/* Tabs */}
               <div className="flex items-center gap-1 mt-3 bg-muted/40 rounded-lg p-0.5 w-fit">
-                {(['dados', 'tarefas', 'andamentos'] as const).map(t => (
+                {(['dados', 'tarefas', 'prazos', 'andamentos'] as const).map(t => (
                   <button key={t} onClick={() => setDetailTab(t)}
                     className={`px-3 h-8 rounded-md text-xs font-medium transition-all ${detailTab === t ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                    {t === 'dados' ? 'Dados' : t === 'tarefas' ? `Tarefas (${processTasks.length})` : `Andamentos (${updates.length})`}
+                    {t === 'dados' ? 'Dados' : t === 'tarefas' ? `Tarefas (${processTasks.length})` : t === 'prazos' ? `Prazos (${processDeadlines.length})` : `Andamentos (${updates.length})`}
                   </button>
                 ))}
               </div>
@@ -788,6 +807,39 @@ export default function Processos() {
                         {t.due_date && <p className="text-xs text-muted-foreground mt-0.5">{fmtDate(t.due_date)}</p>}
                       </div>
                       <Badge variant="outline" className="text-[10px] shrink-0">{t.status === 'concluida' ? 'Concluída' : t.status === 'pendente' ? 'Pendente' : t.status}</Badge>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* ── Prazos tab ── */}
+            {detailTab === 'prazos' && (
+              <div className="flex-1 overflow-y-auto p-5 space-y-2">
+                {loadingDeadlines ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
+                ) : processDeadlines.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">Nenhum prazo vinculado a este processo</p>
+                ) : (
+                  processDeadlines.map(d => (
+                    <div key={d.id} className="p-3 rounded-lg border flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className={`text-sm font-medium truncate ${d.status === 'cumprido' ? 'line-through opacity-60' : ''}`}>{d.title}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs text-muted-foreground">{fmtDate(d.due_date)}</p>
+                          {d.tipo && (
+                            <span
+                              className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                              style={{ backgroundColor: getTagColor(d.tipo) + '22', color: getTagColor(d.tipo) }}
+                            >
+                              {d.tipo}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] shrink-0">
+                        {d.status === 'cumprido' ? 'Cumprido' : d.status === 'perdido' ? 'Perdido' : 'Pendente'}
+                      </Badge>
                     </div>
                   ))
                 )}
