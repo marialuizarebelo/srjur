@@ -15,13 +15,26 @@ import {
 } from "@/components/ui/input-group"
 import { SearchIcon, CheckIcon } from "lucide-react"
 
+// Remove acentos pra busca não travar em "réplica" vs "replica" — no dia a
+// dia ninguém digita acento pra buscar, e o filtro padrão do cmdk é
+// sensível a isso.
+function normalizeForSearch(s: string) {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+}
+
+function defaultFilter(value: string, search: string) {
+  return normalizeForSearch(value).includes(normalizeForSearch(search)) ? 1 : 0
+}
+
 function Command({
   className,
+  filter = defaultFilter,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
     <CommandPrimitive
       data-slot="command"
+      filter={filter}
       className={cn(
         "flex size-full flex-col overflow-hidden rounded-xl! bg-popover p-1 text-popover-foreground",
         className
