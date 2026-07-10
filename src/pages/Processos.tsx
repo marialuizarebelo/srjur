@@ -34,6 +34,8 @@ import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/D
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
+import { ActivityTimeline } from '@/components/ActivityTimeline'
+import { logActivity } from '@/lib/activityLog'
 
 // ── Types ──
 interface Process {
@@ -426,6 +428,8 @@ export default function Processos() {
       if (editing) {
         const { error } = await supabase.from('processes').update(payload).eq('id', editing.id)
         if (error) throw error
+        if (editing.status !== pf.status) logActivity('process', editing.id, `Status alterado para "${formatLabel(pf.status)}"`)
+        if (editing.phase !== pf.phase) logActivity('process', editing.id, `Fase alterada para "${pf.phase}"`)
       } else {
         const { data: created, error } = await supabase.from('processes').insert(payload).select().single()
         if (error) throw error
@@ -1253,6 +1257,12 @@ export default function Processos() {
               <Switch checked={pf.portal_visible} onCheckedChange={v => setPf(f => ({ ...f, portal_visible: v }))} />
               <Label>Visível no portal do cliente</Label>
             </div>
+
+            {editing && (
+              <div className="pt-2 border-t">
+                <ActivityTimeline entityType="process" entityId={editing.id} />
+              </div>
+            )}
           </div>
           <DialogFooter className="pt-4">
             {editing && (

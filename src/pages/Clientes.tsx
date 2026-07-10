@@ -37,6 +37,8 @@ import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/D
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
+import { ActivityTimeline } from '@/components/ActivityTimeline'
+import { logActivity } from '@/lib/activityLog'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 
 // ── Types ──
@@ -636,6 +638,10 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
               <ClipboardList className="h-3.5 w-3.5 mr-1.5" />Nova Tarefa
             </Button>
           </div>
+
+          <div className="pt-2 border-t">
+            <ActivityTimeline entityType="client" entityId={client.id} />
+          </div>
         </div>
 
         {/* Footer */}
@@ -1034,6 +1040,9 @@ export default function Clientes() {
     if (editingClient) {
       const { error } = await supabase.from('clients').update(payload).eq('id', editingClient.id)
       if (error) { toast.error('Erro ao salvar cliente: ' + error.message); return }
+      if (editingClient.status !== cf.status) {
+        logActivity('client', editingClient.id, `Status alterado para "${cf.status}"`)
+      }
     } else {
       const { data: newClient, error } = await supabase.from('clients').insert(payload).select('id').single()
       if (error) { toast.error('Erro ao criar cliente: ' + error.message); return }
