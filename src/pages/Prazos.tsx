@@ -18,6 +18,7 @@ import {
   Circle, Calendar, Scale, LayoutGrid, List, Settings2, SlidersHorizontal,
   GripVertical, Pencil, Trash2, X, ChevronUp, ChevronDown,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { fmtDate, getDaysDiff } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
@@ -28,6 +29,7 @@ import { PinViewButton } from '@/components/PinViewButton'
 interface Deadline {
   id: string
   process_id: string | null
+  client_id: string | null
   title: string
   due_date: string
   status: string
@@ -223,12 +225,12 @@ export default function Prazos() {
   const profilesMap = useProfilesMap()
 
   const [df, setDf] = useState({
-    title: '', due_date: '', process_id: '', status: 'pendente',
+    title: '', due_date: '', client_id: '', process_id: '', status: 'pendente',
     responsible_ids: [] as string[], notes: '', source: 'Manual', portal_visible: false, stage_id: '', drive_url: '',
   })
 
   const resetDf = () => {
-    setDf({ title: '', due_date: '', process_id: '', status: 'pendente',
+    setDf({ title: '', due_date: '', client_id: '', process_id: '', status: 'pendente',
       responsible_ids: [], notes: '', source: 'Manual', portal_visible: false, stage_id: '', drive_url: '' })
     setEditing(null)
   }
@@ -275,7 +277,7 @@ export default function Prazos() {
   const getProcessLabel = (id: string | null) => {
     if (!id) return ''
     const p = processes.find(pr => pr.id === id)
-    return p ? (p.number ? `${p.number} — ${p.title}` : p.title) : ''
+    return p ? (p.number ? `${p.title} — ${p.number}` : p.title) : ''
   }
 
   const getStage = (id: string | null) => stages.find(s => s.id === id) ?? null
@@ -292,8 +294,11 @@ export default function Prazos() {
   }
 
   const openEdit = (d: Deadline) => {
+    const linkedProcess = processes.find(p => p.id === d.process_id)
     setDf({
-      title: d.title, due_date: d.due_date, process_id: d.process_id ?? '',
+      title: d.title, due_date: d.due_date,
+      client_id: d.client_id ?? linkedProcess?.client_id ?? '',
+      process_id: d.process_id ?? '',
       status: d.status, responsible_ids: d.responsible_ids ?? [], notes: d.notes ?? '',
       source: d.source ?? 'Manual', portal_visible: d.portal_visible, stage_id: d.stage_id ?? '',
       drive_url: d.drive_url ?? '',
@@ -307,18 +312,18 @@ export default function Prazos() {
     setSaving(true)
     try {
       const payload = {
-        title: df.title, due_date: df.due_date, process_id: df.process_id || null,
+        title: df.title, due_date: df.due_date,
+        client_id: df.client_id || null, process_id: df.process_id || null,
         status: df.status, notes: df.notes || null,
         responsible_ids: df.responsible_ids,
         responsible: df.responsible_ids.length > 1 ? 'Ambas' : (profilesMap[df.responsible_ids[0]]?.display_name ?? null),
         source: df.source || null, portal_visible: df.portal_visible, stage_id: df.stage_id || null,
         drive_url: df.drive_url || null,
       }
-      if (editing) {
-        await supabase.from('deadlines').update(payload).eq('id', editing.id)
-      } else {
-        await supabase.from('deadlines').insert(payload)
-      }
+      const { error } = editing
+        ? await supabase.from('deadlines').update(payload).eq('id', editing.id)
+        : await supabase.from('deadlines').insert(payload)
+      if (error) { toast.error('Erro ao salvar prazo: ' + error.message); return }
       setDialogOpen(false)
       resetDf()
       loadData()
@@ -794,26 +799,59 @@ export default function Prazos() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Processo vinculado</Label>
-                <Select value={df.process_id} onValueChange={v => setDf(f => ({ ...f, process_id: v }))}>
-                  <SelectTrigger className="h-10">
-                    <SelectValue placeholder="Nenhum">
-                      {(() => {
-                        const p = processes.find(pr => pr.id === df.process_id)
-                        return p ? (p.number ? `${p.number} — ${p.title}` : p.title) : 'Nenhum'
-                      })()}
+                <Label>Cliente</Label>
+                <Select
+                  value={df.client_id}
+                  onValueChange={v => setDf(f => ({
+                    ...f,
+                    client_id: v,
+                    // Se o processo já escolhido não pertence mais ao cliente selecionado, limpa.
+                    process_id: f.process_id && processes.find(p => p.id === f.process_id)?.client_id !== v ? '' : f.process_id,
+                  }))}
+                >
+                  <SelectTrigger className="h-10 min-w-0">
+                    <SelectValue placeholder="Nenhum" className="truncate min-w-0">
+                      {clients.find(c => c.id === df.client_id)?.name ?? 'Nenhum'}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Nenhum</SelectItem>
-                    {processes.map(p => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.number ? `${p.number} — ${p.title}` : p.title}
-                      </SelectItem>
+                    {clients.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label>Processo vinculado</Label>
+                <Select
+                  value={df.process_id}
+                  onValueChange={v => setDf(f => ({
+                    ...f,
+                    process_id: v,
+                    client_id: f.client_id || processes.find(p => p.id === v)?.client_id || '',
+                  }))}
+                >
+                  <SelectTrigger className="h-10 min-w-0">
+                    <SelectValue placeholder="Nenhum" className="truncate min-w-0">
+                      {getProcessLabel(df.process_id) || 'Nenhum'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhum</SelectItem>
+                    {processes
+                      .filter(p => !df.client_id || p.client_id === df.client_id)
+                      .map(p => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.number ? `${p.title} — ${p.number}` : p.title}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Responsável</Label>
                 <ResponsibleSelect value={df.responsible_ids} onChange={ids => setDf(f => ({ ...f, responsible_ids: ids }))} />
