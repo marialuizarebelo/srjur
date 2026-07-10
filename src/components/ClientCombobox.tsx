@@ -17,15 +17,15 @@ export function ClientCombobox({ clients, value, onChange, placeholder = 'Nenhum
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button type="button" className="w-full h-10 flex items-center justify-between gap-2 border rounded-md px-3 hover:border-primary/50 transition-colors bg-background text-left text-sm">
-          <span className={selected ? 'font-medium truncate' : 'text-muted-foreground truncate'}>
-            {selected ? selected.name : placeholder}
-          </span>
-          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-        </button>
+      <PopoverTrigger
+        className="flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-left text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50"
+      >
+        <span className={selected ? 'truncate font-medium' : 'truncate text-muted-foreground'}>
+          {selected ? selected.name : placeholder}
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+      <PopoverContent className="w-(--anchor-width) min-w-48 p-0" align="start">
         <Command>
           <CommandInput placeholder="Digite pra buscar..." />
           <CommandList>
@@ -34,13 +34,13 @@ export function ClientCombobox({ clients, value, onChange, placeholder = 'Nenhum
               {allowNone && (
                 <CommandItem value="__none__" onSelect={() => { onChange(''); setOpen(false) }}>
                   <span className="text-muted-foreground">Nenhum</span>
-                  {!value && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-auto" />}
+                  {!value && <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-primary" />}
                 </CommandItem>
               )}
               {clients.map(c => (
                 <CommandItem key={c.id} value={c.name} onSelect={() => { onChange(c.id); setOpen(false) }}>
                   <span className="truncate">{c.name}</span>
-                  {value === c.id && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-auto" />}
+                  {value === c.id && <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-primary" />}
                 </CommandItem>
               ))}
             </CommandGroup>
