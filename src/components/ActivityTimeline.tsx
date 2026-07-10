@@ -23,8 +23,8 @@ function fmtWhen(iso: string) {
   return `${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
 }
 
-export function ActivityTimeline({ entityType, entityId }: { entityType: EntityType; entityId: string }) {
-  const { profile, user } = useAuth()
+export function ActivityTimeline({ entityType, entityId, createdAt }: { entityType: EntityType; entityId: string; createdAt?: string | null }) {
+  const { profile } = useAuth()
   const profilesMap = useProfilesMap()
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
@@ -57,7 +57,7 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: EntityT
       kind: 'comment',
       text: text.trim(),
       author: profile?.nickname || profile?.display_name || 'Usuária',
-      user_id: user?.id ?? null,
+      user_id: profile?.id ?? null,
     })
     setSaving(false)
     if (error) { toast.error('Erro ao adicionar comentário: ' + error.message); return }
@@ -88,7 +88,7 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: EntityT
 
       {loading ? (
         <p className="text-xs text-muted-foreground py-2">Carregando...</p>
-      ) : entries.length === 0 ? (
+      ) : entries.length === 0 && !createdAt ? (
         <p className="text-xs text-muted-foreground py-2">Nenhuma movimentação ainda.</p>
       ) : (
         <div className="space-y-3 pt-1">
@@ -107,6 +107,15 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: EntityT
               </div>
             )
           })}
+          {createdAt && (
+            <div className="flex gap-2.5">
+              <UserAvatar name={null} className="h-6 w-6 text-[10px] mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-muted-foreground italic">Criado</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{fmtWhen(createdAt)}</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

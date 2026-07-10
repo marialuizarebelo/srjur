@@ -198,7 +198,7 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
           )}
 
           <div className="pt-2 border-t">
-            <ActivityTimeline entityType="deadline" entityId={deadline.id} />
+            <ActivityTimeline entityType="deadline" entityId={deadline.id} createdAt={deadline.created_at} />
           </div>
         </div>
 
@@ -255,11 +255,13 @@ export default function Prazos() {
   const [df, setDf] = useState({
     title: '', tipo: '', due_date: '', client_id: '', process_id: '', status: 'pendente',
     responsible_ids: [] as string[], notes: '', source: 'Manual', portal_visible: false, stage_id: '', drive_url: '',
+    _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '',
   })
 
   const resetDf = () => {
     setDf({ title: '', tipo: '', due_date: '', client_id: '', process_id: '', status: 'pendente',
-      responsible_ids: [], notes: '', source: 'Manual', portal_visible: false, stage_id: '', drive_url: '' })
+      responsible_ids: [], notes: '', source: 'Manual', portal_visible: false, stage_id: '', drive_url: '',
+      _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '' })
     setEditing(null)
   }
 
@@ -279,6 +281,23 @@ export default function Prazos() {
   }
 
   useEffect(() => { loadData() }, [])
+
+  // Abre o formulário de novo prazo quando vem de um atalho "+ Novo" (ex:
+  // Dashboard, Intimações) — mesma tela em qualquer lugar que disparar isso,
+  // em vez de cada atalho ter sua própria versão simplificada do formulário.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('new') === '1') {
+      resetDf()
+      const raw = sessionStorage.getItem('srjur_prazo_prefill')
+      if (raw) {
+        sessionStorage.removeItem('srjur_prazo_prefill')
+        try { setDf(f => ({ ...f, ...JSON.parse(raw) })) } catch { /* ignora prefill inválido */ }
+      }
+      setDialogOpen(true)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
 
   const saveVisibleFields = (fields: Record<string, boolean>) => {
     setVisibleFields(fields)
@@ -355,10 +374,27 @@ export default function Prazos() {
         source: df.source || null, portal_visible: df.portal_visible, stage_id: df.stage_id || null,
         drive_url: df.drive_url || null,
       }
-      const { error } = editing
-        ? await supabase.from('deadlines').update(payload).eq('id', editing.id)
-        : await supabase.from('deadlines').insert(payload)
-      if (error) { toast.error('Erro ao salvar prazo: ' + error.message); return }
+      if (editing) {
+        const { error } = await supabase.from('deadlines').update(payload).eq('id', editing.id)
+        if (error) { toast.error('Erro ao salvar prazo: ' + error.message); return }
+      } else {
+        const { data: created, error } = await supabase.from('deadlines').insert(payload).select().single()
+        if (error) { toast.error('Erro ao salvar prazo: ' + error.message); return }
+        // Se veio de "Criar prazo a partir da intimação", vincula de volta.
+        if (df._intimacaoId && created) {
+          await supabase.from('intimacoes').update({
+            status: 'vinculado', deadline_id: created.id,
+            process_id: payload.process_id ?? undefined, lida: true,
+          }).eq('id', df._intimacaoId)
+          if (payload.process_id) {
+            await supabase.from('process_updates').insert({
+              process_id: payload.process_id,
+              text: `[${df._intimacaoTipo ?? 'Intimação'}] ${df._intimacaoText ?? ''}`,
+              author: 'DJEN (automático)', portal_visible: false,
+            })
+          }
+        }
+      }
       setDialogOpen(false)
       resetDf()
       loadData()

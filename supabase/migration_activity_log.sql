@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS public.activity_log (
   entity_id uuid not null,
   kind text not null default 'comment' check (kind in ('comment', 'activity')),
   text text not null,
-  user_id uuid references auth.users(id) on delete set null,
+  -- Referencia profiles(id) (não auth.users(id) direto) porque é esse id que
+  -- ResponsibleAvatars/profilesMap usam pra achar a foto da usuária.
+  user_id uuid references public.profiles(id) on delete set null,
   author text,
   created_at timestamptz not null default now()
 );
