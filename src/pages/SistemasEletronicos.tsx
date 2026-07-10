@@ -20,6 +20,8 @@ import {
 import { toast } from 'sonner'
 import { fmtDate } from '@/lib/format'
 import { ClientCombobox } from '@/components/ClientCombobox'
+import { ProcessCombobox } from '@/components/ProcessCombobox'
+import { TipoPrazoCombobox } from '@/components/TipoPrazoCombobox'
 import { ResponsibleSelect } from '@/components/ResponsibleSelect'
 
 interface OabConfig { id: string; nome: string; numero_oab: string; uf_oab: string; ativo: boolean }
@@ -108,6 +110,7 @@ export default function SistemasEletronicos() {
   const [prazoClientId, setPrazoClientId] = useState('')
   const [prazoProcessId, setPrazoProcessId] = useState('')
   const [prazoNotes, setPrazoNotes] = useState('')
+  const [prazoTipo, setPrazoTipo] = useState('')
 
   const [tarefaOpen, setTarefaOpen] = useState(false)
   const [tarefaSource, setTarefaSource] = useState<Intimacao | null>(null)
@@ -338,6 +341,7 @@ export default function SistemasEletronicos() {
     setPrazoDias('15')
     setPrazoResponsibleIds([])
     setPrazoNotes(stripHtml(i.texto)?.slice(0, 1000) ?? '')
+    setPrazoTipo('')
     const match = findMatchingProcess(i.numero_processo)
     setPrazoProcessId(match?.id ?? '')
     setPrazoClientId(match?.client_id ?? '')
@@ -357,6 +361,7 @@ export default function SistemasEletronicos() {
     const linkedProcessId = prazoProcessId || match?.id || null
     const { data: deadline } = await supabase.from('deadlines').insert({
       title: prazoTitulo,
+      tipo: prazoTipo || null,
       due_date: prazoData,
       process_id: linkedProcessId,
       client_id: prazoClientId || null,
@@ -660,22 +665,26 @@ export default function SistemasEletronicos() {
         <DialogContent className="max-w-[560px] w-[96vw] max-h-[90vh] overflow-y-auto p-6">
           <DialogHeader><DialogTitle>Criar prazo a partir da intimação</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-2">
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
               <Label>Título</Label>
               <Input value={prazoTitulo} onChange={e => setPrazoTitulo(e.target.value)} className="h-10" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
+              <Label>Tipo de prazo</Label>
+              <TipoPrazoCombobox value={prazoTipo} onChange={setPrazoTipo} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Dias de prazo</Label>
                 <Input value={prazoDias} onChange={e => recalcPrazoData(e.target.value)} className="h-10" inputMode="numeric" />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Data limite</Label>
                 <Input type="date" value={prazoData} onChange={e => setPrazoData(e.target.value)} className="h-10" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Cliente</Label>
                 <ClientCombobox
                   clients={clients}
@@ -686,37 +695,19 @@ export default function SistemasEletronicos() {
                   }}
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Processo vinculado</Label>
-                <Select
+                <ProcessCombobox
+                  processes={processes.filter(p => !prazoClientId || p.client_id === prazoClientId)}
                   value={prazoProcessId}
-                  onValueChange={v => {
+                  onChange={v => {
                     setPrazoProcessId(v)
                     if (!prazoClientId) setPrazoClientId(processes.find(p => p.id === v)?.client_id ?? '')
                   }}
-                >
-                  <SelectTrigger className="h-10 min-w-0">
-                    <SelectValue placeholder="Nenhum" className="truncate min-w-0">
-                      {(() => {
-                        const p = processes.find(pr => pr.id === prazoProcessId)
-                        return p ? (p.number ? `${p.title} — ${p.number}` : p.title) : 'Nenhum'
-                      })()}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
-                    {processes
-                      .filter(p => !prazoClientId || p.client_id === prazoClientId)
-                      .map(p => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.number ? `${p.title} — ${p.number}` : p.title}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
               <Label>Responsável</Label>
               <ResponsibleSelect value={prazoResponsibleIds} onChange={setPrazoResponsibleIds} />
             </div>
