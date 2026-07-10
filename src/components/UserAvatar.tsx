@@ -14,13 +14,13 @@ export function UserAvatar({ name, photoUrl, color, className = 'h-6 w-6 text-[9
         src={photoUrl}
         alt={name ?? ''}
         title={name ?? ''}
-        className={`${className} rounded-full object-cover shrink-0 ring-2 ring-background`}
+        className={`${className} rounded-full object-cover shrink-0 ring-2 ring-primary/25`}
       />
     )
   }
   return (
     <div
-      className={`${className} rounded-full flex items-center justify-center text-white font-bold shrink-0 ring-2 ring-background`}
+      className={`${className} rounded-full flex items-center justify-center text-white font-bold shrink-0 ring-2 ring-primary/25`}
       style={{ backgroundColor: color ?? '#6B7280' }}
       title={name ?? ''}
     >

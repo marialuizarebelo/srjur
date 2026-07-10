@@ -19,8 +19,9 @@ import {
   Plus, Search, Scale, LayoutGrid, List, Pencil, Trash2,
   FileText, ChevronDown, ChevronUp, ExternalLink, Send,
   Clock, User, Calendar, Copy, ClipboardList, CircleDollarSign,
-  Mail, Phone, IdCard, FolderOpen,
+  Mail, Phone, IdCard, FolderOpen, ArrowRight,
 } from 'lucide-react'
+import { getAreaColor } from '@/lib/areaColors'
 import { fmtDate, fmtBRL } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
@@ -714,7 +715,13 @@ export default function Processos() {
                 )}
 
                 <div className="pt-2 border-t">
-                  <ActivityTimeline entityType="process" entityId={detailProcess.id} createdAt={detailProcess.created_at} />
+                  <ActivityTimeline
+                    entityType="process" entityId={detailProcess.id} createdAt={detailProcess.created_at}
+                    externalEntries={updates.map(u => ({
+                      id: u.id, text: u.text, author: u.author, created_at: u.created_at,
+                      tag: { label: 'Andamento', color: '#8B5CF6' },
+                    }))}
+                  />
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-2 border-t">
@@ -970,7 +977,30 @@ export default function Processos() {
                             </span>
                             <ResponsibleAvatars ids={proc.responsible_ids} profilesMap={profilesMap} size="xs" />
                           </div>
-                          {proc.area && <Badge variant="outline" className="text-[10px] mt-1.5">{proc.area}</Badge>}
+                          {proc.court && (
+                            <p className="text-[11px] text-muted-foreground truncate mt-1">Vara: {proc.court}</p>
+                          )}
+                          {(proc.opposing_party || proc.opposing_parties?.[0]?.name) && (
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              Contra: {proc.opposing_party || proc.opposing_parties?.[0]?.name}
+                            </p>
+                          )}
+                          {proc.instance && (
+                            <p className="text-[11px] text-muted-foreground truncate">{proc.instance}</p>
+                          )}
+                          <div className="flex items-center justify-between mt-1.5 gap-1.5">
+                            {proc.area && (
+                              <Badge variant="outline" className={`text-[10px] border-0 ${getAreaColor(proc.area).bg} ${getAreaColor(proc.area).text}`}>
+                                {proc.area}
+                              </Badge>
+                            )}
+                            <Button
+                              variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] ml-auto shrink-0"
+                              onClick={e => { e.stopPropagation(); openDetail(proc) }}
+                            >
+                              Ver processo <ArrowRight className="h-3 w-3 ml-1" />
+                            </Button>
+                          </div>
                         </div>
                       </DraggableCard>
                     ))}
