@@ -29,6 +29,8 @@ import { ClientCombobox } from '@/components/ClientCombobox'
 import { ProcessCombobox } from '@/components/ProcessCombobox'
 import { TipoPrazoCombobox } from '@/components/TipoPrazoCombobox'
 import { getTagColor } from '@/lib/deadlineTypes'
+import { ActivityTimeline } from '@/components/ActivityTimeline'
+import { logActivity } from '@/lib/activityLog'
 
 interface Deadline {
   id: string
@@ -194,6 +196,10 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
           {deadline.portal_visible && (
             <p className="text-[11px] text-muted-foreground">Visível no portal do cliente</p>
           )}
+
+          <div className="pt-2 border-t">
+            <ActivityTimeline entityType="deadline" entityId={deadline.id} />
+          </div>
         </div>
 
         <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2 mx-0 mb-0 rounded-none border-t-0">
@@ -312,11 +318,13 @@ export default function Prazos() {
   const toggleStatus = async (d: Deadline) => {
     const newStatus = d.status === 'pendente' ? 'cumprido' : 'pendente'
     await supabase.from('deadlines').update({ status: newStatus }).eq('id', d.id)
+    logActivity('deadline', d.id, `Status alterado para "${newStatus === 'cumprido' ? 'Cumprido' : 'Pendente'}"`)
     loadData()
   }
 
   const moveToStage = async (deadlineId: string, stageId: string | null) => {
     await supabase.from('deadlines').update({ stage_id: stageId }).eq('id', deadlineId)
+    logActivity('deadline', deadlineId, `Movido para a etapa "${stages.find(s => s.id === stageId)?.name ?? 'Sem etapa'}"`)
     loadData()
   }
 

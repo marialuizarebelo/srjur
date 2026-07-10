@@ -27,6 +27,8 @@ import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/D
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
+import { ActivityTimeline } from '@/components/ActivityTimeline'
+import { logActivity } from '@/lib/activityLog'
 
 // ── Types ──
 interface Task {
@@ -175,6 +177,10 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
           {task.portal_visible && (
             <p className="text-[11px] text-muted-foreground">Visível no portal do cliente</p>
           )}
+
+          <div className="pt-2 border-t">
+            <ActivityTimeline entityType="task" entityId={task.id} />
+          </div>
         </div>
 
         <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2 mx-0 mb-0 rounded-none border-t-0">
@@ -305,6 +311,7 @@ export default function Tarefas() {
     else if (task.workflow_stage === 'concluido') payload.workflow_stage = 'a_fazer'
     const { error } = await supabase.from('tasks').update(payload).eq('id', task.id)
     if (error) { toast.error('Erro ao atualizar tarefa: ' + error.message); return }
+    logActivity('task', task.id, `Status alterado para "${newStatus === 'concluida' ? 'Concluída' : 'Pendente'}"`)
     loadData()
   }
 
@@ -314,6 +321,7 @@ export default function Tarefas() {
     else if (task.status === 'concluida') payload.status = 'pendente'
     const { error } = await supabase.from('tasks').update(payload).eq('id', task.id)
     if (error) { toast.error('Erro ao mover tarefa: ' + error.message); return }
+    logActivity('task', task.id, `Movida para a etapa "${stage}"`)
     loadData()
   }
 
