@@ -25,12 +25,17 @@ import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/D
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
+import { ClientCombobox } from '@/components/ClientCombobox'
+import { ProcessCombobox } from '@/components/ProcessCombobox'
+import { TipoPrazoCombobox } from '@/components/TipoPrazoCombobox'
+import { getTagColor } from '@/lib/deadlineTypes'
 
 interface Deadline {
   id: string
   process_id: string | null
   client_id: string | null
   title: string
+  tipo: string | null
   due_date: string
   status: string
   responsible: string | null
@@ -83,7 +88,7 @@ function getVisibleFields(): Record<string, boolean> {
 }
 
 // ── View Dialog ──
-function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggleStatus, stages, processes, profilesMap }: {
+function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggleStatus, stages, processes, clients, profilesMap }: {
   deadline: Deadline | null
   open: boolean
   onClose: () => void
@@ -92,6 +97,7 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
   onToggleStatus: () => void
   stages: DeadlineStage[]
   processes: ProcessOption[]
+  clients: ClientOption[]
   profilesMap: Record<string, { display_name: string | null; color: string | null }>
 }) {
   if (!deadline) return null
@@ -100,6 +106,8 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
   const isToday = days === 0 && deadline.status === 'pendente'
   const stage = stages.find(s => s.id === deadline.stage_id)
   const process = processes.find(p => p.id === deadline.process_id)
+  const clientId = deadline.client_id ?? process?.client_id
+  const client = clientId ? clients.find(c => c.id === clientId) : null
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
@@ -114,6 +122,14 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
               {stage && (
                 <Badge variant="outline" className="text-[10px]" style={{ borderColor: stage.color, color: stage.color }}>
                   {stage.name}
+                </Badge>
+              )}
+              {deadline.tipo && (
+                <Badge
+                  variant="outline" className="text-[10px]"
+                  style={{ borderColor: getTagColor(deadline.tipo), color: getTagColor(deadline.tipo) }}
+                >
+                  {deadline.tipo}
                 </Badge>
               )}
             </div>
@@ -135,10 +151,16 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
                 {isOverdue ? `${Math.abs(days)}d atrás` : isToday ? 'Hoje' : deadline.status === 'pendente' ? `${days}d restantes` : deadline.status}
               </p>
             </div>
+            {client && (
+              <div className="col-span-2">
+                <p className="text-[11px] text-muted-foreground">Cliente</p>
+                <p className="font-medium">{client.name}</p>
+              </div>
+            )}
             {process && (
               <div className="col-span-2">
                 <p className="text-[11px] text-muted-foreground">Processo</p>
-                <p className="font-medium">{process.number ? `${process.number} — ${process.title}` : process.title}</p>
+                <p className="font-medium">{process.number ? `${process.title} — ${process.number}` : process.title}</p>
               </div>
             )}
             {deadline.source && (
@@ -225,12 +247,12 @@ export default function Prazos() {
   const profilesMap = useProfilesMap()
 
   const [df, setDf] = useState({
-    title: '', due_date: '', client_id: '', process_id: '', status: 'pendente',
+    title: '', tipo: '', due_date: '', client_id: '', process_id: '', status: 'pendente',
     responsible_ids: [] as string[], notes: '', source: 'Manual', portal_visible: false, stage_id: '', drive_url: '',
   })
 
   const resetDf = () => {
-    setDf({ title: '', due_date: '', client_id: '', process_id: '', status: 'pendente',
+    setDf({ title: '', tipo: '', due_date: '', client_id: '', process_id: '', status: 'pendente',
       responsible_ids: [], notes: '', source: 'Manual', portal_visible: false, stage_id: '', drive_url: '' })
     setEditing(null)
   }
@@ -280,6 +302,11 @@ export default function Prazos() {
     return p ? (p.number ? `${p.title} — ${p.number}` : p.title) : ''
   }
 
+  const getClientLabel = (d: Deadline) => {
+    const clientId = d.client_id ?? processes.find(p => p.id === d.process_id)?.client_id
+    return clientId ? clients.find(c => c.id === clientId)?.name ?? '' : ''
+  }
+
   const getStage = (id: string | null) => stages.find(s => s.id === id) ?? null
 
   const toggleStatus = async (d: Deadline) => {
@@ -296,7 +323,7 @@ export default function Prazos() {
   const openEdit = (d: Deadline) => {
     const linkedProcess = processes.find(p => p.id === d.process_id)
     setDf({
-      title: d.title, due_date: d.due_date,
+      title: d.title, tipo: d.tipo ?? '', due_date: d.due_date,
       client_id: d.client_id ?? linkedProcess?.client_id ?? '',
       process_id: d.process_id ?? '',
       status: d.status, responsible_ids: d.responsible_ids ?? [], notes: d.notes ?? '',
@@ -312,7 +339,7 @@ export default function Prazos() {
     setSaving(true)
     try {
       const payload = {
-        title: df.title, due_date: df.due_date,
+        title: df.title, tipo: df.tipo || null, due_date: df.due_date,
         client_id: df.client_id || null, process_id: df.process_id || null,
         status: df.status, notes: df.notes || null,
         responsible_ids: df.responsible_ids,
@@ -417,6 +444,19 @@ export default function Prazos() {
           </p>
         </div>
 
+        {deadline.tipo && (
+          <Badge
+            variant="outline" className="text-[9px] h-4"
+            style={{ borderColor: getTagColor(deadline.tipo) + '55', color: getTagColor(deadline.tipo) }}
+          >
+            {deadline.tipo}
+          </Badge>
+        )}
+
+        {getClientLabel(deadline) && (
+          <p className="text-[10px] text-muted-foreground truncate">{getClientLabel(deadline)}</p>
+        )}
+
         {visibleFields.processo && getProcessLabel(deadline.process_id) && (
           <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1">
             <Scale className="h-3 w-3 shrink-0" />
@@ -501,6 +541,14 @@ export default function Prazos() {
               <p className={`text-sm font-medium truncate ${deadline.status === 'cumprido' ? 'line-through' : ''}`}>
                 {deadline.title}
               </p>
+              {deadline.tipo && (
+                <Badge
+                  variant="outline" className="text-[9px]"
+                  style={{ borderColor: getTagColor(deadline.tipo) + '55', color: getTagColor(deadline.tipo) }}
+                >
+                  {deadline.tipo}
+                </Badge>
+              )}
               {deadline.source && deadline.source !== 'Manual' && (
                 <Badge variant="outline" className="text-[9px]">{deadline.source}</Badge>
               )}
@@ -511,10 +559,10 @@ export default function Prazos() {
                 </div>
               )}
             </div>
-            {getProcessLabel(deadline.process_id) && (
+            {(getClientLabel(deadline) || getProcessLabel(deadline.process_id)) && (
               <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
                 <Scale className="h-3 w-3 inline mr-0.5" />
-                {getProcessLabel(deadline.process_id)}
+                {[getClientLabel(deadline), getProcessLabel(deadline.process_id)].filter(Boolean).join(' — ')}
               </p>
             )}
           </div>
@@ -766,27 +814,63 @@ export default function Prazos() {
         onToggleStatus={() => { if (viewDeadline) { toggleStatus(viewDeadline); setViewDeadline(null) } }}
         stages={stages}
         processes={processes}
+        clients={clients}
         profilesMap={profilesMap}
       />
 
       {/* ── Prazo Dialog ── */}
       <Dialog open={dialogOpen} onOpenChange={o => { setDialogOpen(o); if (!o) resetDf() }}>
-        <DialogContent className="max-w-[700px] w-[96vw] max-h-[90vh] overflow-y-auto p-8">
+        <DialogContent className="max-w-[640px] w-[94vw] max-h-[90vh] overflow-y-auto overflow-x-hidden p-6">
           <DialogHeader>
             <DialogTitle className="text-lg">{editing ? 'Editar' : 'Novo'} Prazo</DialogTitle>
           </DialogHeader>
-          <div className="space-y-5 pt-2">
-            <div className="space-y-2">
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5 min-w-0">
               <Label>Título do prazo</Label>
               <Input value={df.title} onChange={e => setDf(f => ({ ...f, title: e.target.value }))} className="h-10" placeholder="Ex: Contestação, Recurso, Juntada de docs..." />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5 min-w-0">
+                <Label>Tipo de prazo</Label>
+                <TipoPrazoCombobox value={df.tipo} onChange={v => setDf(f => ({ ...f, tipo: v }))} />
+              </div>
+              <div className="space-y-1.5 min-w-0">
                 <Label>Data limite</Label>
                 <Input type="date" value={df.due_date} onChange={e => setDf(f => ({ ...f, due_date: e.target.value }))} className="h-10" />
               </div>
-              <div className="space-y-2">
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5 min-w-0">
+                <Label>Cliente</Label>
+                <ClientCombobox
+                  clients={clients}
+                  value={df.client_id}
+                  onChange={v => setDf(f => ({
+                    ...f,
+                    client_id: v,
+                    // Se o processo já escolhido não pertence mais ao cliente selecionado, limpa.
+                    process_id: f.process_id && processes.find(p => p.id === f.process_id)?.client_id !== v ? '' : f.process_id,
+                  }))}
+                />
+              </div>
+              <div className="space-y-1.5 min-w-0">
+                <Label>Processo vinculado</Label>
+                <ProcessCombobox
+                  processes={processes.filter(p => !df.client_id || p.client_id === df.client_id)}
+                  value={df.process_id}
+                  onChange={v => setDf(f => ({
+                    ...f,
+                    process_id: v,
+                    client_id: f.client_id || processes.find(p => p.id === v)?.client_id || '',
+                  }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Origem</Label>
                 <Select value={df.source} onValueChange={v => setDf(f => ({ ...f, source: v }))}>
                   <SelectTrigger className="h-10"><SelectValue>{df.source}</SelectValue></SelectTrigger>
@@ -795,71 +879,14 @@ export default function Prazos() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Cliente</Label>
-                <Select
-                  value={df.client_id}
-                  onValueChange={v => setDf(f => ({
-                    ...f,
-                    client_id: v,
-                    // Se o processo já escolhido não pertence mais ao cliente selecionado, limpa.
-                    process_id: f.process_id && processes.find(p => p.id === f.process_id)?.client_id !== v ? '' : f.process_id,
-                  }))}
-                >
-                  <SelectTrigger className="h-10 min-w-0">
-                    <SelectValue placeholder="Nenhum" className="truncate min-w-0">
-                      {clients.find(c => c.id === df.client_id)?.name ?? 'Nenhum'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
-                    {clients.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Processo vinculado</Label>
-                <Select
-                  value={df.process_id}
-                  onValueChange={v => setDf(f => ({
-                    ...f,
-                    process_id: v,
-                    client_id: f.client_id || processes.find(p => p.id === v)?.client_id || '',
-                  }))}
-                >
-                  <SelectTrigger className="h-10 min-w-0">
-                    <SelectValue placeholder="Nenhum" className="truncate min-w-0">
-                      {getProcessLabel(df.process_id) || 'Nenhum'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
-                    {processes
-                      .filter(p => !df.client_id || p.client_id === df.client_id)
-                      .map(p => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.number ? `${p.title} — ${p.number}` : p.title}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Responsável</Label>
                 <ResponsibleSelect value={df.responsible_ids} onChange={ids => setDf(f => ({ ...f, responsible_ids: ids }))} />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Status</Label>
                 <Select value={df.status} onValueChange={v => setDf(f => ({ ...f, status: v }))}>
                   <SelectTrigger className="h-10">
@@ -872,11 +899,11 @@ export default function Prazos() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Etapa (Kanban)</Label>
                 <Select value={df.stage_id} onValueChange={v => setDf(f => ({ ...f, stage_id: v }))}>
-                  <SelectTrigger className="h-10">
-                    <SelectValue placeholder="Sem etapa">
+                  <SelectTrigger className="h-10 min-w-0">
+                    <SelectValue placeholder="Sem etapa" className="truncate min-w-0">
                       {stages.find(s => s.id === df.stage_id)?.name ?? 'Sem etapa'}
                     </SelectValue>
                   </SelectTrigger>
@@ -895,12 +922,12 @@ export default function Prazos() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5 min-w-0">
               <Label>Observações</Label>
               <Textarea value={df.notes} onChange={e => setDf(f => ({ ...f, notes: e.target.value }))} rows={2} />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5 min-w-0">
               <Label>Documento do Drive (opcional)</Label>
               <Input
                 value={df.drive_url}
