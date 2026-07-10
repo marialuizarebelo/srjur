@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -165,6 +167,8 @@ function formatLabel(value: string): string {
 
 // ── Main ──
 export default function Processos() {
+  const navigate = useNavigate()
+  const { profile } = useAuth()
   const profilesMap = useProfilesMap()
   const [processes, setProcesses] = useState<Process[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
@@ -539,6 +543,7 @@ export default function Processos() {
       process_id: detailProcess.id,
       text: newUpdate,
       portal_visible: newUpdatePortal,
+      author: profile?.nickname || profile?.display_name || null,
     })
     if (!error) {
       setNewUpdate('')
@@ -631,7 +636,7 @@ export default function Processos() {
 
             {/* ── Dados tab ── */}
             {detailTab === 'dados' && (
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   {detailProcess.number && (
                     <FieldWithCopy label="Número" value={detailProcess.number} onCopy={() => copyToClipboard(detailProcess.number!, 'Número')} />
@@ -714,16 +719,6 @@ export default function Processos() {
                   </div>
                 )}
 
-                <div className="pt-2 border-t">
-                  <ActivityTimeline
-                    entityType="process" entityId={detailProcess.id} createdAt={detailProcess.created_at}
-                    externalEntries={updates.map(u => ({
-                      id: u.id, text: u.text, author: u.author, created_at: u.created_at,
-                      tag: { label: 'Andamento', color: '#8B5CF6' },
-                    }))}
-                  />
-                </div>
-
                 <div className="flex flex-wrap gap-2 pt-2 border-t">
                   {detailProcess.court_url && (
                     <Button variant="outline" size="sm" render={<a href={detailProcess.court_url} target="_blank" rel="noreferrer" />}>
@@ -738,12 +733,41 @@ export default function Processos() {
                   <Button variant="outline" size="sm" onClick={() => setDetailTab('andamentos')}>
                     <ClipboardList className="h-3.5 w-3.5 mr-1.5" />Adicionar Andamento
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => setDetailTab('tarefas')}>
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={() => {
+                      sessionStorage.setItem('srjur_prazo_prefill', JSON.stringify({
+                        process_id: detailProcess.id, client_id: detailProcess.client_id ?? '',
+                      }))
+                      navigate('/prazos?new=1')
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />Novo Prazo
+                  </Button>
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={() => {
+                      sessionStorage.setItem('srjur_tarefa_prefill', JSON.stringify({
+                        process_id: detailProcess.id, client_id: detailProcess.client_id ?? '',
+                      }))
+                      navigate('/tarefas?new=1')
+                    }}
+                  >
                     <Plus className="h-3.5 w-3.5 mr-1.5" />Nova Tarefa
                   </Button>
                   <Button size="sm" onClick={() => openEdit(detailProcess)}>
                     <Pencil className="h-3.5 w-3.5 mr-1.5" />Editar
                   </Button>
+                </div>
+
+                <div className="pt-2 border-t min-w-0">
+                  <ActivityTimeline
+                    entityType="process" entityId={detailProcess.id} createdAt={detailProcess.created_at}
+                    externalEntries={updates.map(u => ({
+                      id: u.id, text: u.text, author: u.author, created_at: u.created_at,
+                      tag: { label: 'Andamento', color: '#8B5CF6' },
+                    }))}
+                  />
                 </div>
               </div>
             )}
@@ -994,12 +1018,14 @@ export default function Processos() {
                                 {proc.area}
                               </Badge>
                             )}
-                            <Button
-                              variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] ml-auto shrink-0"
-                              onClick={e => { e.stopPropagation(); openDetail(proc) }}
-                            >
-                              Ver processo <ArrowRight className="h-3 w-3 ml-1" />
-                            </Button>
+                            {proc.court_url && (
+                              <Button
+                                variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] ml-auto shrink-0"
+                                onClick={e => { e.stopPropagation(); window.open(proc.court_url!, '_blank') }}
+                              >
+                                {proc.electronic_system || 'Ver no tribunal'} <ExternalLink className="h-3 w-3 ml-1" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </DraggableCard>
