@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import type { EntityType } from '@/lib/activityLog'
 import { UserAvatar } from '@/components/UserAvatar'
 import { useProfilesMap } from '@/components/ResponsibleSelect'
+import { useOfficeLogo } from '@/hooks/useOfficeLogo'
 
 interface Entry {
   id: string
@@ -26,6 +27,7 @@ function fmtWhen(iso: string) {
 export function ActivityTimeline({ entityType, entityId, createdAt }: { entityType: EntityType; entityId: string; createdAt?: string | null }) {
   const { profile } = useAuth()
   const profilesMap = useProfilesMap()
+  const officeLogo = useOfficeLogo()
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
   const [text, setText] = useState('')
@@ -97,11 +99,16 @@ export function ActivityTimeline({ entityType, entityId, createdAt }: { entityTy
             const authorName = p?.display_name ?? e.author
             return (
               <div key={e.id} className="flex gap-2.5">
-                <UserAvatar name={authorName} photoUrl={p?.photo_url} color={p?.color} className="h-6 w-6 text-[10px] mt-0.5" />
+                <UserAvatar
+                  name={authorName || 'SRJUR'}
+                  photoUrl={p?.photo_url ?? (authorName ? null : officeLogo)}
+                  color={p?.color}
+                  className="h-6 w-6 text-[10px] mt-0.5"
+                />
                 <div className="flex-1 min-w-0">
                   <p className={`text-sm ${e.kind === 'activity' ? 'text-muted-foreground italic' : ''}`}>{e.text}</p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {authorName ? `${authorName} · ` : ''}{fmtWhen(e.created_at)}
+                    {authorName ? `${authorName} · ` : 'Sistema · '}{fmtWhen(e.created_at)}
                   </p>
                 </div>
               </div>
@@ -109,7 +116,7 @@ export function ActivityTimeline({ entityType, entityId, createdAt }: { entityTy
           })}
           {createdAt && (
             <div className="flex gap-2.5">
-              <UserAvatar name={null} className="h-6 w-6 text-[10px] mt-0.5" />
+              <UserAvatar name="SRJUR" photoUrl={officeLogo} className="h-6 w-6 text-[10px] mt-0.5" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-muted-foreground italic">Criado</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">{fmtWhen(createdAt)}</p>
