@@ -640,7 +640,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
           </div>
 
           <div className="pt-2 border-t">
-            <ActivityTimeline entityType="client" entityId={client.id} />
+            <ActivityTimeline entityType="client" entityId={client.id} createdAt={client.created_at} />
           </div>
         </div>
 

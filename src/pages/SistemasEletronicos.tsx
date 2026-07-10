@@ -1,10 +1,10 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
 import { searchDjen, stripHtml, type DjenItem } from '@/lib/djen'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
@@ -19,10 +19,6 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { fmtDate } from '@/lib/format'
-import { ClientCombobox } from '@/components/ClientCombobox'
-import { ProcessCombobox } from '@/components/ProcessCombobox'
-import { TipoPrazoCombobox } from '@/components/TipoPrazoCombobox'
-import { ResponsibleSelect } from '@/components/ResponsibleSelect'
 
 interface OabConfig { id: string; nome: string; numero_oab: string; uf_oab: string; ativo: boolean }
 interface ProcessOption { id: string; title: string; number: string | null; client_id: string | null }
@@ -80,6 +76,7 @@ function IntimacaoTexto({ texto }: { texto: string | null }) {
 }
 
 export default function SistemasEletronicos() {
+  const navigate = useNavigate()
   const [configs, setConfigs] = useState<OabConfig[]>([])
   const [intimacoes, setIntimacoes] = useState<Intimacao[]>([])
   const [processes, setProcesses] = useState<ProcessOption[]>([])
@@ -100,29 +97,6 @@ export default function SistemasEletronicos() {
   const [linkOpen, setLinkOpen] = useState(false)
   const [linking, setLinking] = useState<Intimacao | null>(null)
   const [linkProcessId, setLinkProcessId] = useState('')
-
-  const [prazoOpen, setPrazoOpen] = useState(false)
-  const [prazoSource, setPrazoSource] = useState<Intimacao | null>(null)
-  const [prazoTitulo, setPrazoTitulo] = useState('')
-  const [prazoData, setPrazoData] = useState('')
-  const [prazoDias, setPrazoDias] = useState('15')
-  const [prazoResponsibleIds, setPrazoResponsibleIds] = useState<string[]>([])
-  const [prazoClientId, setPrazoClientId] = useState('')
-  const [prazoProcessId, setPrazoProcessId] = useState('')
-  const [prazoNotes, setPrazoNotes] = useState('')
-  const [prazoTipo, setPrazoTipo] = useState('')
-
-  const [tarefaOpen, setTarefaOpen] = useState(false)
-  const [tarefaSource, setTarefaSource] = useState<Intimacao | null>(null)
-  const [tarefaTitulo, setTarefaTitulo] = useState('')
-  const [tarefaData, setTarefaData] = useState('')
-  const [tarefaResponsibleIds, setTarefaResponsibleIds] = useState<string[]>([])
-
-  const [processoOpen, setProcessoOpen] = useState(false)
-  const [processoSource, setProcessoSource] = useState<Intimacao | null>(null)
-  const [npf, setNpf] = useState({
-    client_id: '', number: '', title: '', area: '', court: '', electronic_system: '',
-  })
 
   useEffect(() => {
     loadData()
@@ -287,153 +261,50 @@ export default function SistemasEletronicos() {
     loadData()
   }
 
+  // Os três atalhos abaixo levam pra tela oficial de cada cadastro (mesma
+  // usada em qualquer outro lugar do sistema), só passando um prefill via
+  // sessionStorage — em vez de manter uma versão simplificada duplicada só
+  // pra esse fluxo. O vínculo de volta com a intimação acontece dentro do
+  // saveDeadline/saveTask/saveProcess de cada página, via campo _intimacaoId.
   function openProcesso(i: Intimacao) {
-    setProcessoSource(i)
-    setNpf({
-      client_id: '',
+    sessionStorage.setItem('srjur_processo_prefill', JSON.stringify({
       number: i.numero_processo_mascara ?? '',
       title: i.orgao ? `${i.tipo_comunicacao ?? 'Processo'} — ${i.orgao}` : 'Novo processo',
-      area: '',
       court: i.orgao ?? '',
-      electronic_system: (i.tribunal && SISTEMA_POR_TRIBUNAL[i.tribunal]) ?? '',
-    })
-    setProcessoOpen(true)
-  }
-  async function createProcesso() {
-    if (!processoSource) return
-    const { data: proc } = await supabase.from('processes').insert({
-      client_id: npf.client_id || null,
-      number: npf.number || null,
-      title: npf.title,
       type: 'judicial',
-      area: npf.area || null,
-      status: 'em_andamento',
-      phase: 'inicial',
-      court: npf.court || null,
-      electronic_system: npf.electronic_system || null,
-      portal_visible: true,
-    }).select().single()
-
-    await supabase.from('intimacoes').update({
-      process_id: proc?.id ?? null, status: 'vinculado', lida: true,
-    }).eq('id', processoSource.id)
-
-    if (proc?.id) {
-      await supabase.from('process_updates').insert({
-        process_id: proc.id,
-        text: `[${processoSource.tipo_comunicacao ?? 'Intimação'}] ${processoSource.texto ?? ''}`,
-        author: 'DJEN (automático)',
-        portal_visible: false,
-      })
-    }
-
-    toast.success('Processo criado e vinculado à intimação!')
-    setProcessoOpen(false)
-    loadData()
+      electronic_system: (i.tribunal && SISTEMA_POR_TRIBUNAL[i.tribunal]) ?? '',
+      _intimacaoId: i.id, _intimacaoTipo: i.tipo_comunicacao ?? '', _intimacaoText: i.texto ?? '',
+    }))
+    navigate('/processos?new=1')
   }
 
   function openPrazo(i: Intimacao) {
-    setPrazoSource(i)
-    setPrazoTitulo(`Prazo — ${i.tipo_comunicacao ?? 'Intimação'}`)
     const base = new Date()
     base.setDate(base.getDate() + 15)
-    setPrazoData(base.toISOString().slice(0, 10))
-    setPrazoDias('15')
-    setPrazoResponsibleIds([])
-    setPrazoNotes(stripHtml(i.texto)?.slice(0, 1000) ?? '')
-    setPrazoTipo('')
     const match = findMatchingProcess(i.numero_processo)
-    setPrazoProcessId(match?.id ?? '')
-    setPrazoClientId(match?.client_id ?? '')
-    setPrazoOpen(true)
-  }
-  function recalcPrazoData(dias: string) {
-    setPrazoDias(dias)
-    const n = parseInt(dias)
-    if (Number.isNaN(n)) return
-    const d = new Date()
-    d.setDate(d.getDate() + n)
-    setPrazoData(d.toISOString().slice(0, 10))
-  }
-  async function createPrazo() {
-    if (!prazoSource) return
-    const match = findMatchingProcess(prazoSource.numero_processo)
-    const linkedProcessId = prazoProcessId || match?.id || null
-    const { data: deadline } = await supabase.from('deadlines').insert({
-      title: prazoTitulo,
-      tipo: prazoTipo || null,
-      due_date: prazoData,
-      process_id: linkedProcessId,
-      client_id: prazoClientId || null,
-      status: 'pendente',
+    sessionStorage.setItem('srjur_prazo_prefill', JSON.stringify({
+      title: `Prazo — ${i.tipo_comunicacao ?? 'Intimação'}`,
+      due_date: base.toISOString().slice(0, 10),
       source: 'Intimação',
-      notes: prazoNotes || null,
-      responsible_ids: prazoResponsibleIds,
-    }).select().single()
-
-    await supabase.from('intimacoes').update({
-      status: 'vinculado',
-      deadline_id: deadline?.id,
-      process_id: linkedProcessId ?? prazoSource.process_id,
-      lida: true,
-    }).eq('id', prazoSource.id)
-
-    if (linkedProcessId) {
-      await supabase.from('process_updates').insert({
-        process_id: linkedProcessId,
-        text: `[${prazoSource.tipo_comunicacao ?? 'Intimação'}] ${prazoSource.texto ?? ''}`,
-        author: 'DJEN (automático)',
-        portal_visible: false,
-      })
-    }
-
-    toast.success('Prazo criado a partir da intimação!')
-    setPrazoOpen(false)
-    loadData()
+      notes: stripHtml(i.texto)?.slice(0, 1000) ?? '',
+      process_id: match?.id ?? '', client_id: match?.client_id ?? '',
+      _intimacaoId: i.id, _intimacaoTipo: i.tipo_comunicacao ?? '', _intimacaoText: i.texto ?? '',
+    }))
+    navigate('/prazos?new=1')
   }
 
   function openTarefa(i: Intimacao) {
-    setTarefaSource(i)
-    setTarefaTitulo(`Tarefa — ${i.tipo_comunicacao ?? 'Intimação'}`)
     const base = new Date()
     base.setDate(base.getDate() + 7)
-    setTarefaData(base.toISOString().slice(0, 10))
-    setTarefaResponsibleIds([])
-    setTarefaOpen(true)
-  }
-  async function createTarefa() {
-    if (!tarefaSource) return
-    const match = findMatchingProcess(tarefaSource.numero_processo)
-    const linkedProcessId = match?.id ?? tarefaSource.process_id
-    await supabase.from('tasks').insert({
-      title: tarefaTitulo,
-      due_date: tarefaData,
-      status: 'pendente',
-      type: 'tarefa',
-      process_id: linkedProcessId,
-      client_id: match?.client_id ?? null,
-      responsible_ids: tarefaResponsibleIds,
-      description: tarefaSource.texto?.slice(0, 500),
-    })
-
-    await supabase.from('intimacoes').update({
-      status: 'vinculado',
-      process_id: linkedProcessId ?? tarefaSource.process_id,
-      lida: true,
-    }).eq('id', tarefaSource.id)
-
-    if (linkedProcessId) {
-      await supabase.from('process_updates').insert({
-        process_id: linkedProcessId,
-        text: `[${tarefaSource.tipo_comunicacao ?? 'Intimação'}] ${tarefaSource.texto ?? ''}`,
-        author: 'DJEN (automático)',
-        portal_visible: false,
-      })
-    }
-
-    toast.success('Tarefa criada a partir da intimação!')
-    setTarefaOpen(false)
-    loadData()
+    const match = findMatchingProcess(i.numero_processo)
+    sessionStorage.setItem('srjur_tarefa_prefill', JSON.stringify({
+      title: `Tarefa — ${i.tipo_comunicacao ?? 'Intimação'}`,
+      due_date: base.toISOString().slice(0, 10),
+      description: i.texto?.slice(0, 500) ?? '',
+      process_id: match?.id ?? '', client_id: match?.client_id ?? '',
+      _intimacaoId: i.id, _intimacaoTipo: i.tipo_comunicacao ?? '', _intimacaoText: i.texto ?? '',
+    }))
+    navigate('/tarefas?new=1')
   }
 
   return (
@@ -656,165 +527,6 @@ export default function SistemasEletronicos() {
           <DialogFooter className="pt-4">
             <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
             <Button onClick={confirmLink} disabled={!linkProcessId}>Vincular</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Create Prazo Dialog ── */}
-      <Dialog open={prazoOpen} onOpenChange={setPrazoOpen}>
-        <DialogContent className="max-w-[560px] w-[96vw] max-h-[90vh] overflow-y-auto p-6">
-          <DialogHeader><DialogTitle>Criar prazo a partir da intimação</DialogTitle></DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="space-y-1.5 min-w-0">
-              <Label>Título</Label>
-              <Input value={prazoTitulo} onChange={e => setPrazoTitulo(e.target.value)} className="h-10" />
-            </div>
-            <div className="space-y-1.5 min-w-0">
-              <Label>Tipo de prazo</Label>
-              <TipoPrazoCombobox value={prazoTipo} onChange={setPrazoTipo} />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5 min-w-0">
-                <Label>Dias de prazo</Label>
-                <Input value={prazoDias} onChange={e => recalcPrazoData(e.target.value)} className="h-10" inputMode="numeric" />
-              </div>
-              <div className="space-y-1.5 min-w-0">
-                <Label>Data limite</Label>
-                <Input type="date" value={prazoData} onChange={e => setPrazoData(e.target.value)} className="h-10" />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5 min-w-0">
-                <Label>Cliente</Label>
-                <ClientCombobox
-                  clients={clients}
-                  value={prazoClientId}
-                  onChange={id => {
-                    setPrazoClientId(id)
-                    if (prazoProcessId && processes.find(p => p.id === prazoProcessId)?.client_id !== id) setPrazoProcessId('')
-                  }}
-                />
-              </div>
-              <div className="space-y-1.5 min-w-0">
-                <Label>Processo vinculado</Label>
-                <ProcessCombobox
-                  processes={processes.filter(p => !prazoClientId || p.client_id === prazoClientId)}
-                  value={prazoProcessId}
-                  onChange={v => {
-                    setPrazoProcessId(v)
-                    if (!prazoClientId) setPrazoClientId(processes.find(p => p.id === v)?.client_id ?? '')
-                  }}
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5 min-w-0">
-              <Label>Responsável</Label>
-              <ResponsibleSelect value={prazoResponsibleIds} onChange={setPrazoResponsibleIds} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Observações / orientações</Label>
-              <Textarea value={prazoNotes} onChange={e => setPrazoNotes(e.target.value)} rows={3} />
-            </div>
-            {!prazoProcessId && prazoSource && findMatchingProcess(prazoSource.numero_processo) && (
-              <p className="text-[11px] text-primary flex items-center gap-1">
-                <Link2 className="h-3 w-3" />Será vinculado automaticamente ao processo correspondente
-              </p>
-            )}
-          </div>
-          <DialogFooter className="pt-4">
-            <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-            <Button onClick={createPrazo} disabled={!prazoTitulo || !prazoData}>Criar prazo</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Create Tarefa Dialog ── */}
-      <Dialog open={tarefaOpen} onOpenChange={setTarefaOpen}>
-        <DialogContent className="max-w-[520px] w-[96vw] p-6">
-          <DialogHeader><DialogTitle>Criar tarefa a partir da intimação</DialogTitle></DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <Label>Título</Label>
-              <Input value={tarefaTitulo} onChange={e => setTarefaTitulo(e.target.value)} className="h-10" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Data</Label>
-              <Input type="date" value={tarefaData} onChange={e => setTarefaData(e.target.value)} className="h-10" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Responsável</Label>
-              <ResponsibleSelect value={tarefaResponsibleIds} onChange={setTarefaResponsibleIds} />
-            </div>
-            {tarefaSource && findMatchingProcess(tarefaSource.numero_processo) && (
-              <p className="text-[11px] text-primary flex items-center gap-1">
-                <Link2 className="h-3 w-3" />Será vinculada automaticamente ao processo correspondente
-              </p>
-            )}
-          </div>
-          <DialogFooter className="pt-4">
-            <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-            <Button onClick={createTarefa} disabled={!tarefaTitulo || !tarefaData}>Criar tarefa</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Create Processo Dialog ── */}
-      <Dialog open={processoOpen} onOpenChange={setProcessoOpen}>
-        <DialogContent className="max-w-[600px] w-[96vw] max-h-[90vh] overflow-y-auto p-6">
-          <DialogHeader>
-            <DialogTitle>Criar processo a partir da intimação</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <p className="text-xs text-muted-foreground">
-              Processo {processoSource?.numero_processo_mascara} ainda não estava cadastrado — preencha os dados para criá-lo.
-            </p>
-            <div className="space-y-1.5">
-              <Label>Título do processo</Label>
-              <Input value={npf.title} onChange={e => setNpf(f => ({ ...f, title: e.target.value }))} className="h-10" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Cliente</Label>
-                <ClientCombobox clients={clients} value={npf.client_id} onChange={id => setNpf(f => ({ ...f, client_id: id }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Área do direito</Label>
-                <Select value={npf.area} onValueChange={v => setNpf(f => ({ ...f, area: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Nenhuma" /></SelectTrigger>
-                  <SelectContent>{AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Número do processo</Label>
-              <Input value={npf.number} onChange={e => setNpf(f => ({ ...f, number: e.target.value }))} className="h-10" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Vara / Tribunal</Label>
-                <Input value={npf.court} onChange={e => setNpf(f => ({ ...f, court: e.target.value }))} className="h-10" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Sistema eletrônico</Label>
-                <Select value={npf.electronic_system} onValueChange={v => setNpf(f => ({ ...f, electronic_system: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Nenhum" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
-                    <SelectItem value="eProc Estadual">eProc Estadual</SelectItem>
-                    <SelectItem value="eProc Federal">eProc Federal</SelectItem>
-                    <SelectItem value="PJe">PJe</SelectItem>
-                    <SelectItem value="ESAJ">ESAJ</SelectItem>
-                    <SelectItem value="Projudi">Projudi</SelectItem>
-                    <SelectItem value="SEEU">SEEU</SelectItem>
-                    <SelectItem value="Outro">Outro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="pt-4">
-            <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-            <Button onClick={createProcesso} disabled={!npf.title}>Criar processo</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

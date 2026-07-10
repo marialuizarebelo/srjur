@@ -40,6 +40,7 @@ interface MarketingItem {
   responsible_ids: string[] | null
   tags: string | null
   notes: string | null
+  created_at: string
 }
 
 const STATUSES = [
@@ -143,7 +144,7 @@ function MarketingViewDialog({ item, open, onClose, onEdit, onDelete, onMoveStat
           )}
 
           <div className="pt-2 border-t">
-            <ActivityTimeline entityType="marketing" entityId={item.id} />
+            <ActivityTimeline entityType="marketing" entityId={item.id} createdAt={item.created_at} />
           </div>
         </div>
 

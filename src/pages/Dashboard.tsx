@@ -369,80 +369,6 @@ export default function Dashboard() {
   const [clientOptions, setClientOptions] = useState<{ id: string; name: string }[]>([])
   const profilesMap = useProfilesMap()
 
-  const [quickLeadOpen, setQuickLeadOpen] = useState(false)
-  const [quickLead, setQuickLead] = useState({ name: '', phone: '', source: '' })
-  const [quickClientOpen, setQuickClientOpen] = useState(false)
-  const [quickClient, setQuickClient] = useState({ name: '', email: '', phone: '', type: 'pessoa_fisica' })
-  const [quickProcessOpen, setQuickProcessOpen] = useState(false)
-  const [quickProcess, setQuickProcess] = useState({ title: '', client_id: '', area: '' })
-  const [quickTaskOpen, setQuickTaskOpen] = useState(false)
-  const [quickTask, setQuickTask] = useState({ title: '', due_date: '', responsible_ids: [] as string[] })
-  const [saving, setSaving] = useState(false)
-  const [reloadTick, setReloadTick] = useState(0)
-
-  async function saveQuickLead() {
-    if (!quickLead.name.trim() || saving) return
-    setSaving(true)
-    try {
-      const { error } = await supabase.from('leads').insert({ name: quickLead.name, phone: quickLead.phone || null, source: quickLead.source || null, status: 'novo' })
-      if (error) { toast.error('Erro ao criar lead: ' + error.message); return }
-      toast.success('Lead criado!')
-      setQuickLeadOpen(false)
-      setQuickLead({ name: '', phone: '', source: '' })
-      setReloadTick(t => t + 1)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function saveQuickClient() {
-    if (!quickClient.name.trim() || saving) return
-    setSaving(true)
-    try {
-      const { error } = await supabase.from('clients').insert({ name: quickClient.name, email: quickClient.email || null, phone: quickClient.phone || null, type: quickClient.type, status: 'ativo' })
-      if (error) { toast.error('Erro ao criar cliente: ' + error.message); return }
-      toast.success('Cliente criado!')
-      setQuickClientOpen(false)
-      setQuickClient({ name: '', email: '', phone: '', type: 'pessoa_fisica' })
-      setReloadTick(t => t + 1)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function saveQuickProcess() {
-    if (!quickProcess.title.trim() || saving) return
-    setSaving(true)
-    try {
-      const { error } = await supabase.from('processes').insert({ title: quickProcess.title, client_id: quickProcess.client_id || null, area: quickProcess.area || null, status: 'em_andamento', phase: 'inicial' })
-      if (error) { toast.error('Erro ao criar processo: ' + error.message); return }
-      toast.success('Processo criado!')
-      setQuickProcessOpen(false)
-      setQuickProcess({ title: '', client_id: '', area: '' })
-      setReloadTick(t => t + 1)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function saveQuickTask() {
-    if (!quickTask.title.trim() || saving) return
-    setSaving(true)
-    try {
-      const { error } = await supabase.from('tasks').insert({
-        title: quickTask.title, due_date: quickTask.due_date || null, status: 'pendente',
-        responsible_ids: quickTask.responsible_ids, type: 'tarefa',
-      })
-      if (error) { toast.error('Erro ao criar tarefa: ' + error.message); return }
-      toast.success('Tarefa criada!')
-      setQuickTaskOpen(false)
-      setQuickTask({ title: '', due_date: '', responsible_ids: [] })
-      setReloadTick(t => t + 1)
-    } finally {
-      setSaving(false)
-    }
-  }
-
   const firstName = profile?.nickname || profile?.display_name?.split(' ')[0] || 'Usuária'
   const todayStr = fmtDateLong(new Date())
 
@@ -565,7 +491,7 @@ export default function Dashboard() {
     }
 
     load()
-  }, [reloadTick])
+  }, [])
 
   /* ---------- Modal openers ---------- */
 
@@ -713,129 +639,20 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground">{todayStr} · Sua central de operação</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => setQuickLeadOpen(true)}>
+          <Button variant="outline" size="sm" onClick={() => navigate('/clientes?new=lead')}>
             <Plus className="h-3 w-3 mr-1" />Lead
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setQuickClientOpen(true)}>
+          <Button variant="outline" size="sm" onClick={() => navigate('/clientes?new=cliente')}>
             <Plus className="h-3 w-3 mr-1" />Cliente
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setQuickProcessOpen(true)}>
+          <Button variant="outline" size="sm" onClick={() => navigate('/processos?new=1')}>
             <Plus className="h-3 w-3 mr-1" />Processo
           </Button>
-          <Button size="sm" onClick={() => setQuickTaskOpen(true)}>
+          <Button size="sm" onClick={() => navigate('/tarefas?new=1')}>
             <Plus className="h-3 w-3 mr-1" />Tarefa
           </Button>
         </div>
 
-        {/* ── Quick Lead ── */}
-        <Dialog open={quickLeadOpen} onOpenChange={setQuickLeadOpen}>
-          <DialogContent className="max-w-[420px] w-[92vw] p-6">
-            <DialogHeader><DialogTitle>Novo Lead</DialogTitle></DialogHeader>
-            <div className="space-y-3 pt-2">
-              <div className="space-y-1.5">
-                <Label>Nome</Label>
-                <Input value={quickLead.name} onChange={e => setQuickLead(f => ({ ...f, name: e.target.value }))} className="h-10" autoFocus />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Telefone</Label>
-                <Input value={quickLead.phone} onChange={e => setQuickLead(f => ({ ...f, phone: e.target.value }))} className="h-10" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Origem</Label>
-                <Input value={quickLead.source} onChange={e => setQuickLead(f => ({ ...f, source: e.target.value }))} placeholder="Ex: Indicação, Instagram..." className="h-10" />
-              </div>
-            </div>
-            <DialogFooter className="pt-4 mx-0 mb-0 px-0 pb-0 border-t-0 bg-transparent">
-              <Button variant="outline" onClick={() => setQuickLeadOpen(false)}>Cancelar</Button>
-              <Button onClick={saveQuickLead} disabled={saving || !quickLead.name.trim()}>Salvar</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* ── Quick Cliente ── */}
-        <Dialog open={quickClientOpen} onOpenChange={setQuickClientOpen}>
-          <DialogContent className="max-w-[420px] w-[92vw] p-6">
-            <DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader>
-            <div className="space-y-3 pt-2">
-              <div className="space-y-1.5">
-                <Label>Nome</Label>
-                <Input value={quickClient.name} onChange={e => setQuickClient(f => ({ ...f, name: e.target.value }))} className="h-10" autoFocus />
-              </div>
-              <div className="space-y-1.5">
-                <Label>E-mail</Label>
-                <Input type="email" value={quickClient.email} onChange={e => setQuickClient(f => ({ ...f, email: e.target.value }))} className="h-10" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Telefone</Label>
-                <Input value={quickClient.phone} onChange={e => setQuickClient(f => ({ ...f, phone: e.target.value }))} className="h-10" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Tipo</Label>
-                <Select value={quickClient.type} onValueChange={v => setQuickClient(f => ({ ...f, type: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue>{quickClient.type === 'pessoa_fisica' ? 'Pessoa Física' : 'Pessoa Jurídica'}</SelectValue></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pessoa_fisica">Pessoa Física</SelectItem>
-                    <SelectItem value="pessoa_juridica">Pessoa Jurídica</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter className="pt-4 mx-0 mb-0 px-0 pb-0 border-t-0 bg-transparent">
-              <Button variant="outline" onClick={() => setQuickClientOpen(false)}>Cancelar</Button>
-              <Button onClick={saveQuickClient} disabled={saving || !quickClient.name.trim()}>Salvar</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* ── Quick Processo ── */}
-        <Dialog open={quickProcessOpen} onOpenChange={setQuickProcessOpen}>
-          <DialogContent className="max-w-[420px] w-[92vw] p-6">
-            <DialogHeader><DialogTitle>Novo Processo</DialogTitle></DialogHeader>
-            <div className="space-y-3 pt-2">
-              <div className="space-y-1.5">
-                <Label>Título</Label>
-                <Input value={quickProcess.title} onChange={e => setQuickProcess(f => ({ ...f, title: e.target.value }))} className="h-10" autoFocus />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Cliente</Label>
-                <ClientCombobox clients={clientOptions} value={quickProcess.client_id} onChange={id => setQuickProcess(f => ({ ...f, client_id: id }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Área</Label>
-                <Input value={quickProcess.area} onChange={e => setQuickProcess(f => ({ ...f, area: e.target.value }))} placeholder="Ex: Cível, Família..." className="h-10" />
-              </div>
-            </div>
-            <DialogFooter className="pt-4 mx-0 mb-0 px-0 pb-0 border-t-0 bg-transparent">
-              <Button variant="outline" onClick={() => setQuickProcessOpen(false)}>Cancelar</Button>
-              <Button onClick={saveQuickProcess} disabled={saving || !quickProcess.title.trim()}>Salvar</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* ── Quick Tarefa ── */}
-        <Dialog open={quickTaskOpen} onOpenChange={setQuickTaskOpen}>
-          <DialogContent className="max-w-[420px] w-[92vw] p-6">
-            <DialogHeader><DialogTitle>Nova Tarefa</DialogTitle></DialogHeader>
-            <div className="space-y-3 pt-2">
-              <div className="space-y-1.5">
-                <Label>Título</Label>
-                <Input value={quickTask.title} onChange={e => setQuickTask(f => ({ ...f, title: e.target.value }))} className="h-10" autoFocus />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Data</Label>
-                <Input type="date" value={quickTask.due_date} onChange={e => setQuickTask(f => ({ ...f, due_date: e.target.value }))} className="h-10" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Responsável</Label>
-                <ResponsibleSelect value={quickTask.responsible_ids} onChange={ids => setQuickTask(f => ({ ...f, responsible_ids: ids }))} />
-              </div>
-            </div>
-            <DialogFooter className="pt-4 mx-0 mb-0 px-0 pb-0 border-t-0 bg-transparent">
-              <Button variant="outline" onClick={() => setQuickTaskOpen(false)}>Cancelar</Button>
-              <Button onClick={saveQuickTask} disabled={saving || !quickTask.title.trim()}>Salvar</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
 
       {/* Main grid: content + sidebar */}
@@ -897,7 +714,7 @@ export default function Dashboard() {
             <WeekAgendaView
               weekByDay={weekByDay}
               onItemClick={item => openAttentionItem(item, 'Tarefa')}
-              onAddDay={date => { setQuickTask({ title: '', due_date: date, responsible_ids: [] }); setQuickTaskOpen(true) }}
+              onAddDay={date => { sessionStorage.setItem('srjur_tarefa_prefill', JSON.stringify({ due_date: date })); navigate('/tarefas?new=1') }}
             />
           </div>
 
@@ -996,10 +813,10 @@ export default function Dashboard() {
         {/* Right sidebar */}
         <div className="space-y-4 hidden xl:block">
           <QuickActionsCard
-            onLead={() => setQuickLeadOpen(true)}
-            onClient={() => setQuickClientOpen(true)}
-            onProcess={() => setQuickProcessOpen(true)}
-            onTask={() => { setQuickTask({ title: '', due_date: '', responsible_ids: [] }); setQuickTaskOpen(true) }}
+            onLead={() => navigate('/clientes?new=lead')}
+            onClient={() => navigate('/clientes?new=cliente')}
+            onProcess={() => navigate('/processos?new=1')}
+            onTask={() => navigate('/tarefas?new=1')}
           />
 
           <PortalActivityCard />

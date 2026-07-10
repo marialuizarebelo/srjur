@@ -266,6 +266,7 @@ export default function Processos() {
     client_role: 'autor',
     opposing_parties: [{ name: '', cpf: '', role: 'reu' }] as { name: string; cpf: string; role: string }[], filing_date: '', citation_date: '',
     instance: '1º Grau', confidential: false, closed_date: '',
+    _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '',
   })
 
   // Detail view (andamentos)
@@ -285,7 +286,8 @@ export default function Processos() {
       access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
       client_role: 'autor',
       opposing_parties: [{ name: '', cpf: '', role: 'reu' }], filing_date: '', citation_date: '',
-      instance: '1º Grau', confidential: false, closed_date: '' })
+      instance: '1º Grau', confidential: false, closed_date: '',
+      _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '' })
     setEditing(null)
   }
 
@@ -329,11 +331,17 @@ export default function Processos() {
 
   useEffect(() => { loadData(); loadStages() }, [])
 
-  // Abre o formulário de novo processo quando vem de um atalho "+ Novo" (ex: Dashboard)
+  // Abre o formulário de novo processo quando vem de um atalho "+ Novo" (ex:
+  // Dashboard, Intimações) — mesma tela em qualquer lugar que disparar isso.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('new') === '1') {
       resetPf()
+      const raw = sessionStorage.getItem('srjur_processo_prefill')
+      if (raw) {
+        sessionStorage.removeItem('srjur_processo_prefill')
+        try { setPf(f => ({ ...f, ...JSON.parse(raw) })) } catch { /* ignora prefill inválido */ }
+      }
       setDialogOpen(true)
       window.history.replaceState({}, '', window.location.pathname)
     }
@@ -434,6 +442,17 @@ export default function Processos() {
         const { data: created, error } = await supabase.from('processes').insert(payload).select().single()
         if (error) throw error
         processId = created?.id
+        // Se veio de "Criar processo a partir da intimação", vincula de volta.
+        if (pf._intimacaoId && processId) {
+          await supabase.from('intimacoes').update({
+            process_id: processId, status: 'vinculado', lida: true,
+          }).eq('id', pf._intimacaoId)
+          await supabase.from('process_updates').insert({
+            process_id: processId,
+            text: `[${pf._intimacaoTipo ?? 'Intimação'}] ${pf._intimacaoText ?? ''}`,
+            author: 'DJEN (automático)', portal_visible: false,
+          })
+        }
       }
       toast.success(editing ? 'Processo atualizado!' : 'Processo criado!')
       setDialogOpen(false)
@@ -694,6 +713,10 @@ export default function Processos() {
                     <p className="text-sm whitespace-pre-wrap">{detailProcess.notes}</p>
                   </div>
                 )}
+
+                <div className="pt-2 border-t">
+                  <ActivityTimeline entityType="process" entityId={detailProcess.id} createdAt={detailProcess.created_at} />
+                </div>
 
                 <div className="flex flex-wrap gap-2 pt-2 border-t">
                   {detailProcess.court_url && (
@@ -1260,7 +1283,7 @@ export default function Processos() {
 
             {editing && (
               <div className="pt-2 border-t">
-                <ActivityTimeline entityType="process" entityId={editing.id} />
+                <ActivityTimeline entityType="process" entityId={editing.id} createdAt={editing.created_at} />
               </div>
             )}
           </div>
