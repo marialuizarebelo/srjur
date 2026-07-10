@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -426,7 +427,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
       <DialogContent
-        className="max-w-[680px] w-[96vw] max-h-[90vh] overflow-y-auto p-0"
+        className="max-w-[680px] w-[96vw] max-h-[90vh] overflow-y-auto overflow-x-hidden p-0"
         onInteractOutside={e => e.preventDefault()}
         onPointerDownOutside={e => e.preventDefault()}
         onFocusOutside={e => e.preventDefault()}
@@ -679,21 +680,17 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
             </Button>
           </div>
 
-          <div className="pt-2 border-t">
-            <ActivityTimeline entityType="client" entityId={client.id} createdAt={client.created_at} externalEntries={activityExtras} />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted/20">
-          <Button variant="destructive" size="sm" onClick={onDelete}>
-            <Trash2 className="h-3.5 w-3.5 mr-1.5" />Excluir
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+          <div className="flex items-center justify-between gap-2 pt-2 border-t">
+            <Button variant="destructive" size="sm" onClick={onDelete}>
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />Excluir
+            </Button>
             <Button size="sm" onClick={onEdit}>
               <Pencil className="h-3.5 w-3.5 mr-1.5" />Editar
             </Button>
+          </div>
+
+          <div className="pt-2 border-t min-w-0">
+            <ActivityTimeline entityType="client" entityId={client.id} createdAt={client.created_at} externalEntries={activityExtras} />
           </div>
         </div>
       </DialogContent>
@@ -822,6 +819,7 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
 }
 
 export default function Clientes() {
+  const navigate = useNavigate()
   const profilesMap = useProfilesMap()
   const [clients, setClients] = useState<Client[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
@@ -1599,8 +1597,16 @@ export default function Clientes() {
         onClose={() => setViewClient(null)}
         onEdit={() => { const c = viewClient; setViewClient(null); if (c) openEditClient(c) }}
         onDelete={() => { if (viewClient) { deleteClient(viewClient.id); setViewClient(null) } }}
-        onNewTask={() => { /* TODO: abrir tarefas com cliente pré-selecionado */ }}
-        onNewProcess={() => { /* TODO: abrir processos com cliente pré-selecionado */ }}
+        onNewTask={() => {
+          if (!viewClient) return
+          sessionStorage.setItem('srjur_tarefa_prefill', JSON.stringify({ client_id: viewClient.id }))
+          navigate('/tarefas?new=1')
+        }}
+        onNewProcess={() => {
+          if (!viewClient) return
+          sessionStorage.setItem('srjur_processo_prefill', JSON.stringify({ client_id: viewClient.id }))
+          navigate('/processos?new=1')
+        }}
       />
 
       {/* ── Lead View Dialog ── */}

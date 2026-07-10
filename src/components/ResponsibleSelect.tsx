@@ -3,7 +3,16 @@ import { supabase } from '@/integrations/supabase/client'
 import { Check } from 'lucide-react'
 import { UserAvatar } from '@/components/UserAvatar'
 
-export interface ProfileOption { id: string; display_name: string | null; color: string | null; photo_url: string | null }
+export interface ProfileOption {
+  id: string
+  display_name: string | null
+  // Nome/e-mail bruto, do jeito que ficou salvo em outras tabelas antigas
+  // (ex: process_updates.author) — usado só pra "traduzir" esses registros
+  // pro apelido, nunca pra exibir diretamente.
+  raw_name: string | null
+  color: string | null
+  photo_url: string | null
+}
 
 let cachedProfiles: ProfileOption[] | null = null
 
@@ -12,7 +21,7 @@ export async function getAdminProfiles(): Promise<ProfileOption[]> {
   const { data } = await supabase.from('profiles').select('id, display_name, nickname, color, photo_url').eq('role', 'admin').order('display_name')
   // Prioriza o apelido sobre o nome/e-mail cadastrado — é o que deve aparecer em toda a UI
   cachedProfiles = ((data ?? []) as any[]).map(p => ({
-    id: p.id, color: p.color, display_name: p.nickname || p.display_name, photo_url: p.photo_url,
+    id: p.id, color: p.color, display_name: p.nickname || p.display_name, raw_name: p.display_name, photo_url: p.photo_url,
   }))
   return cachedProfiles!
 }
