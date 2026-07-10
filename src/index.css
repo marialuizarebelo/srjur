@@ -41,8 +41,8 @@
 }
 
 :root {
-  /* raio maior para arredondamento generoso estilo Intelly */
-  --radius: 0.875rem;
+  /* raio mais contido, estilo SaaS maduro (era 0.875rem — ficava infantil/bolha) */
+  --radius: 0.5rem;
 
   /* fundo creme quente — inspirado no Intelly, não frio nem branco puro */
   --background: #F2EDE6;
