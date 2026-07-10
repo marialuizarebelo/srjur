@@ -4,6 +4,7 @@ import { searchDjen, stripHtml, type DjenItem } from '@/lib/djen'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
@@ -104,6 +105,9 @@ export default function SistemasEletronicos() {
   const [prazoData, setPrazoData] = useState('')
   const [prazoDias, setPrazoDias] = useState('15')
   const [prazoResponsibleIds, setPrazoResponsibleIds] = useState<string[]>([])
+  const [prazoClientId, setPrazoClientId] = useState('')
+  const [prazoProcessId, setPrazoProcessId] = useState('')
+  const [prazoNotes, setPrazoNotes] = useState('')
 
   const [tarefaOpen, setTarefaOpen] = useState(false)
   const [tarefaSource, setTarefaSource] = useState<Intimacao | null>(null)
@@ -333,11 +337,16 @@ export default function SistemasEletronicos() {
     setPrazoData(base.toISOString().slice(0, 10))
     setPrazoDias('15')
     setPrazoResponsibleIds([])
+    setPrazoNotes(stripHtml(i.texto)?.slice(0, 1000) ?? '')
+    const match = findMatchingProcess(i.numero_processo)
+    setPrazoProcessId(match?.id ?? '')
+    setPrazoClientId(match?.client_id ?? '')
     setPrazoOpen(true)
   }
   function recalcPrazoData(dias: string) {
     setPrazoDias(dias)
-    const n = parseInt(dias) || 0
+    const n = parseInt(dias)
+    if (Number.isNaN(n)) return
     const d = new Date()
     d.setDate(d.getDate() + n)
     setPrazoData(d.toISOString().slice(0, 10))
@@ -345,24 +354,25 @@ export default function SistemasEletronicos() {
   async function createPrazo() {
     if (!prazoSource) return
     const match = findMatchingProcess(prazoSource.numero_processo)
+    const linkedProcessId = prazoProcessId || match?.id || null
     const { data: deadline } = await supabase.from('deadlines').insert({
       title: prazoTitulo,
       due_date: prazoData,
-      process_id: match?.id ?? null,
+      process_id: linkedProcessId,
+      client_id: prazoClientId || null,
       status: 'pendente',
       source: 'Intimação',
-      notes: prazoSource.texto?.slice(0, 500),
+      notes: prazoNotes || null,
       responsible_ids: prazoResponsibleIds,
     }).select().single()
 
     await supabase.from('intimacoes').update({
       status: 'vinculado',
       deadline_id: deadline?.id,
-      process_id: match?.id ?? prazoSource.process_id,
+      process_id: linkedProcessId ?? prazoSource.process_id,
       lida: true,
     }).eq('id', prazoSource.id)
 
-    const linkedProcessId = match?.id ?? prazoSource.process_id
     if (linkedProcessId) {
       await supabase.from('process_updates').insert({
         process_id: linkedProcessId,
@@ -514,7 +524,7 @@ export default function SistemasEletronicos() {
                   <p className="text-xs text-muted-foreground mt-0.5">{i.orgao}</p>
                   {match && (
                     <p className="text-[11px] text-primary flex items-center gap-1 mt-1">
-                      <Link2 className="h-3 w-3" />Vinculado a: {match.number ? `${match.number} — ${match.title}` : match.title}
+                      <Link2 className="h-3 w-3" />Vinculado a: {match.number ? `${match.title} — ${match.number}` : match.title}
                     </p>
                   )}
                   {!match && i.numero_processo && i.status !== 'vinculado' && (
@@ -626,7 +636,7 @@ export default function SistemasEletronicos() {
               <SelectTrigger className="h-10"><SelectValue placeholder="Selecione o processo..." /></SelectTrigger>
               <SelectContent>
                 {processes.map(p => (
-                  <SelectItem key={p.id} value={p.id}>{p.number ? `${p.number} — ${p.title}` : p.title}</SelectItem>
+                  <SelectItem key={p.id} value={p.id}>{p.number ? `${p.title} — ${p.number}` : p.title}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -640,7 +650,7 @@ export default function SistemasEletronicos() {
 
       {/* ── Create Prazo Dialog ── */}
       <Dialog open={prazoOpen} onOpenChange={setPrazoOpen}>
-        <DialogContent className="max-w-[520px] w-[96vw] p-6">
+        <DialogContent className="max-w-[560px] w-[96vw] max-h-[90vh] overflow-y-auto p-6">
           <DialogHeader><DialogTitle>Criar prazo a partir da intimação</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-1.5">
@@ -657,11 +667,57 @@ export default function SistemasEletronicos() {
                 <Input type="date" value={prazoData} onChange={e => setPrazoData(e.target.value)} className="h-10" />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Cliente</Label>
+                <ClientCombobox
+                  clients={clients}
+                  value={prazoClientId}
+                  onChange={id => {
+                    setPrazoClientId(id)
+                    if (prazoProcessId && processes.find(p => p.id === prazoProcessId)?.client_id !== id) setPrazoProcessId('')
+                  }}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Processo vinculado</Label>
+                <Select
+                  value={prazoProcessId}
+                  onValueChange={v => {
+                    setPrazoProcessId(v)
+                    if (!prazoClientId) setPrazoClientId(processes.find(p => p.id === v)?.client_id ?? '')
+                  }}
+                >
+                  <SelectTrigger className="h-10 min-w-0">
+                    <SelectValue placeholder="Nenhum" className="truncate min-w-0">
+                      {(() => {
+                        const p = processes.find(pr => pr.id === prazoProcessId)
+                        return p ? (p.number ? `${p.title} — ${p.number}` : p.title) : 'Nenhum'
+                      })()}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhum</SelectItem>
+                    {processes
+                      .filter(p => !prazoClientId || p.client_id === prazoClientId)
+                      .map(p => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.number ? `${p.title} — ${p.number}` : p.title}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label>Responsável</Label>
               <ResponsibleSelect value={prazoResponsibleIds} onChange={setPrazoResponsibleIds} />
             </div>
-            {prazoSource && findMatchingProcess(prazoSource.numero_processo) && (
+            <div className="space-y-1.5">
+              <Label>Observações / orientações</Label>
+              <Textarea value={prazoNotes} onChange={e => setPrazoNotes(e.target.value)} rows={3} />
+            </div>
+            {!prazoProcessId && prazoSource && findMatchingProcess(prazoSource.numero_processo) && (
               <p className="text-[11px] text-primary flex items-center gap-1">
                 <Link2 className="h-3 w-3" />Será vinculado automaticamente ao processo correspondente
               </p>
