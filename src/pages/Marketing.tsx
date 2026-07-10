@@ -76,7 +76,7 @@ function MarketingViewDialog({ item, open, onClose, onEdit, onDelete, onMoveStat
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="max-w-[560px] w-[96vw] max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="max-w-[560px] w-[96vw] max-h-[90vh] overflow-y-auto overflow-x-hidden p-0">
         <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-4 border-b">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -143,20 +143,20 @@ function MarketingViewDialog({ item, open, onClose, onEdit, onDelete, onMoveStat
             </div>
           )}
 
-          <div className="pt-2 border-t">
+          <div className="flex flex-wrap gap-2 pt-2 border-t">
+            <Button variant="destructive" size="sm" className="mr-auto" onClick={onDelete}>Excluir</Button>
+            {nextStatus && (
+              <Button variant="outline" size="sm" onClick={() => onMoveStatus(nextStatus.value)}>
+                Avançar → {nextStatus.label}
+              </Button>
+            )}
+            <Button size="sm" onClick={onEdit}>Editar</Button>
+          </div>
+
+          <div className="pt-2 border-t min-w-0">
             <ActivityTimeline entityType="marketing" entityId={item.id} createdAt={item.created_at} />
           </div>
         </div>
-
-        <DialogFooter className="px-6 pb-6 pt-2 flex-wrap gap-2 mx-0 mb-0 rounded-none border-t-0">
-          <Button variant="destructive" className="mr-auto" onClick={onDelete}>Excluir</Button>
-          {nextStatus && (
-            <Button variant="outline" onClick={() => onMoveStatus(nextStatus.value)}>
-              Avançar → {nextStatus.label}
-            </Button>
-          )}
-          <Button onClick={onEdit}>Editar</Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
