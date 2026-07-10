@@ -179,7 +179,7 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
           )}
 
           <div className="pt-2 border-t">
-            <ActivityTimeline entityType="task" entityId={task.id} />
+            <ActivityTimeline entityType="task" entityId={task.id} createdAt={task.created_at} />
           </div>
         </div>
 
@@ -238,13 +238,15 @@ export default function Tarefas() {
     priority: 'media', due_date: '', due_time: '', responsible_ids: [] as string[],
     client_id: '', process_id: '', recurrence: 'Única', portal_visible: false,
     workflow_stage: 'a_fazer',
+    _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '',
   })
 
   const resetTf = () => {
     setTf({ title: '', description: '', type: 'tarefa', status: 'pendente',
       priority: 'media', due_date: '', due_time: '', responsible_ids: [],
       client_id: '', process_id: '', recurrence: 'Única', portal_visible: false,
-      workflow_stage: 'a_fazer' })
+      workflow_stage: 'a_fazer',
+      _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '' })
     setEditing(null)
   }
 
@@ -263,11 +265,17 @@ export default function Tarefas() {
 
   useEffect(() => { loadData() }, [])
 
-  // Abre o formulário de nova tarefa quando vem de um atalho "+ Novo" (ex: Dashboard)
+  // Abre o formulário de nova tarefa quando vem de um atalho "+ Novo" (ex:
+  // Dashboard, Intimações) — mesma tela em qualquer lugar que disparar isso.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('new') === '1') {
       resetTf()
+      const raw = sessionStorage.getItem('srjur_tarefa_prefill')
+      if (raw) {
+        sessionStorage.removeItem('srjur_tarefa_prefill')
+        try { setTf(f => ({ ...f, ...JSON.parse(raw) })) } catch { /* ignora prefill inválido */ }
+      }
       setDialogOpen(true)
       window.history.replaceState({}, '', window.location.pathname)
     }
@@ -355,9 +363,24 @@ export default function Tarefas() {
         workflow_stage: tf.workflow_stage,
       }
       if (editing) {
-        await supabase.from('tasks').update(payload).eq('id', editing.id)
+        const { error } = await supabase.from('tasks').update(payload).eq('id', editing.id)
+        if (error) { toast.error('Erro ao salvar tarefa: ' + error.message); return }
       } else {
-        await supabase.from('tasks').insert(payload)
+        const { data: created, error } = await supabase.from('tasks').insert(payload).select().single()
+        if (error) { toast.error('Erro ao salvar tarefa: ' + error.message); return }
+        // Se veio de "Criar tarefa a partir da intimação", vincula de volta.
+        if (tf._intimacaoId && created) {
+          await supabase.from('intimacoes').update({
+            status: 'vinculado', process_id: payload.process_id ?? undefined, lida: true,
+          }).eq('id', tf._intimacaoId)
+          if (payload.process_id) {
+            await supabase.from('process_updates').insert({
+              process_id: payload.process_id,
+              text: `[${tf._intimacaoTipo ?? 'Intimação'}] ${tf._intimacaoText ?? ''}`,
+              author: 'DJEN (automático)', portal_visible: false,
+            })
+          }
+        }
       }
       setDialogOpen(false)
       resetTf()
