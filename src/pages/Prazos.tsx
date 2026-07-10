@@ -841,32 +841,30 @@ export default function Prazos() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5 min-w-0">
-                <Label>Cliente</Label>
-                <ClientCombobox
-                  clients={clients}
-                  value={df.client_id}
-                  onChange={v => setDf(f => ({
-                    ...f,
-                    client_id: v,
-                    // Se o processo já escolhido não pertence mais ao cliente selecionado, limpa.
-                    process_id: f.process_id && processes.find(p => p.id === f.process_id)?.client_id !== v ? '' : f.process_id,
-                  }))}
-                />
-              </div>
-              <div className="space-y-1.5 min-w-0">
-                <Label>Processo vinculado</Label>
-                <ProcessCombobox
-                  processes={processes.filter(p => !df.client_id || p.client_id === df.client_id)}
-                  value={df.process_id}
-                  onChange={v => setDf(f => ({
-                    ...f,
-                    process_id: v,
-                    client_id: f.client_id || processes.find(p => p.id === v)?.client_id || '',
-                  }))}
-                />
-              </div>
+            <div className="space-y-1.5 min-w-0">
+              <Label>Cliente</Label>
+              <ClientCombobox
+                clients={clients}
+                value={df.client_id}
+                onChange={v => setDf(f => ({
+                  ...f,
+                  client_id: v,
+                  // Se o processo já escolhido não pertence mais ao cliente selecionado, limpa.
+                  process_id: f.process_id && processes.find(p => p.id === f.process_id)?.client_id !== v ? '' : f.process_id,
+                }))}
+              />
+            </div>
+            <div className="space-y-1.5 min-w-0">
+              <Label>Processo vinculado</Label>
+              <ProcessCombobox
+                processes={processes.filter(p => !df.client_id || p.client_id === df.client_id)}
+                value={df.process_id}
+                onChange={v => setDf(f => ({
+                  ...f,
+                  process_id: v,
+                  client_id: f.client_id || processes.find(p => p.id === v)?.client_id || '',
+                }))}
+              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
