@@ -692,8 +692,13 @@ export default function Financeiro() {
     .slice(0, 5)
 
   // ── Projection ──
+  // "saldo" de cada mês é ACUMULADO (posição de caixa atual + o que já entrou/saiu
+  // nos meses anteriores da projeção + o que ainda falta entrar/sair naquele mês),
+  // porque o objetivo é dar uma ideia de como vai estar a saúde do caixa lá na
+  // frente — não só o delta isolado daquele mês, que sozinho não diz muita coisa.
   const projection = useMemo(() => {
     const result: { month: string; aReceber: number; aPagar: number; saldo: number }[] = []
+    let saldoAcumulado = saldo
     if (projectionMonths === 0) {
       // "até final deste mês" — lançamentos pendentes do mês atual ainda não vencidos/pagos
       const today = new Date()
@@ -702,7 +707,8 @@ export default function Financeiro() {
       const monthRows = rows.filter(r => r.due_date && r.due_date >= start && r.due_date <= end && !r.paid && r.impacts_cash !== false)
       const rec = monthRows.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0)
       const desp = monthRows.filter(r => r.type === 'despesa').reduce((s, r) => s + Number(r.value), 0)
-      result.push({ month: `${MONTHS[viewMonth]}/${viewYear % 100} (restante)`, aReceber: rec, aPagar: desp, saldo: rec - desp })
+      saldoAcumulado += rec - desp
+      result.push({ month: `${MONTHS[viewMonth]}/${viewYear % 100} (restante)`, aReceber: rec, aPagar: desp, saldo: saldoAcumulado })
     } else {
       for (let i = 1; i <= projectionMonths; i++) {
         const d = new Date(viewYear, viewMonth + i, 1)
@@ -711,11 +717,12 @@ export default function Financeiro() {
         const monthRows = rows.filter(r => r.due_date && r.due_date >= start && r.due_date <= end && !r.paid && r.impacts_cash !== false)
         const rec = monthRows.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0)
         const desp = monthRows.filter(r => r.type === 'despesa').reduce((s, r) => s + Number(r.value), 0)
-        result.push({ month: `${MONTHS[d.getMonth()]}/${d.getFullYear() % 100}`, aReceber: rec, aPagar: desp, saldo: rec - desp })
+        saldoAcumulado += rec - desp
+        result.push({ month: `${MONTHS[d.getMonth()]}/${d.getFullYear() % 100}`, aReceber: rec, aPagar: desp, saldo: saldoAcumulado })
       }
     }
     return result
-  }, [rows, projectionMonths, viewMonth, viewYear])
+  }, [rows, projectionMonths, viewMonth, viewYear, saldo])
 
   // ── Charts ──
   const monthlyEvolution = useMemo(() => {
@@ -1663,7 +1670,7 @@ export default function Financeiro() {
                   <div className="flex items-center gap-4 text-sm">
                     <span className="text-green-600">+{fmtBRL(p.aReceber)}</span>
                     <span className="text-red-500">-{fmtBRL(p.aPagar)}</span>
-                    <span className={`font-semibold ${p.saldo >= 0 ? 'text-primary' : 'text-red-500'}`}>{fmtBRL(p.saldo)}</span>
+                    <span className={`font-semibold ${p.saldo >= 0 ? 'text-primary' : 'text-red-500'}`} title="Saldo acumulado até este mês">{fmtBRL(p.saldo)}</span>
                   </div>
                 </div>
               ))}
