@@ -20,7 +20,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import {
-  TrendingUp, TrendingDown, DollarSign, AlertTriangle,
+  TrendingUp, DollarSign, AlertTriangle,
   Plus, FileDown, Pencil, Trash2, Download, Calendar, Upload,
   CreditCard, Wallet, ChevronLeft, ChevronRight, Eye,
   ArrowUpCircle, ArrowDownCircle, Clock, Ban, Link2,
@@ -669,12 +669,15 @@ export default function Financeiro() {
   const receitas = filtered.filter(r => r.type === 'receita')
   const despesas = filtered.filter(r => r.type === 'despesa')
   const totalReceitas = receitas.reduce((s, r) => s + Number(r.value), 0)
-  const totalDespesas = despesas.reduce((s, r) => s + Number(r.value), 0)
-  // "Recebido"/"Pago"/"Saldo" representam o caixa de fato — lançamentos marcados
-  // como "não impacta caixa" (ex: repasses, valores só de registro) precisam
-  // ficar de fora dessas contas, senão o caixa mostrado não bate com a realidade.
+  // "Despesas"/"Recebido"/"Pago"/"Saldo" representam o caixa de fato — lançamentos
+  // marcados como "não impacta caixa" (ex: pagos do bolso pessoal das sócias, repasses,
+  // valores só de registro) precisam ficar de fora dessas contas, senão parece que o
+  // escritório tem muito mais a pagar do que realmente vai sair do caixa dele.
   const receitasCaixa = receitas.filter(r => r.impacts_cash !== false)
   const despesasCaixa = despesas.filter(r => r.impacts_cash !== false)
+  const despesasNaoCaixa = despesas.filter(r => r.impacts_cash === false)
+  const totalDespesas = despesasCaixa.reduce((s, r) => s + Number(r.value), 0)
+  const totalDespesasNaoCaixa = despesasNaoCaixa.reduce((s, r) => s + Number(r.value), 0)
   const receitasPagas = receitasCaixa.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
   const receitasPendentes = receitasCaixa.reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
   const despesasPagas = despesasCaixa.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
@@ -696,7 +699,7 @@ export default function Financeiro() {
       const today = new Date()
       const start = today.toISOString().slice(0, 10)
       const end = new Date(viewYear, viewMonth + 1, 0).toISOString().slice(0, 10)
-      const monthRows = rows.filter(r => r.due_date && r.due_date >= start && r.due_date <= end && !r.paid)
+      const monthRows = rows.filter(r => r.due_date && r.due_date >= start && r.due_date <= end && !r.paid && r.impacts_cash !== false)
       const rec = monthRows.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0)
       const desp = monthRows.filter(r => r.type === 'despesa').reduce((s, r) => s + Number(r.value), 0)
       result.push({ month: `${MONTHS[viewMonth]}/${viewYear % 100} (restante)`, aReceber: rec, aPagar: desp, saldo: rec - desp })
@@ -705,7 +708,7 @@ export default function Financeiro() {
         const d = new Date(viewYear, viewMonth + i, 1)
         const start = d.toISOString().slice(0, 10)
         const end = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10)
-        const monthRows = rows.filter(r => r.due_date && r.due_date >= start && r.due_date <= end && !r.paid)
+        const monthRows = rows.filter(r => r.due_date && r.due_date >= start && r.due_date <= end && !r.paid && r.impacts_cash !== false)
         const rec = monthRows.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0)
         const desp = monthRows.filter(r => r.type === 'despesa').reduce((s, r) => s + Number(r.value), 0)
         result.push({ month: `${MONTHS[d.getMonth()]}/${d.getFullYear() % 100}`, aReceber: rec, aPagar: desp, saldo: rec - desp })
@@ -725,7 +728,7 @@ export default function Financeiro() {
       months.push({
         month: MONTHS[d.getMonth()],
         receitas: mRows.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0),
-        despesas: mRows.filter(r => r.type === 'despesa').reduce((s, r) => s + Number(r.value), 0),
+        despesas: mRows.filter(r => r.type === 'despesa' && r.impacts_cash !== false).reduce((s, r) => s + Number(r.value), 0),
       })
     }
     return months
@@ -742,12 +745,12 @@ export default function Financeiro() {
 
   const despesaCategoryData = useMemo(() => {
     const map = new Map<string, number>()
-    despesas.forEach(r => {
+    despesasCaixa.forEach(r => {
       const cat = r.category ?? 'Outros'
       map.set(cat, (map.get(cat) ?? 0) + Number(r.value))
     })
     return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
-  }, [despesas])
+  }, [despesasCaixa])
 
   // ── Handlers ──
   const handleSave = async () => {
@@ -1037,8 +1040,8 @@ export default function Financeiro() {
       case 'receitas': return receitas
       case 'receitas-pagas': return receitasCaixa.filter(r => r.paid)
       case 'receitas-pendentes': return receitasCaixa.filter(r => !r.paid)
-      case 'despesas': return despesas
-      case 'despesas-pagas': return despesasCaixa.filter(r => r.paid)
+      case 'despesas': return despesasCaixa
+      case 'despesas-nao-caixa': return despesasNaoCaixa
       case 'despesas-pendentes': return despesasCaixa.filter(r => !r.paid)
       case 'inadimplencia': return receitas.filter(r => !r.paid && r.due_date && r.due_date < today)
       case 'saldo': return filtered
@@ -1050,8 +1053,8 @@ export default function Financeiro() {
     receitas: 'Receitas',
     'receitas-pagas': 'Receitas Pagas',
     'receitas-pendentes': 'Receitas Pendentes',
-    despesas: 'Despesas',
-    'despesas-pagas': 'Despesas Pagas',
+    despesas: 'Despesas (impacta caixa)',
+    'despesas-nao-caixa': 'Não impacta caixa',
     'despesas-pendentes': 'Despesas Pendentes',
     inadimplencia: 'Inadimplência',
     saldo: 'Todos os lançamentos',
@@ -1609,8 +1612,8 @@ export default function Financeiro() {
         <SummaryCard title="Receitas" subtitle="total" value={fmtBRL(totalReceitas)} icon={ArrowUpCircle} color="#16a34a" muted active={activeCard === 'receitas'} onClick={() => setActiveCard(activeCard === 'receitas' ? null : 'receitas')} />
         <SummaryCard title="Recebido" subtitle="pago" value={fmtBRL(receitasPagas)} icon={TrendingUp} color="#22c55e" highlight active={activeCard === 'receitas-pagas'} onClick={() => setActiveCard(activeCard === 'receitas-pagas' ? null : 'receitas-pagas')} />
         <SummaryCard title="A receber" subtitle="pendente" value={fmtBRL(receitasPendentes)} icon={Clock} color="#f59e0b" active={activeCard === 'receitas-pendentes'} onClick={() => setActiveCard(activeCard === 'receitas-pendentes' ? null : 'receitas-pendentes')} />
-        <SummaryCard title="Despesas" subtitle="total" value={fmtBRL(totalDespesas)} icon={ArrowDownCircle} color="#ef4444" active={activeCard === 'despesas'} onClick={() => setActiveCard(activeCard === 'despesas' ? null : 'despesas')} />
-        <SummaryCard title="Pago" subtitle="despesas pagas" value={fmtBRL(despesasPagas)} icon={TrendingDown} color="#dc2626" active={activeCard === 'despesas-pagas'} onClick={() => setActiveCard(activeCard === 'despesas-pagas' ? null : 'despesas-pagas')} />
+        <SummaryCard title="Despesas" subtitle="impacta caixa" value={fmtBRL(totalDespesas)} icon={ArrowDownCircle} color="#ef4444" active={activeCard === 'despesas'} onClick={() => setActiveCard(activeCard === 'despesas' ? null : 'despesas')} />
+        <SummaryCard title="Não impacta caixa" subtitle="fora do caixa" value={fmtBRL(totalDespesasNaoCaixa)} icon={Wallet} color="#6b7280" active={activeCard === 'despesas-nao-caixa'} onClick={() => setActiveCard(activeCard === 'despesas-nao-caixa' ? null : 'despesas-nao-caixa')} />
         <SummaryCard title="Inadimplência" subtitle="receitas vencidas" value={fmtBRL(inadimplencia)} icon={AlertTriangle} color={inadimplencia > 0 ? '#ef4444' : '#6b7280'} active={activeCard === 'inadimplencia'} onClick={() => setActiveCard(activeCard === 'inadimplencia' ? null : 'inadimplencia')} />
         <SummaryCard title="Saldo" subtitle="recebido - pago" value={fmtBRL(saldo)} icon={Wallet} color={saldo >= 0 ? '#8B5CF6' : '#ef4444'} active={activeCard === 'saldo'} onClick={() => setActiveCard(activeCard === 'saldo' ? null : 'saldo')} />
       </div>
