@@ -81,6 +81,9 @@ interface Client {
   city: string | null
   state: string | null
   tags: string | null
+  is_incarcerated: boolean | null
+  incarceration_facility: string | null
+  incarceration_city: string | null
 }
 
 interface Lead {
@@ -488,6 +491,16 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
             {client.potential_value && <InfoRow label="Potencial" value={fmtBRL(Number(client.potential_value))} />}
             {client.tags && <InfoRow label="Tags" value={client.tags} />}
           </div>
+
+          {client.is_incarcerated && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 space-y-1.5">
+              <p className="text-[10px] font-semibold text-red-700 uppercase tracking-wide">Preso</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5">
+                <InfoRow label="Penitenciária" value={client.incarceration_facility} />
+                <InfoRow label="Cidade" value={client.incarceration_city} />
+              </div>
+            </div>
+          )}
 
           {addr && (
             <div className="text-sm">
@@ -980,6 +993,8 @@ export default function Clientes() {
       drive_url: c.drive_url ?? '', drive_folder_id: c.drive_folder_id ?? '', tags: c.tags ?? '', notes: c.notes ?? '',
       status: c.status ?? 'ativo', portal_visible: c.portal_visible ?? false,
       birth_date: c.birth_date ?? '', signed_at: c.signed_at ?? '', first_contact_at: c.first_contact_at ?? '',
+      is_incarcerated: c.is_incarcerated ?? false,
+      incarceration_facility: c.incarceration_facility ?? '', incarceration_city: c.incarceration_city ?? '',
     })
     setEditingClient(c)
     setDialogOpen(true)
@@ -1012,6 +1027,9 @@ export default function Clientes() {
       signed_at: cf.signed_at || null, first_contact_at: cf.first_contact_at || null,
       potential_value: cf.potential_value ? parseFloat(cf.potential_value.replace(',', '.')) : null,
       drive_url: cf.drive_url || null, drive_folder_id: cf.drive_folder_id || null, tags: cf.tags || null,
+      is_incarcerated: cf.is_incarcerated,
+      incarceration_facility: cf.is_incarcerated ? (cf.incarceration_facility || null) : null,
+      incarceration_city: cf.is_incarcerated ? (cf.incarceration_city || null) : null,
     }
     if (editingClient) {
       const { error } = await supabase.from('clients').update(payload).eq('id', editingClient.id)

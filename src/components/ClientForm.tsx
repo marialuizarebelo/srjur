@@ -144,6 +144,7 @@ export interface ClientFormData {
   potential_value: string; drive_url: string; drive_folder_id: string; tags: string; notes: string
   status: string; portal_visible: boolean; birth_date: string
   signed_at: string; first_contact_at: string
+  is_incarcerated: boolean; incarceration_facility: string; incarceration_city: string
 }
 
 export const emptyClientForm: ClientFormData = {
@@ -156,6 +157,7 @@ export const emptyClientForm: ClientFormData = {
   potential_value: '', drive_url: '', drive_folder_id: '', tags: '', notes: '',
   status: 'ativo', portal_visible: false, birth_date: '',
   signed_at: '', first_contact_at: '',
+  is_incarcerated: false, incarceration_facility: '', incarceration_city: '',
 }
 
 const GENDERS = ['Masculino', 'Feminino', 'Outro', 'Não informado']
@@ -374,6 +376,28 @@ export function ClientFormDialog({
                 <Input value={form.father_name} onChange={e => setForm(f => ({ ...f, father_name: e.target.value }))} className="h-10" />
               </div>
             </div>
+
+            <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+              <Label className="cursor-pointer" htmlFor="is_incarcerated">Está preso?</Label>
+              <Switch
+                id="is_incarcerated"
+                checked={form.is_incarcerated}
+                onCheckedChange={v => setForm(f => ({ ...f, is_incarcerated: v, ...(v ? {} : { incarceration_facility: '', incarceration_city: '' }) }))}
+              />
+            </div>
+
+            {form.is_incarcerated && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Penitenciária</Label>
+                  <Input value={form.incarceration_facility} onChange={e => setForm(f => ({ ...f, incarceration_facility: e.target.value }))} className="h-10" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Cidade</Label>
+                  <Input value={form.incarceration_city} onChange={e => setForm(f => ({ ...f, incarceration_city: e.target.value }))} className="h-10" />
+                </div>
+              </div>
+            )}
           </Section>
 
           {/* ── Endereço ── */}
