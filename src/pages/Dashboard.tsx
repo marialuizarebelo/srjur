@@ -408,9 +408,12 @@ export default function Dashboard() {
 
       const { data: finData } = await supabase
         .from('finance')
-        .select('type, value, paid, due_date, date')
+        .select('type, value, paid, due_date, date, impacts_cash')
 
-      const finDataThisMonth = (finData ?? []).filter(f => f.date.slice(0, 7) === currentMonthStr)
+      // Mesmo filtro do módulo Financeiro: lançamentos "não impacta caixa" (pagos
+      // do bolso pessoal das sócias, repasses etc.) não entram nessas contas —
+      // senão o card do dashboard não bate com o do Financeiro.
+      const finDataThisMonth = (finData ?? []).filter(f => f.date.slice(0, 7) === currentMonthStr && f.impacts_cash !== false)
 
       if (finData) {
         const receitas = finDataThisMonth.filter(f => f.type === 'receita').reduce((s, f) => s + Number(f.value), 0)
@@ -479,12 +482,12 @@ export default function Dashboard() {
 
         const { data: mData } = await supabase
           .from('finance')
-          .select('type, value')
+          .select('type, value, impacts_cash')
           .gte('date', start)
           .lte('date', end)
 
-        const rec = mData?.filter(f => f.type === 'receita').reduce((s, f) => s + Number(f.value), 0) ?? 0
-        const desp = mData?.filter(f => f.type === 'despesa').reduce((s, f) => s + Number(f.value), 0) ?? 0
+        const rec = mData?.filter(f => f.type === 'receita' && f.impacts_cash !== false).reduce((s, f) => s + Number(f.value), 0) ?? 0
+        const desp = mData?.filter(f => f.type === 'despesa' && f.impacts_cash !== false).reduce((s, f) => s + Number(f.value), 0) ?? 0
         months.push({ month: label, receitas: rec, despesas: desp })
       }
       setChartData(months)
