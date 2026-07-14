@@ -1324,7 +1324,7 @@ export default function Financeiro() {
           <ExportMenu
             onExcelExport={() => {
               const clientMap = Object.fromEntries(clients.map(c => [c.id, c.name]))
-              const exRows = rows.map(r => ({
+              const exRows = sortedFiltered.map(r => ({
                 'Tipo': r.type === 'receita' ? 'Receita' : 'Despesa',
                 'Descrição': r.description,
                 'Categoria': r.category ?? '',
@@ -1349,23 +1349,25 @@ export default function Financeiro() {
               const clientMap = Object.fromEntries(clients.map(c => [c.id, c.name]))
               exportPDF(
                 'Financeiro',
-                `${rows.length} lançamentos`,
+                `${sortedFiltered.length} lançamentos`,
                 [
                   { header: 'Tipo', key: 'Tipo', width: 18 },
-                  { header: 'Descrição', key: 'Descrição', width: 55 },
-                  { header: 'Categoria', key: 'Categoria', width: 30 },
-                  { header: 'Valor', key: 'Valor', width: 28 },
-                  { header: 'Vencimento', key: 'Vencimento', width: 25 },
-                  { header: 'Pago', key: 'Pago', width: 14 },
-                  { header: 'Cliente', key: 'Cliente', width: 35 },
+                  { header: 'Descrição', key: 'Descrição', width: 48 },
+                  { header: 'Categoria', key: 'Categoria', width: 26 },
+                  { header: 'Valor', key: 'Valor', width: 25 },
+                  { header: 'Vencimento', key: 'Vencimento', width: 22 },
+                  { header: 'Pago', key: 'Pago', width: 12 },
+                  { header: 'Impacta Caixa', key: 'Impacta Caixa', width: 16 },
+                  { header: 'Cliente', key: 'Cliente', width: 30 },
                 ],
-                rows.map(r => ({
+                sortedFiltered.map(r => ({
                   'Tipo': r.type === 'receita' ? 'Receita' : 'Despesa',
                   'Descrição': r.description,
                   'Categoria': r.category ?? '—',
                   'Valor': fmtBRLStr(r.value),
                   'Vencimento': fmtDateBR(r.due_date),
                   'Pago': r.paid ? '✓' : '—',
+                  'Impacta Caixa': r.impacts_cash ? 'Sim' : 'Não',
                   'Cliente': r.client_id ? (clientMap[r.client_id] ?? '—') : '—',
                 })),
                 `financeiro_${new Date().toISOString().slice(0,10)}`
