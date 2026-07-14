@@ -357,7 +357,7 @@ export default function Dashboard() {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const [stats, setStats] = useState({ clients: 0, processes: 0, tasks: 0, overdueDeadlines: 0 })
-  const [finance, setFinance] = useState({ receitas: 0, despesas: 0, inadimplencia: 0 })
+  const [finance, setFinance] = useState({ receitas: 0, despesas: 0, inadimplencia: 0, saldoMes: 0 })
   const [recentProcesses, setRecentProcesses] = useState<{ id: string; title: string; responsible?: string; status: string }[]>([])
   const [overdueTasks, setOverdueTasks] = useState<AttentionItem[]>([])
   const [todayTasks, setTodayTasks] = useState<AttentionItem[]>([])
@@ -408,7 +408,7 @@ export default function Dashboard() {
 
       const { data: finData } = await supabase
         .from('finance')
-        .select('type, value, paid, due_date, date, impacts_cash')
+        .select('id, type, value, paid, due_date, date, impacts_cash')
 
       // Mesmo filtro do módulo Financeiro: lançamentos "não impacta caixa" (pagos
       // do bolso pessoal das sócias, repasses etc.) não entram nessas contas —
@@ -421,7 +421,23 @@ export default function Dashboard() {
         const inadimplencia = finDataThisMonth
           .filter(f => f.type === 'receita' && !f.paid && f.due_date && f.due_date < today)
           .reduce((s, f) => s + Number(f.value), 0)
-        setFinance({ receitas, despesas, inadimplencia })
+
+        // "Saldo do mês" precisa ser calculado igual ao Financeiro (recebido - pago,
+        // olhando pagamento parcial via finance_payments), senão os dois números
+        // nunca batem mesmo mostrando "a mesma coisa" pro olho da usuária.
+        const ids = finDataThisMonth.map(f => f.id)
+        const { data: paysData } = ids.length > 0
+          ? await supabase.from('finance_payments').select('finance_id, amount').in('finance_id', ids)
+          : { data: [] as { finance_id: string; amount: number }[] }
+        const paidMap: Record<string, number> = {}
+        for (const p of paysData ?? []) paidMap[p.finance_id] = (paidMap[p.finance_id] ?? 0) + Number(p.amount)
+        const paidAmountOf = (f: typeof finDataThisMonth[number]) =>
+          paidMap[f.id] !== undefined ? paidMap[f.id] : (f.paid ? Number(f.value) : 0)
+
+        const recebido = finDataThisMonth.filter(f => f.type === 'receita').reduce((s, f) => s + Math.min(paidAmountOf(f), Number(f.value)), 0)
+        const pago = finDataThisMonth.filter(f => f.type === 'despesa').reduce((s, f) => s + Math.min(paidAmountOf(f), Number(f.value)), 0)
+
+        setFinance({ receitas, despesas, inadimplencia, saldoMes: recebido - pago })
       }
 
       const { data: procs } = await supabase
@@ -726,7 +742,7 @@ export default function Dashboard() {
             {[
               { label: 'Receitas (mês)', value: fmtBRL(finance.receitas), color: 'text-green-600' },
               { label: 'Despesas (mês)', value: fmtBRL(finance.despesas), color: 'text-red-500' },
-              { label: 'Lucro Líquido', value: fmtBRL(finance.receitas - finance.despesas), color: '' },
+              { label: 'Saldo do mês', value: fmtBRL(finance.saldoMes), color: finance.saldoMes >= 0 ? '' : 'text-red-500' },
               { label: 'Inadimplência', value: fmtBRL(finance.inadimplencia), color: 'text-red-500', bell: true },
             ].map(({ label, value, color, bell }) => (
               <Card
