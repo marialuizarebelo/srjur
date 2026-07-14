@@ -159,7 +159,7 @@ function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClic
           <div className="min-w-0">
             <p className="text-xs font-medium text-white/80 truncate">{title}</p>
             {subtitle && <p className="text-[10px] text-white/60 truncate">{subtitle}</p>}
-            <p className={`text-lg sm:text-xl font-bold mt-1.5 text-white truncate ${valueClass}`}>{value}</p>
+            <p className={`text-base sm:text-lg font-bold mt-1.5 text-white break-words ${valueClass}`}>{value}</p>
           </div>
           <div className="h-9 w-9 rounded-xl flex items-center justify-center bg-white/20 shrink-0">
             <Icon className="h-4 w-4 text-white" />
@@ -177,7 +177,7 @@ function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClic
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground font-medium truncate">{title}</p>
           {subtitle && <p className="text-[10px] text-muted-foreground/60 truncate">{subtitle}</p>}
-          <p className={`text-lg sm:text-xl font-bold mt-1.5 truncate ${valueClass}`} style={{ color: muted ? undefined : color }}>{value}</p>
+          <p className={`text-base sm:text-lg font-bold mt-1.5 break-words ${valueClass}`} style={{ color: muted ? undefined : color }}>{value}</p>
         </div>
         <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}15` }}>
           <Icon className="h-4 w-4" style={{ color: muted ? undefined : color }} />
@@ -207,7 +207,7 @@ function SplitCard({ leftLabel, leftValue, leftActive, onClickLeft, leftColor, r
         >
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground font-medium truncate">{leftLabel}</p>
-            <p className={`text-lg sm:text-xl font-bold mt-1 truncate ${valueClass}`} style={{ color: lc }}>
+            <p className={`text-base sm:text-lg font-bold mt-1 break-words ${valueClass}`} style={{ color: lc }}>
               {fmtBRL(leftValue)}
             </p>
           </div>
@@ -221,7 +221,7 @@ function SplitCard({ leftLabel, leftValue, leftActive, onClickLeft, leftColor, r
         >
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground font-medium truncate">{rightLabel}</p>
-            <p className={`text-lg sm:text-xl font-bold mt-1 truncate ${valueClass}`} style={{ color: rc }}>
+            <p className={`text-base sm:text-lg font-bold mt-1 break-words ${valueClass}`} style={{ color: rc }}>
               {fmtBRL(rightValue)}
             </p>
           </div>
