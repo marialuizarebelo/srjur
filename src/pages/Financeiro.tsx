@@ -682,7 +682,18 @@ export default function Financeiro() {
   const receitasPendentes = receitasCaixa.reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
   const despesasPagas = despesasCaixa.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
   const despesasPendentes = despesasCaixa.reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
+  // "Saldo" (do período filtrado, ex: só o mês selecionado) é diferente de
+  // "Saldo total" (todo o histórico) — o escritório não zera/consome todo o
+  // caixa a cada mês, então a projeção futura precisa partir do total
+  // acumulado de sempre, não só do que entrou/saiu dentro do filtro atual.
   const saldo = receitasPagas - despesasPagas
+  const saldoTotal = useMemo(() => {
+    const recCaixa = rows.filter(r => r.type === 'receita' && r.impacts_cash !== false)
+    const despCaixa = rows.filter(r => r.type === 'despesa' && r.impacts_cash !== false)
+    const recPagas = recCaixa.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
+    const despPagas = despCaixa.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
+    return recPagas - despPagas
+  }, [rows, paymentsMap])
   const inadimplencia = receitasCaixa
     .filter(r => rowStatus(r, paymentsMap) !== 'pago' && r.due_date && r.due_date < today)
     .reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
@@ -698,7 +709,7 @@ export default function Financeiro() {
   // frente — não só o delta isolado daquele mês, que sozinho não diz muita coisa.
   const projection = useMemo(() => {
     const result: { month: string; aReceber: number; aPagar: number; saldo: number }[] = []
-    let saldoAcumulado = saldo
+    let saldoAcumulado = saldoTotal
     if (projectionMonths === 0) {
       // "até final deste mês" — lançamentos pendentes do mês atual ainda não vencidos/pagos
       const today = new Date()
@@ -722,7 +733,7 @@ export default function Financeiro() {
       }
     }
     return result
-  }, [rows, projectionMonths, viewMonth, viewYear, saldo])
+  }, [rows, projectionMonths, viewMonth, viewYear, saldoTotal])
 
   // ── Charts ──
   const monthlyEvolution = useMemo(() => {
@@ -1622,7 +1633,8 @@ export default function Financeiro() {
         <SummaryCard title="Despesas" subtitle="impacta caixa" value={fmtBRL(totalDespesas)} icon={ArrowDownCircle} color="#ef4444" active={activeCard === 'despesas'} onClick={() => setActiveCard(activeCard === 'despesas' ? null : 'despesas')} />
         <SummaryCard title="Não impacta caixa" subtitle="fora do caixa" value={fmtBRL(totalDespesasNaoCaixa)} icon={Wallet} color="#6b7280" active={activeCard === 'despesas-nao-caixa'} onClick={() => setActiveCard(activeCard === 'despesas-nao-caixa' ? null : 'despesas-nao-caixa')} />
         <SummaryCard title="Inadimplência" subtitle="receitas vencidas" value={fmtBRL(inadimplencia)} icon={AlertTriangle} color={inadimplencia > 0 ? '#ef4444' : '#6b7280'} active={activeCard === 'inadimplencia'} onClick={() => setActiveCard(activeCard === 'inadimplencia' ? null : 'inadimplencia')} />
-        <SummaryCard title="Saldo" subtitle="recebido - pago" value={fmtBRL(saldo)} icon={Wallet} color={saldo >= 0 ? '#8B5CF6' : '#ef4444'} active={activeCard === 'saldo'} onClick={() => setActiveCard(activeCard === 'saldo' ? null : 'saldo')} />
+        <SummaryCard title="Saldo do período" subtitle="recebido - pago, no filtro atual" value={fmtBRL(saldo)} icon={Wallet} color={saldo >= 0 ? '#8B5CF6' : '#ef4444'} active={activeCard === 'saldo'} onClick={() => setActiveCard(activeCard === 'saldo' ? null : 'saldo')} />
+        <SummaryCard title="Saldo total" subtitle="acumulado, todo o histórico" value={fmtBRL(saldoTotal)} icon={Wallet} color={saldoTotal >= 0 ? '#8B5CF6' : '#ef4444'} />
       </div>
 
       {/* ── Projection (minimizável, com fixar visualização) ── */}
