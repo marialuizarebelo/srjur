@@ -83,7 +83,7 @@ interface FinancePayment {
 
 // ── Constants ──
 const CATEGORIES_RECEITA = ['Honorários Iniciais', 'Mensalidade', 'Acordo', 'Consultoria', 'Êxito', 'Outros']
-const CATEGORIES_DESPESA = ['Operacional', 'Pessoal', 'Impostos', 'Software', 'Marketing', 'Aluguel', 'Outros']
+const CATEGORIES_DESPESA = ['Operacional', 'Pessoal', 'Pró-labore/Salário', 'Impostos', 'Software', 'Marketing', 'Aluguel', 'Outros']
 const PAYMENT_METHODS = ['PIX/Transferência', 'Boleto', 'Cartão de Crédito', 'Cartão de Débito', 'Dinheiro']
 
 // Soma meses mantendo o mesmo dia do mês (ex: todo dia 5) — sem o bug clássico do
@@ -1051,7 +1051,7 @@ export default function Financeiro() {
       case 'despesas-nao-caixa': return despesasNaoCaixa
       case 'despesas-pendentes': return despesasCaixa.filter(r => !r.paid)
       case 'inadimplencia': return receitas.filter(r => !r.paid && r.due_date && r.due_date < today)
-      case 'saldo': return filtered
+      case 'saldo': return filtered.filter(r => r.impacts_cash !== false)
       default: return []
     }
   }
