@@ -197,30 +197,42 @@ function SaldoCard({ saldoPeriodo, saldoTotal, activePeriodo, activeTotal, onCli
   const { hidden } = usePrivacy()
   const valueClass = hidden ? 'blur-sm select-none' : ''
   return (
-    <Card className="p-0 overflow-hidden">
-      <div className="flex items-stretch divide-x">
-        <button
-          type="button"
-          onClick={onClickPeriodo}
-          className={`flex-1 min-w-0 p-2.5 sm:p-3 text-left cursor-pointer transition-colors hover:bg-muted/40 ${activePeriodo ? 'bg-primary/5 ring-1 ring-inset ring-primary' : ''}`}
-        >
-          <p className="text-[10px] text-muted-foreground font-medium leading-tight">Saldo do mês</p>
-          <p className={`text-sm sm:text-base font-bold mt-1 leading-tight break-words ${valueClass}`} style={{ color: saldoPeriodo >= 0 ? '#8B5CF6' : '#ef4444' }}>
-            {fmtBRL(saldoPeriodo)}
-          </p>
-        </button>
-        <button
-          type="button"
-          onClick={onClickTotal}
-          className={`flex-1 min-w-0 p-2.5 sm:p-3 text-left cursor-pointer transition-colors hover:bg-muted/40 ${activeTotal ? 'bg-primary/5 ring-1 ring-inset ring-primary' : ''}`}
-        >
-          <p className="text-[10px] text-muted-foreground font-medium leading-tight">Saldo total</p>
-          <p className={`text-sm sm:text-base font-bold mt-1 leading-tight break-words ${valueClass}`} style={{ color: saldoTotal >= 0 ? '#8B5CF6' : '#ef4444' }}>
-            {fmtBRL(saldoTotal)}
-          </p>
-        </button>
-      </div>
-    </Card>
+    <div className="col-span-2 grid grid-cols-2 gap-2 sm:gap-3">
+      <Card
+        onClick={onClickPeriodo}
+        className={`p-3 sm:p-4 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${activePeriodo ? 'ring-2 ring-primary' : ''}`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground font-medium truncate">Saldo do mês</p>
+            <p className="text-[10px] text-muted-foreground/60 truncate">recebido - pago</p>
+            <p className={`text-lg sm:text-xl font-bold mt-1.5 truncate ${valueClass}`} style={{ color: saldoPeriodo >= 0 ? '#8B5CF6' : '#ef4444' }}>
+              {fmtBRL(saldoPeriodo)}
+            </p>
+          </div>
+          <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${saldoPeriodo >= 0 ? '#8B5CF6' : '#ef4444'}15` }}>
+            <Wallet className="h-4 w-4" style={{ color: saldoPeriodo >= 0 ? '#8B5CF6' : '#ef4444' }} />
+          </div>
+        </div>
+      </Card>
+      <Card
+        onClick={onClickTotal}
+        className={`p-3 sm:p-4 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${activeTotal ? 'ring-2 ring-primary' : ''}`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground font-medium truncate">Saldo total</p>
+            <p className="text-[10px] text-muted-foreground/60 truncate">acumulado, todo o histórico</p>
+            <p className={`text-lg sm:text-xl font-bold mt-1.5 truncate ${valueClass}`} style={{ color: saldoTotal >= 0 ? '#8B5CF6' : '#ef4444' }}>
+              {fmtBRL(saldoTotal)}
+            </p>
+          </div>
+          <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${saldoTotal >= 0 ? '#8B5CF6' : '#ef4444'}15` }}>
+            <Wallet className="h-4 w-4" style={{ color: saldoTotal >= 0 ? '#8B5CF6' : '#ef4444' }} />
+          </div>
+        </div>
+      </Card>
+    </div>
   )
 }
 
