@@ -742,7 +742,7 @@ export default function Dashboard() {
             {[
               { label: 'Receitas (mês)', value: fmtBRL(finance.receitas), color: 'text-green-600' },
               { label: 'Despesas (mês)', value: fmtBRL(finance.despesas), color: 'text-red-500' },
-              { label: 'Saldo do mês', value: fmtBRL(finance.saldoMes), color: finance.saldoMes >= 0 ? '' : 'text-red-500' },
+              { label: 'Saldo do mês', value: fmtBRL(finance.saldoMes), color: finance.saldoMes >= 0 ? 'text-[#8B5CF6]' : 'text-red-500' },
               { label: 'Inadimplência', value: fmtBRL(finance.inadimplencia), color: 'text-red-500', bell: true },
             ].map(({ label, value, color, bell }) => (
               <Card
