@@ -54,9 +54,10 @@ Deno.serve(async (req) => {
     // O endpoint de listagem não retorna "signers" — o campo confiável pra
     // identificar de quem é o contrato é a pasta (folder_path), que é o nome
     // que a gente mesma dá ao criar a pasta no ZapSign. "name" (nome do
-    // arquivo) entra como fallback. Normaliza acento/maiúscula pra não
-    // depender de "José" bater exatamente com "Jose".
-    const normalize = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    // arquivo) entra como fallback. Normaliza acento/maiúscula/espaços extras
+    // pra não depender de "José Victor" (lead, às vezes salvo com espaço
+    // sobrando no fim) bater exatamente com "José Victor" (pasta, sem espaço).
+    const normalize = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().replace(/\s+/g, ' ')
     const lower = normalize(name)
     const filtered = docs.filter((d: any) =>
       normalize(d.folder_path ?? '').includes(lower) ||
