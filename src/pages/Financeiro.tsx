@@ -139,13 +139,12 @@ function MonthNavigator({ month, year, onChange }: {
 }
 
 // ── Clickable summary card ──
-function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClick, highlight, muted, secondaryLabel, secondaryValue }: {
+function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClick, highlight, muted }: {
   title: string; value: string; subtitle?: string
   icon: React.ElementType; color: string
   active?: boolean; onClick?: () => void
   highlight?: boolean  // fundo colorido invertido
   muted?: boolean      // esmaecido
-  secondaryLabel?: string; secondaryValue?: string  // segunda linha de valor, ex: saldo total abaixo do saldo do mês
 }) {
   const { hidden } = usePrivacy()
   const valueClass = hidden ? 'blur-sm select-none' : ''
@@ -179,15 +178,47 @@ function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClic
           <p className="text-xs text-muted-foreground font-medium truncate">{title}</p>
           {subtitle && <p className="text-[10px] text-muted-foreground/60 truncate">{subtitle}</p>}
           <p className={`text-lg sm:text-xl font-bold mt-1.5 truncate ${valueClass}`} style={{ color: muted ? undefined : color }}>{value}</p>
-          {secondaryValue && (
-            <p className={`text-[11px] font-semibold mt-1 truncate ${valueClass}`} style={{ color: muted ? undefined : color, opacity: 0.7 }}>
-              {secondaryLabel}: {secondaryValue}
-            </p>
-          )}
         </div>
         <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}15` }}>
           <Icon className="h-4 w-4" style={{ color: muted ? undefined : color }} />
         </div>
+      </div>
+    </Card>
+  )
+}
+
+// ── Saldo Card (dividido ao meio: período à esquerda, total à direita — sem
+// truncar valor, cada metade clicável abre o SaldoDrawer na aba correspondente) ──
+function SaldoCard({ saldoPeriodo, saldoTotal, activePeriodo, activeTotal, onClickPeriodo, onClickTotal }: {
+  saldoPeriodo: number; saldoTotal: number
+  activePeriodo: boolean; activeTotal: boolean
+  onClickPeriodo: () => void; onClickTotal: () => void
+}) {
+  const { hidden } = usePrivacy()
+  const valueClass = hidden ? 'blur-sm select-none' : ''
+  return (
+    <Card className="p-0 overflow-hidden">
+      <div className="flex items-stretch divide-x">
+        <button
+          type="button"
+          onClick={onClickPeriodo}
+          className={`flex-1 min-w-0 p-2.5 sm:p-3 text-left cursor-pointer transition-colors hover:bg-muted/40 ${activePeriodo ? 'bg-primary/5 ring-1 ring-inset ring-primary' : ''}`}
+        >
+          <p className="text-[10px] text-muted-foreground font-medium leading-tight">Saldo do mês</p>
+          <p className={`text-sm sm:text-base font-bold mt-1 leading-tight break-words ${valueClass}`} style={{ color: saldoPeriodo >= 0 ? '#8B5CF6' : '#ef4444' }}>
+            {fmtBRL(saldoPeriodo)}
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={onClickTotal}
+          className={`flex-1 min-w-0 p-2.5 sm:p-3 text-left cursor-pointer transition-colors hover:bg-muted/40 ${activeTotal ? 'bg-primary/5 ring-1 ring-inset ring-primary' : ''}`}
+        >
+          <p className="text-[10px] text-muted-foreground font-medium leading-tight">Saldo total</p>
+          <p className={`text-sm sm:text-base font-bold mt-1 leading-tight break-words ${valueClass}`} style={{ color: saldoTotal >= 0 ? '#8B5CF6' : '#ef4444' }}>
+            {fmtBRL(saldoTotal)}
+          </p>
+        </button>
       </div>
     </Card>
   )
@@ -299,6 +330,103 @@ function DetailDrawer({ title, rows, onClose, clients, onEdit, paymentsMap }: {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Saldo Drawer (compacto, só valores realizados, Entradas/Saídas, abas Total/Período) ──
+function SaldoDrawer({ totalRows, periodRows, onClose, clients, onEdit, paymentsMap, defaultTab }: {
+  totalRows: FinanceRow[]; periodRows: FinanceRow[]
+  onClose: () => void; clients: ClientOption[]
+  onEdit: (row: FinanceRow) => void
+  paymentsMap: Record<string, FinancePayment[]>
+  defaultTab: 'periodo' | 'total'
+}) {
+  const [tab, setTab] = useState<'periodo' | 'total'>(defaultTab)
+  const getClientName = (id: string | null) => clients.find(c => c.id === id)?.name ?? '—'
+
+  // Só o que já foi de fato pago/recebido, e que impacta caixa — "previsto"/
+  // pendente e "não impacta caixa" não fazem parte do saldo.
+  const realized = (tab === 'total' ? totalRows : periodRows).filter(r => {
+    if (r.impacts_cash === false) return false
+    const status = rowStatus(r, paymentsMap)
+    return status === 'pago' || status === 'parcial'
+  })
+  const entradas = realized.filter(r => r.type === 'receita').sort((a, b) => b.date.localeCompare(a.date))
+  const saidas = realized.filter(r => r.type === 'despesa').sort((a, b) => b.date.localeCompare(a.date))
+  const totalEntradas = entradas.reduce((s, r) => s + paidAmount(r, paymentsMap), 0)
+  const totalSaidas = saidas.reduce((s, r) => s + paidAmount(r, paymentsMap), 0)
+
+  function Row({ row }: { row: FinanceRow }) {
+    return (
+      <div
+        className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md cursor-pointer hover:bg-muted/60 transition-colors"
+        onClick={() => { onEdit(row); onClose() }}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-medium truncate leading-tight">{row.description}</p>
+          <p className="text-[10px] text-muted-foreground truncate leading-tight">
+            {fmtDate(row.date)}{row.category ? ` · ${row.category}` : ''}{row.client_id ? ` · ${getClientName(row.client_id)}` : ''}
+          </p>
+        </div>
+        <p className={`text-[13px] font-semibold shrink-0 ${row.type === 'receita' ? 'text-green-600' : 'text-slate-500'}`}>
+          {row.type === 'receita' ? '+' : '-'}{fmtBRL(paidAmount(row, paymentsMap))}
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-background shadow-xl overflow-y-auto">
+        <div className="sticky top-0 bg-background border-b p-3 z-10">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">Saldo</h3>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}><X className="h-4 w-4" /></Button>
+          </div>
+          <div className="flex gap-1 mt-2">
+            <button
+              className={`flex-1 h-7 rounded-md text-xs font-medium transition-colors ${tab === 'periodo' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+              onClick={() => setTab('periodo')}
+            >
+              Período
+            </button>
+            <button
+              className={`flex-1 h-7 rounded-md text-xs font-medium transition-colors ${tab === 'total' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+              onClick={() => setTab('total')}
+            >
+              Total
+            </button>
+          </div>
+        </div>
+
+        <div className="px-3 py-3 space-y-4">
+          <div>
+            <div className="flex items-center justify-between px-2 mb-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600">Entradas</p>
+              <p className="text-[11px] font-semibold text-green-600">{fmtBRL(totalEntradas)}</p>
+            </div>
+            {entradas.length === 0 ? (
+              <p className="text-xs text-muted-foreground px-2 py-2">Nenhuma entrada realizada.</p>
+            ) : (
+              <div className="space-y-0.5">{entradas.map(r => <Row key={r.id} row={r} />)}</div>
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between px-2 mb-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Saídas</p>
+              <p className="text-[11px] font-semibold text-slate-500">{fmtBRL(totalSaidas)}</p>
+            </div>
+            {saidas.length === 0 ? (
+              <p className="text-xs text-muted-foreground px-2 py-2">Nenhuma saída realizada.</p>
+            ) : (
+              <div className="space-y-0.5">{saidas.map(r => <Row key={r.id} row={r} />)}</div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -1068,7 +1196,6 @@ export default function Financeiro() {
       case 'despesas-nao-caixa': return despesasNaoCaixa
       case 'despesas-pendentes': return despesasCaixa.filter(r => !r.paid)
       case 'inadimplencia': return receitas.filter(r => !r.paid && r.due_date && r.due_date < today)
-      case 'saldo': return filtered.filter(r => r.impacts_cash !== false)
       default: return []
     }
   }
@@ -1081,13 +1208,23 @@ export default function Financeiro() {
     'despesas-nao-caixa': 'Não impacta caixa',
     'despesas-pendentes': 'Despesas Pendentes',
     inadimplencia: 'Inadimplência',
-    saldo: 'Todos os lançamentos',
   }
 
   return (
     <div className="space-y-6">
       {/* Detail drawer */}
-      {activeCard && (
+      {(activeCard === 'saldo-periodo' || activeCard === 'saldo-total') && (
+        <SaldoDrawer
+          totalRows={rows}
+          periodRows={filtered}
+          defaultTab={activeCard === 'saldo-total' ? 'total' : 'periodo'}
+          onClose={() => setActiveCard(null)}
+          clients={clients}
+          onEdit={setViewRow}
+          paymentsMap={paymentsMap}
+        />
+      )}
+      {activeCard && activeCard !== 'saldo-periodo' && activeCard !== 'saldo-total' && (
         <DetailDrawer
           title={cardLabels[activeCard] ?? activeCard}
           rows={getCardRows()}
@@ -1641,11 +1778,11 @@ export default function Financeiro() {
         <SummaryCard title="Despesas" subtitle="impacta caixa" value={fmtBRL(totalDespesas)} icon={ArrowDownCircle} color="#ef4444" active={activeCard === 'despesas'} onClick={() => setActiveCard(activeCard === 'despesas' ? null : 'despesas')} />
         <SummaryCard title="Não impacta caixa" subtitle="fora do caixa" value={fmtBRL(totalDespesasNaoCaixa)} icon={Wallet} color="#6b7280" active={activeCard === 'despesas-nao-caixa'} onClick={() => setActiveCard(activeCard === 'despesas-nao-caixa' ? null : 'despesas-nao-caixa')} />
         <SummaryCard title="Inadimplência" subtitle="receitas vencidas" value={fmtBRL(inadimplencia)} icon={AlertTriangle} color={inadimplencia > 0 ? '#ef4444' : '#6b7280'} active={activeCard === 'inadimplencia'} onClick={() => setActiveCard(activeCard === 'inadimplencia' ? null : 'inadimplencia')} />
-        <SummaryCard
-          title="Saldo" subtitle="do período · recebido - pago" value={fmtBRL(saldo)}
-          secondaryLabel="Total acumulado" secondaryValue={fmtBRL(saldoTotal)}
-          icon={Wallet} color={saldo >= 0 ? '#8B5CF6' : '#ef4444'}
-          active={activeCard === 'saldo'} onClick={() => setActiveCard(activeCard === 'saldo' ? null : 'saldo')}
+        <SaldoCard
+          saldoPeriodo={saldo} saldoTotal={saldoTotal}
+          activePeriodo={activeCard === 'saldo-periodo'} activeTotal={activeCard === 'saldo-total'}
+          onClickPeriodo={() => setActiveCard(activeCard === 'saldo-periodo' ? null : 'saldo-periodo')}
+          onClickTotal={() => setActiveCard(activeCard === 'saldo-total' ? null : 'saldo-total')}
         />
       </div>
 
