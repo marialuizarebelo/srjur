@@ -932,13 +932,21 @@ export default function Clientes() {
     if (!isZapSignConfigured() || leads.length === 0) return
 
     const checkZapSign = async () => {
-      const contractLeads = leads.filter(l => l.status === 'contrato_enviado')
+      // !l.client_id evita recriar o cliente (e as tarefas de onboarding) toda
+      // vez que o efeito roda de novo pra um lead cujo status ainda não foi
+      // atualizado — sem essa guarda, um lead "preso" gera um cliente duplicado
+      // a cada recarregamento da tela.
+      const contractLeads = leads.filter(l => l.status === 'contrato_enviado' && !l.client_id)
       if (contractLeads.length === 0) return
 
       for (const lead of contractLeads) {
         const docs = await findDocsByName(lead.name)
         const signedDoc = docs.find(d => d.status === 'signed')
         if (signedDoc) {
+          // Sem isso o lead virava cliente ativo com tarefas de onboarding
+          // criadas, mas o card ficava "preso" em Contrato Enviado no kanban
+          // pra sempre, em vez de avançar pra Contrato Assinado.
+          await supabase.from('leads').update({ status: 'contrato_assinado' }).eq('id', lead.id)
           await autoConvertLead(lead)
           loadData()
         }
