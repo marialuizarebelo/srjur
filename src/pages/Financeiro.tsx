@@ -139,12 +139,13 @@ function MonthNavigator({ month, year, onChange }: {
 }
 
 // ── Clickable summary card ──
-function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClick, highlight, muted }: {
+function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClick, highlight, muted, secondaryLabel, secondaryValue }: {
   title: string; value: string; subtitle?: string
   icon: React.ElementType; color: string
   active?: boolean; onClick?: () => void
   highlight?: boolean  // fundo colorido invertido
   muted?: boolean      // esmaecido
+  secondaryLabel?: string; secondaryValue?: string  // segunda linha de valor, ex: saldo total abaixo do saldo do mês
 }) {
   const { hidden } = usePrivacy()
   const valueClass = hidden ? 'blur-sm select-none' : ''
@@ -178,6 +179,11 @@ function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClic
           <p className="text-xs text-muted-foreground font-medium truncate">{title}</p>
           {subtitle && <p className="text-[10px] text-muted-foreground/60 truncate">{subtitle}</p>}
           <p className={`text-lg sm:text-xl font-bold mt-1.5 truncate ${valueClass}`} style={{ color: muted ? undefined : color }}>{value}</p>
+          {secondaryValue && (
+            <p className={`text-[11px] font-semibold mt-1 truncate ${valueClass}`} style={{ color: muted ? undefined : color, opacity: 0.7 }}>
+              {secondaryLabel}: {secondaryValue}
+            </p>
+          )}
         </div>
         <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}15` }}>
           <Icon className="h-4 w-4" style={{ color: muted ? undefined : color }} />
@@ -1633,8 +1639,12 @@ export default function Financeiro() {
         <SummaryCard title="Despesas" subtitle="impacta caixa" value={fmtBRL(totalDespesas)} icon={ArrowDownCircle} color="#ef4444" active={activeCard === 'despesas'} onClick={() => setActiveCard(activeCard === 'despesas' ? null : 'despesas')} />
         <SummaryCard title="Não impacta caixa" subtitle="fora do caixa" value={fmtBRL(totalDespesasNaoCaixa)} icon={Wallet} color="#6b7280" active={activeCard === 'despesas-nao-caixa'} onClick={() => setActiveCard(activeCard === 'despesas-nao-caixa' ? null : 'despesas-nao-caixa')} />
         <SummaryCard title="Inadimplência" subtitle="receitas vencidas" value={fmtBRL(inadimplencia)} icon={AlertTriangle} color={inadimplencia > 0 ? '#ef4444' : '#6b7280'} active={activeCard === 'inadimplencia'} onClick={() => setActiveCard(activeCard === 'inadimplencia' ? null : 'inadimplencia')} />
-        <SummaryCard title="Saldo do período" subtitle="recebido - pago, no filtro atual" value={fmtBRL(saldo)} icon={Wallet} color={saldo >= 0 ? '#8B5CF6' : '#ef4444'} active={activeCard === 'saldo'} onClick={() => setActiveCard(activeCard === 'saldo' ? null : 'saldo')} />
-        <SummaryCard title="Saldo total" subtitle="acumulado, todo o histórico" value={fmtBRL(saldoTotal)} icon={Wallet} color={saldoTotal >= 0 ? '#8B5CF6' : '#ef4444'} />
+        <SummaryCard
+          title="Saldo" subtitle="do período · recebido - pago" value={fmtBRL(saldo)}
+          secondaryLabel="Total acumulado" secondaryValue={fmtBRL(saldoTotal)}
+          icon={Wallet} color={saldo >= 0 ? '#8B5CF6' : '#ef4444'}
+          active={activeCard === 'saldo'} onClick={() => setActiveCard(activeCard === 'saldo' ? null : 'saldo')}
+        />
       </div>
 
       {/* ── Projection (minimizável, com fixar visualização) ── */}
