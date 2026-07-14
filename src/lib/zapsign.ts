@@ -1,5 +1,9 @@
-const ZAPSIGN_TOKEN = import.meta.env.VITE_ZAPSIGN_TOKEN ?? ''
-const BASE_URL = 'https://api.zapsign.com.br/api/v1'
+// A API do ZapSign bloqueia chamada direta do navegador (sem CORS), então
+// tudo passa pela Edge Function zapsign-proxy (servidor, token nunca exposto
+// no bundle do navegador). Ver supabase/functions/zapsign-proxy.
+const ZAPSIGN_ENABLED = (import.meta.env.VITE_ZAPSIGN_ENABLED ?? '').toLowerCase() === 'true'
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export interface ZapSignDoc {
   open_id: string
@@ -21,28 +25,23 @@ export interface ZapSignSigner {
   sign_url: string
 }
 
-export async function listDocuments(): Promise<ZapSignDoc[]> {
-  const res = await fetch(`${BASE_URL}/docs/?api_token=${ZAPSIGN_TOKEN}`)
-  if (!res.ok) return []
-  const data = await res.json()
-  return data.results ?? []
-}
-
-export async function getDocument(token: string): Promise<ZapSignDoc | null> {
-  const res = await fetch(`${BASE_URL}/docs/${token}/?api_token=${ZAPSIGN_TOKEN}`)
-  if (!res.ok) return null
-  return res.json()
-}
-
 export async function findDocsByName(searchName: string): Promise<ZapSignDoc[]> {
-  const docs = await listDocuments()
-  const lower = searchName.toLowerCase()
-  return docs.filter(d =>
-    d.name.toLowerCase().includes(lower) ||
-    d.signers?.some(s => s.name.toLowerCase().includes(lower))
-  )
+  if (!ZAPSIGN_ENABLED) return []
+  try {
+    const url = `${SUPABASE_URL}/functions/v1/zapsign-proxy?name=${encodeURIComponent(searchName)}`
+    const res = await fetch(url, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data.docs ?? []) as ZapSignDoc[]
+  } catch {
+    // Nunca deixa a UI travada esperando pra sempre (ex: "Verificando ZapSign...")
+    // por causa de uma falha de rede/infra — melhor mostrar "não encontrado".
+    return []
+  }
 }
 
 export function isZapSignConfigured(): boolean {
-  return ZAPSIGN_TOKEN.length > 10
+  return ZAPSIGN_ENABLED
 }
