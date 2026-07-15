@@ -608,7 +608,19 @@ export default function Configuracoes() {
       <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
         <DialogContent className="max-w-[440px] w-[96vw] max-h-[90vh] overflow-y-auto p-6">
           <DialogHeader><DialogTitle>{editingUser ? 'Editar usuário' : 'Nova usuária'}</DialogTitle></DialogHeader>
+          {(() => {
+            // Perfil "Suporte SRJUR" só pode ser editado por quem está logado
+            // com esse mesmo perfil — pro cliente, o suporte é só protegido
+            // contra exclusão, mas também não editável (nome, foto, acesso etc.).
+            const isLockedProfile = !!editingUser && editingUser.display_name === 'Suporte SRJUR' && profile?.display_name !== 'Suporte SRJUR'
+            return (
           <div className="space-y-4 pt-2">
+            {isLockedProfile && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-3 flex items-center gap-2">
+                <Lock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <p className="text-xs text-amber-700 dark:text-amber-400">Este perfil é protegido — só pode ser editado pelo próprio suporte SRJUR.</p>
+              </div>
+            )}
             {!editingUser && (
               <>
                 <div className="space-y-1.5">
@@ -628,29 +640,30 @@ export default function Configuracoes() {
               shape="circle"
               size={80}
               label="Foto de perfil"
+              disabled={isLockedProfile}
             />
             <div className="space-y-1.5">
               <Label>Nome completo</Label>
-              <Input value={uf.full_name} onChange={e => setUf(f => ({ ...f, full_name: e.target.value }))} placeholder="Ex: Maria Luiza Rebelo" className="h-10" />
+              <Input value={uf.full_name} onChange={e => setUf(f => ({ ...f, full_name: e.target.value }))} placeholder="Ex: Maria Luiza Rebelo" className="h-10" disabled={isLockedProfile} />
             </div>
             <div className="space-y-1.5">
               <Label>Apelido (como gosta de ser chamada)</Label>
-              <Input value={uf.nickname} onChange={e => setUf(f => ({ ...f, nickname: e.target.value }))} placeholder="Ex: Maria, Malu..." className="h-10" />
+              <Input value={uf.nickname} onChange={e => setUf(f => ({ ...f, nickname: e.target.value }))} placeholder="Ex: Maria, Malu..." className="h-10" disabled={isLockedProfile} />
               <p className="text-[11px] text-muted-foreground">Usado no "Olá," do painel</p>
             </div>
             <div className="space-y-1.5">
               <Label>Nome de exibição (sidebar/avatares)</Label>
-              <Input value={uf.display_name} onChange={e => setUf(f => ({ ...f, display_name: e.target.value }))} className="h-10" />
+              <Input value={uf.display_name} onChange={e => setUf(f => ({ ...f, display_name: e.target.value }))} className="h-10" disabled={isLockedProfile} />
             </div>
             <div className="space-y-1.5">
               <Label>Cargo</Label>
               <Input value={uf.role_title} onChange={e => setUf(f => ({ ...f, role_title: e.target.value }))}
-                placeholder="Ex: Advogada, Sócia-fundadora..." className="h-10" />
+                placeholder="Ex: Advogada, Sócia-fundadora..." className="h-10" disabled={isLockedProfile} />
             </div>
             {editingUser && (
               <div className="space-y-1.5">
                 <Label>Perfil de acesso</Label>
-                <Select value={uf.role} onValueChange={v => setUf(f => ({ ...f, role: v as 'admin' | 'client' }))}>
+                <Select value={uf.role} onValueChange={v => setUf(f => ({ ...f, role: v as 'admin' | 'client' }))} disabled={isLockedProfile}>
                   <SelectTrigger className="h-10"><SelectValue>{uf.role === 'admin' ? 'Administradora' : 'Cliente'}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Administradora</SelectItem>
@@ -663,8 +676,8 @@ export default function Configuracoes() {
               <Label>Cor de identificação</Label>
               <div className="flex flex-wrap gap-2">
                 {USER_COLORS.map(c => (
-                  <button key={c} onClick={() => setUf(f => ({ ...f, color: c }))}
-                    className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 ${uf.color === c ? 'border-foreground scale-110' : 'border-transparent'}`}
+                  <button key={c} onClick={() => !isLockedProfile && setUf(f => ({ ...f, color: c }))} disabled={isLockedProfile}
+                    className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed ${uf.color === c ? 'border-foreground scale-110' : 'border-transparent'}`}
                     style={{ backgroundColor: c }} />
                 ))}
               </div>
@@ -672,14 +685,14 @@ export default function Configuracoes() {
 
             <div className="space-y-2 pt-2 border-t border-border/40">
               <div className="flex items-center gap-2">
-                <Switch checked={uf.fullAccess} onCheckedChange={v => setUf(f => ({ ...f, fullAccess: v }))} />
+                <Switch checked={uf.fullAccess} onCheckedChange={v => setUf(f => ({ ...f, fullAccess: v }))} disabled={isLockedProfile} />
                 <Label>Acesso total ao sistema</Label>
               </div>
               {!uf.fullAccess && (
                 <div className="grid grid-cols-2 gap-1.5 pt-1">
                   {MODULES.map(m => (
-                    <button key={m.key} type="button" onClick={() => toggleModule(m.key)}
-                      className={`flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-medium border text-left transition-all ${
+                    <button key={m.key} type="button" onClick={() => toggleModule(m.key)} disabled={isLockedProfile}
+                      className={`flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-medium border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                         uf.allowed_modules.includes(m.key)
                           ? 'bg-primary/10 border-primary text-primary'
                           : 'border-border/60 text-muted-foreground hover:border-border'
@@ -692,10 +705,11 @@ export default function Configuracoes() {
               )}
             </div>
           </div>
+          )})()}
           <DialogFooter className="pt-4">
             <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
             {editingUser ? (
-              <Button onClick={saveUser}>Salvar</Button>
+              <Button onClick={saveUser} disabled={editingUser.display_name === 'Suporte SRJUR' && profile?.display_name !== 'Suporte SRJUR'}>Salvar</Button>
             ) : (
               <Button onClick={createUser} disabled={creatingUser}>{creatingUser ? 'Criando...' : 'Criar usuária'}</Button>
             )}
