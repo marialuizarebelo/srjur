@@ -118,8 +118,8 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1.5">
               {deadline.status === 'cumprido' && <Badge className="text-[10px] bg-green-600 text-white">Cumprido</Badge>}
-              {deadline.status === 'perdido' && <Badge className="text-[10px] bg-red-500 text-white">Perdido</Badge>}
-              {isOverdue && deadline.status === 'pendente' && <Badge className="text-[10px] bg-red-500 text-white">Atrasado</Badge>}
+              {deadline.status === 'perdido' && <Badge className="text-[10px] bg-red-500 dark:bg-red-600 text-white">Perdido</Badge>}
+              {isOverdue && deadline.status === 'pendente' && <Badge className="text-[10px] bg-red-500 dark:bg-red-600 text-white">Atrasado</Badge>}
               {isToday && <Badge className="text-[10px] bg-blue-500 text-white">Hoje</Badge>}
               {stage && (
                 <Badge variant="outline" className="text-[10px]" style={{ borderColor: stage.color, color: stage.color }}>

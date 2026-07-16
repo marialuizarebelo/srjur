@@ -114,27 +114,28 @@ interface StatCardProps {
 
 function StatCard({ title, value, subtitle, icon: Icon, lightColor, darkColor, bgColor, onClick }: StatCardProps) {
   const isDark = document.documentElement.classList.contains('dark')
-  const color = isDark ? darkColor : lightColor
+  const accent = isDark ? darkColor : lightColor
+  // bgColor entra como cor de destaque (borda + selo do ícone), não mais como
+  // preenchimento do card inteiro — o corpo fica no creme/navy neutro do tema,
+  // pra harmonizar com a identidade visual dos outros sites do escritório.
+  const border = bgColor.length === 9 ? bgColor.slice(0, 7) : bgColor
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl p-5 shadow-sm transition-transform duration-150 ${onClick ? 'cursor-pointer hover:scale-[1.02] hover:shadow-md active:scale-[0.99]' : ''}`}
-      style={{ backgroundColor: bgColor }}
+      className={`relative overflow-hidden rounded-2xl border-l-4 bg-card p-5 shadow-sm transition-transform duration-150 ${onClick ? 'cursor-pointer hover:scale-[1.02] hover:shadow-md active:scale-[0.99]' : ''}`}
+      style={{ borderLeftColor: border }}
       onClick={onClick}
     >
-      <div className="absolute -right-3 -top-3 opacity-10">
-        <Icon className="h-16 w-16" style={{ color }} />
-      </div>
       <div className="flex items-center gap-2 mb-3">
-        <div className="h-7 w-7 rounded-lg flex items-center justify-center bg-white/20">
-          <Icon className="h-3.5 w-3.5" style={{ color }} />
+        <div className="h-7 w-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: border + '1a' }}>
+          <Icon className="h-3.5 w-3.5" style={{ color: accent }} />
         </div>
-        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color }}>{title}</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
       </div>
-      <p className="text-4xl font-bold" style={{ color }}><Sensitive>{value}</Sensitive></p>
-      {subtitle && <p className="text-xs mt-1.5 font-medium" style={{ color: color + 'cc' }}>{subtitle}</p>}
+      <p className="text-4xl font-bold text-foreground"><Sensitive>{value}</Sensitive></p>
+      {subtitle && <p className="text-xs mt-1.5 font-medium" style={{ color: accent }}>{subtitle}</p>}
       {onClick && (
-        <div className="absolute bottom-2 right-3 opacity-50">
-          <ChevronRight className="h-3.5 w-3.5" style={{ color }} />
+        <div className="absolute bottom-2 right-3 opacity-40">
+          <ChevronRight className="h-3.5 w-3.5" style={{ color: accent }} />
         </div>
       )}
     </div>
@@ -149,6 +150,7 @@ interface AttentionItem {
   subtitle?: string
   days?: number
   priority?: string
+  kind?: 'tarefa' | 'prazo'
 }
 
 function AttentionColumn({
@@ -429,14 +431,22 @@ export default function Dashboard() {
         .limit(5)
       if (procs) setRecentProcesses(procs)
 
-      const { data: allTasks } = await supabase
-        .from('tasks')
-        .select('id, title, responsible, due_date, priority')
-        .eq('status', 'pendente')
-        .order('due_date', { ascending: true })
-        .limit(50)
+      const [{ data: allTasks }, { data: allDeadlines }] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('id, title, responsible, due_date, priority')
+          .eq('status', 'pendente')
+          .order('due_date', { ascending: true })
+          .limit(50),
+        supabase
+          .from('deadlines')
+          .select('id, title, responsible, due_date')
+          .eq('status', 'pendente')
+          .order('due_date', { ascending: true })
+          .limit(50),
+      ])
 
-      if (allTasks) {
+      if (allTasks || allDeadlines) {
         const overdue: AttentionItem[] = []
         const todayItems: AttentionItem[] = []
         const upcoming: AttentionItem[] = []
@@ -444,7 +454,12 @@ export default function Dashboard() {
         // Segunda = índice 0 ... Domingo = índice 6
         const todayWeekdayMondayFirst = (new Date().getDay() + 6) % 7
 
-        allTasks.forEach(t => {
+        const combined = [
+          ...(allTasks ?? []).map(t => ({ ...t, kind: 'tarefa' as const })),
+          ...(allDeadlines ?? []).map(d => ({ ...d, kind: 'prazo' as const })),
+        ]
+
+        combined.forEach(t => {
           if (!t.due_date) return
           const diff = getDaysDiff(t.due_date)
           const item: AttentionItem = {
@@ -453,6 +468,7 @@ export default function Dashboard() {
             subtitle: t.responsible ?? undefined,
             days: diff,
             priority: t.priority ?? undefined,
+            kind: t.kind,
           }
           if (diff < 0) overdue.push(item)
           else if (diff === 0) todayItems.push(item)
@@ -466,7 +482,7 @@ export default function Dashboard() {
         setTodayTasks(todayItems)
         setUpcomingTasks(upcoming)
         setWeekByDay(week)
-        setNextTasks(allTasks.filter(t => t.due_date).slice(0, 5))
+        setNextTasks(combined.filter(t => t.due_date).slice(0, 5))
       }
 
       const months: { month: string; receitas: number; despesas: number }[] = []
@@ -603,12 +619,13 @@ export default function Dashboard() {
         ? 'Vence hoje'
         : `Vence em ${diff}d`
       : undefined
+    const isDeadline = item.kind === 'prazo'
     setModal({
       open: true,
       title: section,
       loading: false,
-      link: '/tarefas',
-      linkLabel: 'Tarefas',
+      link: isDeadline ? '/prazos' : '/tarefas',
+      linkLabel: isDeadline ? 'Prazos' : 'Tarefas',
       items: [{
         id: item.id,
         label: item.title,
@@ -713,7 +730,7 @@ export default function Dashboard() {
             </div>
             <WeekAgendaView
               weekByDay={weekByDay}
-              onItemClick={item => openAttentionItem(item, 'Tarefa')}
+              onItemClick={item => openAttentionItem(item, item.kind === 'prazo' ? 'Prazo' : 'Tarefa')}
               onAddDay={date => { sessionStorage.setItem('srjur_tarefa_prefill', JSON.stringify({ due_date: date })); navigate('/tarefas?new=1') }}
             />
           </div>
@@ -839,7 +856,7 @@ export default function Dashboard() {
                   <div
                     key={item.id}
                     className="cursor-pointer rounded-lg p-1.5 -mx-1.5 hover:bg-muted/50 transition-colors"
-                    onClick={() => openAttentionItem(item, 'Tarefa Atrasada')}
+                    onClick={() => openAttentionItem(item, item.kind === 'prazo' ? 'Prazo Atrasado' : 'Tarefa Atrasada')}
                   >
                     <p className="text-sm font-medium truncate">{item.title}</p>
                     {item.subtitle && <p className="text-xs text-muted-foreground">{item.subtitle}</p>}
