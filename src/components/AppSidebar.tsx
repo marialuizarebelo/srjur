@@ -135,7 +135,7 @@ export function AppSidebar() {
                       <SidebarMenuItem key={item.url}>
                         <SidebarMenuButton
                           isActive={isActive}
-                          className="text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] data-[active=true]:bg-[var(--sidebar-accent)] data-[active=true]:text-[var(--sidebar-primary)]"
+                          className="text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] data-[active=true]:bg-[var(--sidebar-accent)] data-[active=true]:text-[var(--sidebar-accent-foreground)] data-[active=true]:font-semibold"
                           render={<NavLink to={item.url} />}
                         >
                           <item.icon className="h-4 w-4" />

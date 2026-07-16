@@ -81,15 +81,17 @@
   --chart-4: #6B8FD4;
   --chart-5: #E06B4A;
 
-  /* sidebar navy, puxando pra identidade dos sites (era preto puro) */
+  /* sidebar navy, puxando pra identidade dos sites (era preto puro) — hover/
+     ativo usam o bege da paleta como destaque (era navy-sobre-navy, contraste
+     baixo demais pra perceber a diferença). */
   --sidebar-background: #162846;
   --sidebar-foreground: #C8B89A;
   --sidebar-primary: #A9762F;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #1E3459;
-  --sidebar-accent-foreground: #F2EDE6;
+  --sidebar-accent: #E2D4C0;
+  --sidebar-accent-foreground: #1E2A3F;
   --sidebar-border: #22385C;
-  --sidebar-ring: #A9762F;
+  --sidebar-ring: #E2D4C0;
 
   --finance-income: #D5EAD9;
   --finance-expense: #F2D6D6;
@@ -125,10 +127,10 @@
   --sidebar-foreground: #A99B7F;
   --sidebar-primary: #D4A843;
   --sidebar-primary-foreground: #1E2A3F;
-  --sidebar-accent: #162846;
-  --sidebar-accent-foreground: #F2EDE6;
+  --sidebar-accent: #E2D4C0;
+  --sidebar-accent-foreground: #1E2A3F;
   --sidebar-border: #1E3459;
-  --sidebar-ring: #D4A843;
+  --sidebar-ring: #E2D4C0;
   --finance-income: #1a3328;
   --finance-expense: #331a1a;
 }
@@ -170,7 +172,9 @@ html {
    continua em DM Sans pra manter a leitura de dados limpa e densa. */
 h1 {
   font-family: var(--font-serif);
-  font-weight: 400;
+  /* Antic Didone só tem o peso 400 disponível — 700 força o navegador a
+     sintetizar um "bold" (engrossa o traço), que é o efeito pedido aqui. */
+  font-weight: 700;
   letter-spacing: 0.01em;
 }
 
