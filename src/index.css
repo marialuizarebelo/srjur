@@ -1,6 +1,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 @import "tailwindcss";
 
+/* Tailwind v4 por padrão compila "dark:" como @media (prefers-color-scheme:
+   dark) — ou seja, ignora completamente o botão de tema do sistema e só
+   aplica se o SISTEMA OPERACIONAL estiver no escuro. Como o app alterna tema
+   com uma classe .dark no <html> (ThemeContext), sem essa linha NENHUMA
+   classe dark:* do Tailwind (badges, bordas, bg de status etc.) surtia
+   efeito de verdade ao clicar no botão de tema — só as variáveis CSS que
+   eu declarei manualmente em .dark{} aqui embaixo funcionavam. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
   --color-background: var(--background);
