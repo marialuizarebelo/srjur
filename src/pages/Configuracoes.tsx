@@ -433,7 +433,7 @@ export default function Configuracoes() {
                     </span>
                   )}
                   <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                    u.role === 'admin' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
+                    u.role === 'admin' ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
                   }`}>
                     {u.role === 'admin' ? 'Admin' : 'Cliente'}
                   </span>
