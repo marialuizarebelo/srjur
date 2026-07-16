@@ -113,7 +113,9 @@
   --muted-foreground: #94A1B8;
   --accent: #1E3459;
   --accent-foreground: #E2D4C0;
-  --destructive: oklch(0.55 0.22 25);
+  /* menos saturado que o modo claro — vermelho puro em cima de navy escuro
+     fica "gritando" (neon), destoa de todo o resto da paleta mais sóbria */
+  --destructive: oklch(0.6 0.16 25);
   --border: #22385C;
   --input: #22385C;
   --ring: #D4A843;
