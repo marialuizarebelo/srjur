@@ -278,7 +278,7 @@ function RowBadge({ row, paymentsMap }: { row: FinanceRow; paymentsMap: Record<s
   }
   if (status === 'pago')     return <Badge className="text-[10px] bg-green-600 text-white">ENT</Badge>
   if (status === 'parcial')  return <Badge className="text-[10px] bg-blue-400 text-white">PARC</Badge>
-  if (status === 'atrasado') return <Badge className="text-[10px] bg-red-500 text-white">ATR</Badge>
+  if (status === 'atrasado') return <Badge className="text-[10px] bg-red-500 dark:bg-red-600 text-white">ATR</Badge>
   return <Badge className="text-[10px] bg-amber-400 text-white">PRV</Badge>
 }
 

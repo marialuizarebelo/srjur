@@ -170,7 +170,7 @@ export function ImportExtrato({ open, onOpenChange, onComplete }: ImportExtratoP
                 <span className="font-semibold">{items.length}</span> transações encontradas
               </div>
               {totalDuplicates > 0 && (
-                <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
+                <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30">
                   <AlertTriangle className="h-3 w-3 mr-1" />
                   {totalDuplicates} possíveis duplicatas
                 </Badge>

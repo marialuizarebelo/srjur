@@ -121,7 +121,7 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
                 {stageInfo.label}
               </Badge>
               {task.status === 'concluida' && <Badge className="text-[10px] bg-green-600 text-white">Concluída</Badge>}
-              {isOverdue && <Badge className="text-[10px] bg-red-500 text-white">Atrasada</Badge>}
+              {isOverdue && <Badge className="text-[10px] bg-red-500 dark:bg-red-600 text-white">Atrasada</Badge>}
             </div>
             <h2 className={`text-lg font-semibold leading-tight ${task.status === 'concluida' ? 'line-through opacity-60' : ''}`}>
               {task.title}
