@@ -150,6 +150,7 @@ interface AttentionItem {
   subtitle?: string
   days?: number
   priority?: string
+  kind?: 'tarefa' | 'prazo'
 }
 
 function AttentionColumn({
@@ -449,14 +450,22 @@ export default function Dashboard() {
         .limit(5)
       if (procs) setRecentProcesses(procs)
 
-      const { data: allTasks } = await supabase
-        .from('tasks')
-        .select('id, title, responsible, due_date, priority')
-        .eq('status', 'pendente')
-        .order('due_date', { ascending: true })
-        .limit(50)
+      const [{ data: allTasks }, { data: allDeadlines }] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('id, title, responsible, due_date, priority')
+          .eq('status', 'pendente')
+          .order('due_date', { ascending: true })
+          .limit(50),
+        supabase
+          .from('deadlines')
+          .select('id, title, responsible, due_date, priority')
+          .eq('status', 'pendente')
+          .order('due_date', { ascending: true })
+          .limit(50),
+      ])
 
-      if (allTasks) {
+      if (allTasks || allDeadlines) {
         const overdue: AttentionItem[] = []
         const todayItems: AttentionItem[] = []
         const upcoming: AttentionItem[] = []
@@ -464,7 +473,12 @@ export default function Dashboard() {
         // Segunda = índice 0 ... Domingo = índice 6
         const todayWeekdayMondayFirst = (new Date().getDay() + 6) % 7
 
-        allTasks.forEach(t => {
+        const combined = [
+          ...(allTasks ?? []).map(t => ({ ...t, kind: 'tarefa' as const })),
+          ...(allDeadlines ?? []).map(d => ({ ...d, kind: 'prazo' as const })),
+        ]
+
+        combined.forEach(t => {
           if (!t.due_date) return
           const diff = getDaysDiff(t.due_date)
           const item: AttentionItem = {
@@ -473,6 +487,7 @@ export default function Dashboard() {
             subtitle: t.responsible ?? undefined,
             days: diff,
             priority: t.priority ?? undefined,
+            kind: t.kind,
           }
           if (diff < 0) overdue.push(item)
           else if (diff === 0) todayItems.push(item)
@@ -486,7 +501,7 @@ export default function Dashboard() {
         setTodayTasks(todayItems)
         setUpcomingTasks(upcoming)
         setWeekByDay(week)
-        setNextTasks(allTasks.filter(t => t.due_date).slice(0, 5))
+        setNextTasks(combined.filter(t => t.due_date).slice(0, 5))
       }
 
       const months: { month: string; receitas: number; despesas: number }[] = []
@@ -623,12 +638,13 @@ export default function Dashboard() {
         ? 'Vence hoje'
         : `Vence em ${diff}d`
       : undefined
+    const isDeadline = item.kind === 'prazo'
     setModal({
       open: true,
       title: section,
       loading: false,
-      link: '/tarefas',
-      linkLabel: 'Tarefas',
+      link: isDeadline ? '/prazos' : '/tarefas',
+      linkLabel: isDeadline ? 'Prazos' : 'Tarefas',
       items: [{
         id: item.id,
         label: item.title,
@@ -733,7 +749,7 @@ export default function Dashboard() {
             </div>
             <WeekAgendaView
               weekByDay={weekByDay}
-              onItemClick={item => openAttentionItem(item, 'Tarefa')}
+              onItemClick={item => openAttentionItem(item, item.kind === 'prazo' ? 'Prazo' : 'Tarefa')}
               onAddDay={date => { sessionStorage.setItem('srjur_tarefa_prefill', JSON.stringify({ due_date: date })); navigate('/tarefas?new=1') }}
             />
           </div>
@@ -859,7 +875,7 @@ export default function Dashboard() {
                   <div
                     key={item.id}
                     className="cursor-pointer rounded-lg p-1.5 -mx-1.5 hover:bg-muted/50 transition-colors"
-                    onClick={() => openAttentionItem(item, 'Tarefa Atrasada')}
+                    onClick={() => openAttentionItem(item, item.kind === 'prazo' ? 'Prazo Atrasado' : 'Tarefa Atrasada')}
                   >
                     <p className="text-sm font-medium truncate">{item.title}</p>
                     {item.subtitle && <p className="text-xs text-muted-foreground">{item.subtitle}</p>}
