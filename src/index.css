@@ -1,9 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Kalnia:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 @import "tailwindcss";
 
 @theme inline {
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
-  --font-serif: "Kalnia", serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -85,7 +84,7 @@
      ativo usam o bege da paleta como destaque (era navy-sobre-navy, contraste
      baixo demais pra perceber a diferença). */
   --sidebar-background: #162846;
-  --sidebar-foreground: #C8B89A;
+  --sidebar-foreground: #AEB9CC;
   --sidebar-primary: #A9762F;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #E2D4C0;
@@ -111,7 +110,7 @@
   --secondary: #1E3459;
   --secondary-foreground: #E2D4C0;
   --muted: #1E3459;
-  --muted-foreground: #A99B7F;
+  --muted-foreground: #94A1B8;
   --accent: #1E3459;
   --accent-foreground: #E2D4C0;
   --destructive: oklch(0.55 0.22 25);
@@ -124,7 +123,7 @@
   --chart-4: #a78bfa;
   --chart-5: #f87171;
   --sidebar-background: #0B1428;
-  --sidebar-foreground: #A99B7F;
+  --sidebar-foreground: #94A1B8;
   --sidebar-primary: #D4A843;
   --sidebar-primary-foreground: #1E2A3F;
   --sidebar-accent: #E2D4C0;
@@ -167,13 +166,8 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Título principal de cada página (h1) na fonte serifada da identidade dos
-   sites — só o "topo" de cada tela, o resto (tabelas, formulários, corpo)
-   continua em Plus Jakarta Sans pra manter a leitura de dados limpa e densa. */
 h1 {
-  font-family: var(--font-serif);
   font-weight: 700;
-  letter-spacing: 0.01em;
 }
 
 /* Barra de rolagem fina e discreta em QUALQUER lugar da aplicação — sem isso,

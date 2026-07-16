@@ -703,9 +703,9 @@ export default function Calendario() {
           {/* type toggles */}
           {[
             { label:'Tarefas',       val:showT, set:setShowT, active:'bg-slate-200 text-slate-700 border-slate-200', inactive:'text-muted-foreground border-border/60' },
-            { label:'Prazos',        val:showP, set:setShowP, active:'bg-rose-100 text-rose-600 border-rose-200',   inactive:'text-muted-foreground border-border/60' },
-            { label:'Compromissos',  val:showC, set:setShowC, active:'bg-violet-100 text-violet-600 border-violet-200', inactive:'text-muted-foreground border-border/60' },
-            { label:'Marketing',     val:showM, set:setShowM, active:'bg-pink-100 text-pink-600 border-pink-200', inactive:'text-muted-foreground border-border/60' },
+            { label:'Prazos',        val:showP, set:setShowP, active:'bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 border-rose-200 dark:border-rose-800',   inactive:'text-muted-foreground border-border/60' },
+            { label:'Compromissos',  val:showC, set:setShowC, active:'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-300 border-violet-200 dark:border-violet-800', inactive:'text-muted-foreground border-border/60' },
+            { label:'Marketing',     val:showM, set:setShowM, active:'bg-pink-100 dark:bg-pink-900/40 text-pink-600 dark:text-pink-300 border-pink-200 dark:border-pink-800', inactive:'text-muted-foreground border-border/60' },
           ].map(f => (
             <button key={f.label} onClick={() => f.set(!f.val)}
               className={`h-7 px-3 rounded-full text-[11px] font-medium border transition-all ${
@@ -890,7 +890,7 @@ export default function Calendario() {
                   <p className="text-sm font-semibold">
                     {r.owner_type === 'office' ? 'Escritório' : 'Pessoal'} {r.email ? `— ${r.email}` : '(sem e-mail registrado)'}
                   </p>
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${r.error ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${r.error ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300'}`}>
                     {r.error ? 'Erro' : 'OK'}
                   </span>
                 </div>
@@ -898,7 +898,7 @@ export default function Calendario() {
                   <p className="text-xs text-amber-600">⚠ Sem token salvo — precisa reconectar essa agenda.</p>
                 )}
                 {r.error ? (
-                  <p className="text-xs text-red-600 bg-red-50 rounded-lg p-2">{r.error}</p>
+                  <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded-lg p-2">{r.error}</p>
                 ) : (
                   <div className="text-xs text-muted-foreground space-y-1">
                     <p>Importados do Google: <strong className="text-foreground">{r.pulled}</strong></p>

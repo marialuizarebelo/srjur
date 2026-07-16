@@ -390,8 +390,8 @@ export default function SistemasEletronicos() {
                   <div className="flex items-center gap-2 flex-wrap mb-1.5">
                     <Badge variant="outline" className="text-[10px]">{i.tribunal}</Badge>
                     <Badge variant="secondary" className="text-[10px]">{i.tipo_comunicacao}</Badge>
-                    {!i.lida && i.status !== 'ignorado' && <Badge className="text-[10px] bg-amber-100 text-amber-700 hover:bg-amber-100">Não lida</Badge>}
-                    {i.status === 'vinculado' && <Badge className="text-[10px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Vinculado</Badge>}
+                    {!i.lida && i.status !== 'ignorado' && <Badge className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40">Não lida</Badge>}
+                    {i.status === 'vinculado' && <Badge className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40">Vinculado</Badge>}
                     <span className="text-[11px] text-muted-foreground ml-auto shrink-0">{i.data_disponibilizacao && fmtDate(i.data_disponibilizacao)}</span>
                   </div>
                   <p className="text-sm font-medium text-foreground">

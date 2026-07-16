@@ -175,7 +175,7 @@ function LeadCard({ lead, onClick, onStatusChange, stages }: {
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-medium truncate flex-1"><Sensitive>{lead.name}</Sensitive></p>
         {lead.client_id && (
-          <Badge className="text-[9px] h-4 bg-emerald-100 text-emerald-700 hover:bg-emerald-100 shrink-0">✓ Cliente</Badge>
+          <Badge className="text-[9px] h-4 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 shrink-0">✓ Cliente</Badge>
         )}
         <ResponsibleAvatars ids={lead.responsible_ids} profilesMap={profilesMap} size="xs" />
       </div>
@@ -231,20 +231,20 @@ interface ClientDetail extends Client {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  ativo: 'bg-emerald-100 text-emerald-700',
-  inativo: 'bg-gray-100 text-gray-600',
-  prospecto: 'bg-blue-100 text-blue-700',
+  ativo: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300',
+  inativo: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300',
+  prospecto: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300',
 }
 const PRIORITY_COLORS: Record<string, string> = {
-  alta: 'bg-red-100 text-red-700',
-  media: 'bg-amber-100 text-amber-700',
-  baixa: 'bg-gray-100 text-gray-600',
+  alta: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300',
+  media: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300',
+  baixa: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300',
 }
 const TASK_STATUS_COLORS: Record<string, string> = {
-  pendente: 'bg-amber-100 text-amber-700',
-  em_andamento: 'bg-blue-100 text-blue-700',
-  concluida: 'bg-emerald-100 text-emerald-700',
-  concluído: 'bg-emerald-100 text-emerald-700',
+  pendente: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300',
+  em_andamento: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300',
+  concluida: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300',
+  concluído: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300',
 }
 
 function fmtAddr(c: Client) {
@@ -437,7 +437,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
                 </button>
               </h2>
               <div className="flex items-center gap-1.5 mt-1">
-                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[client.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[client.status] ?? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
                   {client.status.toUpperCase()}
                 </span>
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
@@ -579,8 +579,8 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
                       {p.title}{p.number ? ` (${p.number})` : ''}
                     </p>
                     <div className="flex gap-1 shrink-0">
-                      {p.type && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">{p.type.toUpperCase()}</span>}
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">{p.status.toUpperCase().replace('_', ' ')}</span>
+                      {p.type && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">{p.type.toUpperCase()}</span>}
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">{p.status.toUpperCase().replace('_', ' ')}</span>
                     </div>
                   </div>
                 ))}
@@ -599,8 +599,8 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
                   <div key={t.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
                     <p className="text-sm truncate flex-1">{t.title}</p>
                     <div className="flex gap-1 shrink-0">
-                      {t.priority && <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${PRIORITY_COLORS[t.priority] ?? 'bg-gray-100 text-gray-600'}`}>{t.priority.toUpperCase()}</span>}
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${TASK_STATUS_COLORS[t.status] ?? 'bg-gray-100 text-gray-600'}`}>{t.status.toUpperCase().replace('_', ' ')}</span>
+                      {t.priority && <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${PRIORITY_COLORS[t.priority] ?? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>{t.priority.toUpperCase()}</span>}
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${TASK_STATUS_COLORS[t.status] ?? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>{t.status.toUpperCase().replace('_', ' ')}</span>
                     </div>
                   </div>
                 ))}
@@ -619,9 +619,9 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
                   <div key={i} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
                     <p className="text-sm truncate flex-1">{doc.name}</p>
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
-                      doc.status === 'signed' ? 'bg-emerald-100 text-emerald-700' :
-                      doc.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                      'bg-gray-100 text-gray-600'
+                      doc.status === 'signed' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' :
+                      doc.status === 'pending' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' :
+                      'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'
                     }`}>
                       {doc.status === 'signed' ? '✓ ASSINADO' : doc.status === 'pending' ? 'AGUARDANDO' : doc.status.toUpperCase()}
                     </span>
@@ -732,7 +732,7 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
               {stageInfo && (
                 <Badge className="text-[10px]" style={{ backgroundColor: stageInfo.color, color: '#fff' }}>{stageInfo.label}</Badge>
               )}
-              {lead.client_id && <Badge className="text-[10px] bg-emerald-100 text-emerald-700">✓ Cliente</Badge>}
+              {lead.client_id && <Badge className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">✓ Cliente</Badge>}
               {lead.source && <Badge variant="outline" className="text-[10px]">{lead.source}</Badge>}
             </div>
             <h2 className="text-lg font-semibold leading-tight"><Sensitive>{lead.name}</Sensitive></h2>
@@ -1359,7 +1359,7 @@ export default function Clientes() {
               <Button variant="outline" size="sm" onClick={() => setStagesDialogOpen(true)}>
                 <Settings2 className="h-3 w-3 mr-1" />Etapas
               </Button>
-              <Button variant="outline" size="sm" className="text-green-600 border-green-300 hover:bg-green-50"
+              <Button variant="outline" size="sm" className="text-green-600 dark:text-green-400 border-green-300 dark:border-green-800 hover:bg-green-50 dark:hover:bg-green-900/30"
                 onClick={() => { setQuickName(''); setQuickPhone(''); setQuickLeadOpen(true) }}>
                 <Phone className="h-3 w-3 mr-1" />WhatsApp
               </Button>
@@ -1730,7 +1730,7 @@ export default function Clientes() {
                     <UserCheck className="h-3.5 w-3.5 mr-1" />Converter em cliente
                   </Button>
                 ) : (
-                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                  <Badge className="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40">
                     <UserCheck className="h-3 w-3 mr-1" />Já é cliente ativo
                   </Badge>
                 )}
