@@ -459,7 +459,7 @@ export default function Dashboard() {
           .limit(50),
         supabase
           .from('deadlines')
-          .select('id, title, responsible, due_date, priority')
+          .select('id, title, responsible, due_date')
           .eq('status', 'pendente')
           .order('due_date', { ascending: true })
           .limit(50),
