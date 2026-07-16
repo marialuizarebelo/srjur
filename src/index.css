@@ -1,8 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Antic+Didone&display=swap');
 @import "tailwindcss";
 
 @theme inline {
   --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-serif: "Antic Didone", serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -44,18 +45,20 @@
   /* raio mais contido, estilo SaaS maduro (era 0.875rem — ficava infantil/bolha) */
   --radius: 0.5rem;
 
-  /* fundo creme quente — inspirado no Intelly, não frio nem branco puro */
+  /* Identidade SRJUR: modo claro = fundo creme quente + texto grafite-azulado,
+     igual ao contraste usado nos sites (srjur.com, Rotina Segura, escritório) —
+     lá o creme é o texto sobre navy; aqui é o inverso, mesma paleta. */
   --background: #F2EDE6;
-  --foreground: #1a1a1a;
+  --foreground: #1E2A3F;
 
-  /* cards brancos puros — contraste limpo sobre o creme */
-  --card: #ffffff;
-  --card-foreground: #1a1a1a;
-  --popover: #ffffff;
-  --popover-foreground: #1a1a1a;
+  /* cards num off-white levemente mais claro que o fundo, não branco puro */
+  --card: #FAF7F2;
+  --card-foreground: #1E2A3F;
+  --popover: #FAF7F2;
+  --popover-foreground: #1E2A3F;
 
-  /* primária: rosa/magenta — identidade SR&JUR original do Lovable */
-  --primary: #C4478A;
+  /* primária: dourado/âmbar da identidade dos sites (era rosa/magenta do Lovable) */
+  --primary: #A9762F;
   --primary-foreground: #ffffff;
 
   /* secundários e muds em tom creme mais escuro */
@@ -69,62 +72,63 @@
   --destructive: #dc2626;
   --border: #DDD7CE;
   --input: #DDD7CE;
-  --ring: #C4478A;
+  --ring: #A9762F;
 
-  /* chart colors vibrantes */
+  /* chart colors vibrantes — mantidas, não fazem parte da paleta neutra */
   --chart-1: #C4478A;
   --chart-2: #4A9E6B;
   --chart-3: #D4A843;
   --chart-4: #6B8FD4;
   --chart-5: #E06B4A;
 
-  /* sidebar preta como Intelly */
-  --sidebar-background: #1a1a1a;
-  --sidebar-foreground: #a8a29e;
-  --sidebar-primary: #D4608E;
+  /* sidebar navy, puxando pra identidade dos sites (era preto puro) */
+  --sidebar-background: #162846;
+  --sidebar-foreground: #C8B89A;
+  --sidebar-primary: #A9762F;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #2a2a2a;
-  --sidebar-accent-foreground: #e5e0db;
-  --sidebar-border: #2e2e2e;
-  --sidebar-ring: #C4478A;
+  --sidebar-accent: #1E3459;
+  --sidebar-accent-foreground: #F2EDE6;
+  --sidebar-border: #22385C;
+  --sidebar-ring: #A9762F;
 
   --finance-income: #D5EAD9;
   --finance-expense: #F2D6D6;
 }
 
 .dark {
-  /* azul-ardósia estilo refs enviadas — navy suave, não preto */
-  --background: #1a1f2e;
-  --foreground: #e2e8f0;
-  --card: #222840;
-  --card-foreground: #e2e8f0;
-  --popover: #222840;
-  --popover-foreground: #e2e8f0;
-  --primary: oklch(0.68 0.18 320);
-  --primary-foreground: #ffffff;
-  --secondary: #2a3150;
-  --secondary-foreground: #cbd5e1;
-  --muted: #2a3150;
-  --muted-foreground: #94a3b8;
-  --accent: #2a3150;
-  --accent-foreground: #cbd5e1;
+  /* Modo escuro = fundo navy + texto/detalhes creme, igual aos sites (srjur.com
+     usa exatamente esse navy de fundo com texto creme). */
+  --background: #0F1936;
+  --foreground: #F2EDE6;
+  --card: #162846;
+  --card-foreground: #F2EDE6;
+  --popover: #162846;
+  --popover-foreground: #F2EDE6;
+  --primary: #D4A843;
+  --primary-foreground: #1E2A3F;
+  --secondary: #1E3459;
+  --secondary-foreground: #E2D4C0;
+  --muted: #1E3459;
+  --muted-foreground: #A99B7F;
+  --accent: #1E3459;
+  --accent-foreground: #E2D4C0;
   --destructive: oklch(0.55 0.22 25);
-  --border: #2e3a56;
-  --input: #2e3a56;
-  --ring: oklch(0.68 0.18 320);
+  --border: #22385C;
+  --input: #22385C;
+  --ring: #D4A843;
   --chart-1: #818cf8;
   --chart-2: #34d399;
   --chart-3: #fbbf24;
   --chart-4: #a78bfa;
   --chart-5: #f87171;
-  --sidebar-background: #141827;
-  --sidebar-foreground: #94a3b8;
-  --sidebar-primary: oklch(0.72 0.16 320);
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #1e2540;
-  --sidebar-accent-foreground: #cbd5e1;
-  --sidebar-border: #1e2a42;
-  --sidebar-ring: oklch(0.68 0.18 320);
+  --sidebar-background: #0B1428;
+  --sidebar-foreground: #A99B7F;
+  --sidebar-primary: #D4A843;
+  --sidebar-primary-foreground: #1E2A3F;
+  --sidebar-accent: #162846;
+  --sidebar-accent-foreground: #F2EDE6;
+  --sidebar-border: #1E3459;
+  --sidebar-ring: #D4A843;
   --finance-income: #1a3328;
   --finance-expense: #331a1a;
 }
@@ -159,6 +163,15 @@ input, select, textarea {
 /* scroll suave em toda a aplicação */
 html {
   scroll-behavior: smooth;
+}
+
+/* Título principal de cada página (h1) na fonte serifada da identidade dos
+   sites — só o "topo" de cada tela, o resto (tabelas, formulários, corpo)
+   continua em DM Sans pra manter a leitura de dados limpa e densa. */
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: 0.01em;
 }
 
 /* Barra de rolagem fina e discreta em QUALQUER lugar da aplicação — sem isso,

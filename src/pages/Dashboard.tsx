@@ -114,27 +114,28 @@ interface StatCardProps {
 
 function StatCard({ title, value, subtitle, icon: Icon, lightColor, darkColor, bgColor, onClick }: StatCardProps) {
   const isDark = document.documentElement.classList.contains('dark')
-  const color = isDark ? darkColor : lightColor
+  const accent = isDark ? darkColor : lightColor
+  // bgColor entra como cor de destaque (borda + selo do ícone), não mais como
+  // preenchimento do card inteiro — o corpo fica no creme/navy neutro do tema,
+  // pra harmonizar com a identidade visual dos outros sites do escritório.
+  const border = bgColor.length === 9 ? bgColor.slice(0, 7) : bgColor
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl p-5 shadow-sm transition-transform duration-150 ${onClick ? 'cursor-pointer hover:scale-[1.02] hover:shadow-md active:scale-[0.99]' : ''}`}
-      style={{ backgroundColor: bgColor }}
+      className={`relative overflow-hidden rounded-2xl border-l-4 bg-card p-5 shadow-sm transition-transform duration-150 ${onClick ? 'cursor-pointer hover:scale-[1.02] hover:shadow-md active:scale-[0.99]' : ''}`}
+      style={{ borderLeftColor: border }}
       onClick={onClick}
     >
-      <div className="absolute -right-3 -top-3 opacity-10">
-        <Icon className="h-16 w-16" style={{ color }} />
-      </div>
       <div className="flex items-center gap-2 mb-3">
-        <div className="h-7 w-7 rounded-lg flex items-center justify-center bg-white/20">
-          <Icon className="h-3.5 w-3.5" style={{ color }} />
+        <div className="h-7 w-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: border + '1a' }}>
+          <Icon className="h-3.5 w-3.5" style={{ color: accent }} />
         </div>
-        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color }}>{title}</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
       </div>
-      <p className="text-4xl font-bold" style={{ color }}><Sensitive>{value}</Sensitive></p>
-      {subtitle && <p className="text-xs mt-1.5 font-medium" style={{ color: color + 'cc' }}>{subtitle}</p>}
+      <p className="text-4xl font-bold text-foreground"><Sensitive>{value}</Sensitive></p>
+      {subtitle && <p className="text-xs mt-1.5 font-medium" style={{ color: accent }}>{subtitle}</p>}
       {onClick && (
-        <div className="absolute bottom-2 right-3 opacity-50">
-          <ChevronRight className="h-3.5 w-3.5" style={{ color }} />
+        <div className="absolute bottom-2 right-3 opacity-40">
+          <ChevronRight className="h-3.5 w-3.5" style={{ color: accent }} />
         </div>
       )}
     </div>
