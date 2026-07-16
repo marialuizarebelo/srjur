@@ -449,7 +449,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
           </div>
         </div>
 
-        <div className="px-6 py-4 space-y-5">
+        <div className="px-6 py-4 space-y-5 min-w-0">
           {/* Cards financeiros */}
           {financeiro && (
             <div className="grid grid-cols-3 gap-3">
@@ -532,8 +532,8 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
 
           {client.type === 'pessoa_fisica' && (
             <div className="rounded-lg border px-4 py-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Qualificação</p>
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide truncate">Qualificação</p>
                 <Button
                   variant="outline" size="sm" className="h-7 text-xs"
                   onClick={() => {
@@ -574,8 +574,8 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
               </p>
               <div className="space-y-1.5">
                 {detail!.processes!.map(p => (
-                  <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
-                    <p className="text-sm truncate flex-1">
+                  <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 min-w-0">
+                    <p className="text-sm truncate flex-1 min-w-0">
                       {p.title}{p.number ? ` (${p.number})` : ''}
                     </p>
                     <div className="flex gap-1 shrink-0">
