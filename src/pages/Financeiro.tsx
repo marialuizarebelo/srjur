@@ -159,7 +159,7 @@ function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClic
           <div className="min-w-0">
             <p className="text-xs font-medium text-white/80 truncate">{title}</p>
             {subtitle && <p className="text-[10px] text-white/60 truncate">{subtitle}</p>}
-            <p className={`text-base sm:text-lg font-bold mt-1.5 text-white break-words ${valueClass}`}>{value}</p>
+            <p className={`font-bold mt-1.5 text-white whitespace-nowrap overflow-hidden ${value.length > 12 ? 'text-xs sm:text-sm' : value.length > 9 ? 'text-sm sm:text-base' : 'text-base sm:text-lg'} ${valueClass}`}>{value}</p>
           </div>
           <div className="h-9 w-9 rounded-xl flex items-center justify-center bg-white/20 shrink-0">
             <Icon className="h-4 w-4 text-white" />
@@ -177,7 +177,7 @@ function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClic
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground font-medium truncate">{title}</p>
           {subtitle && <p className="text-[10px] text-muted-foreground/60 truncate">{subtitle}</p>}
-          <p className={`text-base sm:text-lg font-bold mt-1.5 break-words ${valueClass}`} style={{ color: muted ? undefined : color }}>{value}</p>
+          <p className={`font-bold mt-1.5 whitespace-nowrap overflow-hidden ${value.length > 12 ? 'text-xs sm:text-sm' : value.length > 9 ? 'text-sm sm:text-base' : 'text-base sm:text-lg'} ${valueClass}`} style={{ color: muted ? undefined : color }}>{value}</p>
         </div>
         <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}15` }}>
           <Icon className="h-4 w-4" style={{ color: muted ? undefined : color }} />
@@ -198,6 +198,9 @@ function SplitCard({ leftLabel, leftValue, leftActive, onClickLeft, leftColor, r
   const valueClass = hidden ? 'blur-sm select-none' : ''
   const lc = leftColor ?? (leftValue >= 0 ? '#8B5CF6' : '#ef4444')
   const rc = rightColor ?? (rightValue >= 0 ? '#8B5CF6' : '#ef4444')
+  const leftStr = fmtBRL(leftValue)
+  const rightStr = fmtBRL(rightValue)
+  const sizeClass = (s: string) => s.length > 12 ? 'text-xs sm:text-sm' : s.length > 9 ? 'text-sm sm:text-base' : 'text-base sm:text-lg'
   return (
     <Card className="col-span-2 p-0 overflow-hidden">
       <div className="grid grid-cols-2 divide-x">
@@ -207,8 +210,8 @@ function SplitCard({ leftLabel, leftValue, leftActive, onClickLeft, leftColor, r
         >
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground font-medium truncate">{leftLabel}</p>
-            <p className={`text-base sm:text-lg font-bold mt-1 break-words ${valueClass}`} style={{ color: lc }}>
-              {fmtBRL(leftValue)}
+            <p className={`font-bold mt-1 whitespace-nowrap overflow-hidden ${sizeClass(leftStr)} ${valueClass}`} style={{ color: lc }}>
+              {leftStr}
             </p>
           </div>
           <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${lc}15` }}>
@@ -221,8 +224,8 @@ function SplitCard({ leftLabel, leftValue, leftActive, onClickLeft, leftColor, r
         >
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground font-medium truncate">{rightLabel}</p>
-            <p className={`text-base sm:text-lg font-bold mt-1 break-words ${valueClass}`} style={{ color: rc }}>
-              {fmtBRL(rightValue)}
+            <p className={`font-bold mt-1 whitespace-nowrap overflow-hidden ${sizeClass(rightStr)} ${valueClass}`} style={{ color: rc }}>
+              {rightStr}
             </p>
           </div>
           <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${rc}15` }}>

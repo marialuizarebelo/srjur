@@ -16,6 +16,7 @@ import { syncGoogleCalendar, type SyncResult } from '@/lib/googleCalendar'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { toast } from 'sonner'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
+import { useDroppable } from '@dnd-kit/core'
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { Badge } from '@/components/ui/badge'
 import { Columns3, CalendarDays } from 'lucide-react'
@@ -176,6 +177,24 @@ export default function Calendario() {
     } finally {
       setSaving(false)
     }
+  }
+
+  // Arrastar um evento pra outro dia no Mês/Semana reagenda ele direto (sem
+  // precisar abrir o dialog de edição só pra trocar a data).
+  async function rescheduleEvent(evId: string, newDate: string) {
+    const prefix = evId[0]
+    const rawId = evId.slice(2)
+    if (prefix === 't') {
+      await supabase.from('tasks').update({ due_date: newDate }).eq('id', rawId)
+    } else if (prefix === 'd') {
+      await supabase.from('deadlines').update({ due_date: newDate }).eq('id', rawId)
+    } else if (prefix === 'm') {
+      await supabase.from('marketing_content').update({ scheduled_date: newDate }).eq('id', rawId)
+    } else {
+      return
+    }
+    toast.success('Data atualizada!')
+    load()
   }
 
   async function deleteEditEvent() {
@@ -371,18 +390,53 @@ export default function Calendario() {
       : pillStyle ? '' : `${tc.bg} ${tc.text}`
 
     return (
-      <div className={`rounded-lg px-2 py-0.5 text-[11px] font-medium truncate leading-5 cursor-pointer hover:brightness-95 transition-all
-        ${pillClass} ${done ? 'opacity-40 line-through' : ''}`}
-        style={pillStyle}
-        title={ev.title}
-        onClick={e => { e.stopPropagation(); openEditEvent(ev) }}>
-        {!mini && ev.time && <span className="mr-1.5 opacity-60 font-normal">{ev.time.slice(0,5)}</span>}
-        {ev.title}
-      </div>
+      <DraggableCard id={ev.id}>
+        <div className={`rounded-lg px-2 py-0.5 text-[11px] font-medium truncate leading-5 cursor-pointer hover:brightness-95 transition-all
+          ${pillClass} ${done ? 'opacity-40 line-through' : ''}`}
+          style={pillStyle}
+          title={ev.title}
+          onClick={e => { e.stopPropagation(); openEditEvent(ev) }}>
+          {!mini && ev.time && <span className="mr-1.5 opacity-60 font-normal">{ev.time.slice(0,5)}</span>}
+          {ev.title}
+        </div>
+      </DraggableCard>
     )
   }
 
   // ── Month grid ────────────────────────────────────────────────────────────
+  function MonthDayCell({ c }: { c: { d: Date; in: boolean } }) {
+    const ymd = toYMD(c.d)
+    const isT = ymd === toYMD(today)
+    const evs = byDate[ymd] ?? []
+    const MAX = 3
+    const { setNodeRef, isOver } = useDroppable({ id: ymd })
+    return (
+      <div ref={setNodeRef}
+        onClick={() => { setSelDate(ymd); setView('dia') }}
+        className={`group relative min-h-[100px] p-2 border-r border-b border-border/40 cursor-pointer transition-colors
+          hover:bg-muted/20 last:border-r-0 ${!c.in ? 'bg-muted/10' : ''} ${isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/40' : ''}`}>
+        <div className="flex items-center justify-between mb-1.5">
+          <span className={`text-xs font-semibold h-6 w-6 flex items-center justify-center rounded-full transition-colors
+            ${isT ? 'bg-primary text-primary-foreground' : !c.in ? 'text-muted-foreground/30' : 'text-foreground hover:bg-muted'}`}>
+            {c.d.getDate()}
+          </span>
+          <button
+            onClick={e => { e.stopPropagation(); openQuickCreate(ymd) }}
+            className="opacity-0 group-hover:opacity-100 h-5 w-5 rounded-md hover:bg-primary hover:text-primary-foreground flex items-center justify-center transition-all text-muted-foreground"
+            title="Criar evento">
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+          {evs.length > MAX && (
+            <span className="text-[9px] text-muted-foreground font-medium">+{evs.length-MAX}</span>
+          )}
+        </div>
+        <div className="space-y-0.5">
+          {evs.slice(0,MAX).map(ev => <Pill key={ev.id} ev={ev} mini />)}
+        </div>
+      </div>
+    )
+  }
+
   function MonthView() {
     const y = cursor.getFullYear(), m = cursor.getMonth()
     const fd = new Date(y,m,1).getDay()
@@ -393,132 +447,112 @@ export default function Calendario() {
     while (cells.length < 42) { const n=cells.length-fd-dim+1; cells.push({d:new Date(y,m+1,n), in:false}) }
 
     return (
-      <div className="rounded-2xl border border-border/60 overflow-hidden shadow-sm">
-        {/* weekday headers */}
-        <div className="grid grid-cols-7 bg-muted/30">
-          {WEEKDAYS_SHORT.map(w => (
-            <div key={w} className="py-3 text-center text-[11px] font-semibold text-muted-foreground tracking-wide">
-              {w}
-            </div>
-          ))}
-        </div>
-        {/* day cells */}
-        <div className="grid grid-cols-7 bg-background">
-          {cells.map((c,i) => {
-            const ymd = toYMD(c.d)
-            const isT = ymd === toYMD(today)
-            const evs = byDate[ymd] ?? []
-            const MAX = 3
-            return (
-              <div key={i}
-                onClick={() => { setSelDate(ymd); setView('dia') }}
-                className={`group relative min-h-[100px] p-2 border-r border-b border-border/40 cursor-pointer transition-colors
-                  hover:bg-muted/20 last:border-r-0 ${!c.in ? 'bg-muted/10' : ''}`}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className={`text-xs font-semibold h-6 w-6 flex items-center justify-center rounded-full transition-colors
-                    ${isT ? 'bg-primary text-primary-foreground' : !c.in ? 'text-muted-foreground/30' : 'text-foreground hover:bg-muted'}`}>
-                    {c.d.getDate()}
-                  </span>
-                  <button
-                    onClick={e => { e.stopPropagation(); openQuickCreate(ymd) }}
-                    className="opacity-0 group-hover:opacity-100 h-5 w-5 rounded-md hover:bg-primary hover:text-primary-foreground flex items-center justify-center transition-all text-muted-foreground"
-                    title="Criar evento">
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                  {evs.length > MAX && (
-                    <span className="text-[9px] text-muted-foreground font-medium">+{evs.length-MAX}</span>
-                  )}
-                </div>
-                <div className="space-y-0.5">
-                  {evs.slice(0,MAX).map(ev => <Pill key={ev.id} ev={ev} mini />)}
-                </div>
+      <KanbanDndContext onDropOnColumn={(evId, ymd) => rescheduleEvent(evId, ymd)}>
+        <div className="rounded-2xl border border-border/60 overflow-hidden shadow-sm">
+          {/* weekday headers */}
+          <div className="grid grid-cols-7 bg-muted/30">
+            {WEEKDAYS_SHORT.map(w => (
+              <div key={w} className="py-3 text-center text-[11px] font-semibold text-muted-foreground tracking-wide">
+                {w}
               </div>
-            )
-          })}
+            ))}
+          </div>
+          {/* day cells */}
+          <div className="grid grid-cols-7 bg-background">
+            {cells.map((c,i) => <MonthDayCell key={i} c={c} />)}
+          </div>
         </div>
-      </div>
+      </KanbanDndContext>
     )
   }
 
   // ── Week grid ─────────────────────────────────────────────────────────────
+  function WeekMobileDayBlock({ d, i }: { d: Date; i: number }) {
+    const ymd = toYMD(d), isT = ymd===toYMD(today)
+    const evs = (byDate[ymd]??[]).sort((a,b)=>(a.time??'').localeCompare(b.time??''))
+    const { setNodeRef, isOver } = useDroppable({ id: ymd })
+    return (
+      <div ref={setNodeRef} key={i} className={`rounded-2xl border border-border/60 overflow-hidden shadow-sm transition-colors ${isOver ? 'ring-2 ring-primary/40' : ''}`}>
+        <div
+          onClick={() => { setSelDate(ymd); setView('dia') }}
+          className="w-full flex items-center gap-3 px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+        >
+          <span className={`text-base font-bold inline-flex h-9 w-9 items-center justify-center rounded-full shrink-0 transition-colors
+            ${isT ? 'bg-primary text-primary-foreground' : ''}`}>
+            {d.getDate()}
+          </span>
+          <span className="text-sm font-medium text-muted-foreground flex-1 text-left">{WEEKDAYS_FULL[d.getDay()]}</span>
+          {evs.length > 0 && (
+            <span className="text-[10px] font-semibold text-muted-foreground bg-background rounded-full px-2 py-0.5">{evs.length}</span>
+          )}
+          <button
+            onClick={e => { e.stopPropagation(); openQuickCreate(ymd) }}
+            className="h-6 w-6 rounded-md hover:bg-primary hover:text-primary-foreground flex items-center justify-center transition-all text-muted-foreground shrink-0"
+            title="Criar evento">
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        {evs.length > 0 && (
+          <div className="p-2 space-y-1 bg-background">
+            {evs.map(ev => <Pill key={ev.id} ev={ev} />)}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  function WeekDesktopHeaderCell({ d, i }: { d: Date; i: number }) {
+    const ymd = toYMD(d), isT = ymd===toYMD(today)
+    return (
+      <div key={i} onClick={() => { setSelDate(ymd); setView('dia') }}
+        className="py-4 text-center border-r border-border/40 last:border-r-0 cursor-pointer hover:bg-muted/30 transition-colors">
+        <p className="text-[11px] font-medium text-muted-foreground mb-1">{WEEKDAYS_FULL[d.getDay()]}</p>
+        <span className={`text-xl font-bold inline-flex h-10 w-10 items-center justify-center rounded-full mx-auto transition-colors
+          ${isT ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+          {d.getDate()}
+        </span>
+      </div>
+    )
+  }
+
+  function WeekDesktopDayCell({ d, i }: { d: Date; i: number }) {
+    const ymd = toYMD(d)
+    const evs = (byDate[ymd]??[]).sort((a,b)=>(a.time??'').localeCompare(b.time??''))
+    const { setNodeRef, isOver } = useDroppable({ id: ymd })
+    return (
+      <div ref={setNodeRef} key={i} className={`group relative border-r border-border/40 last:border-r-0 p-2 space-y-1 cursor-pointer hover:bg-muted/10 transition-colors min-h-[80px] ${isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/40' : ''}`}
+        onClick={() => { setSelDate(ymd); setView('dia') }}>
+        <button
+          onClick={e => { e.stopPropagation(); openQuickCreate(ymd) }}
+          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 h-5 w-5 rounded-md hover:bg-primary hover:text-primary-foreground flex items-center justify-center transition-all text-muted-foreground"
+          title="Criar evento">
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+        {evs.map(ev => <Pill key={ev.id} ev={ev} />)}
+      </div>
+    )
+  }
+
   function WeekView() {
     const ws = weekStart(cursor)
     const days = Array.from({length:7},(_,i) => { const d=new Date(ws); d.setDate(ws.getDate()+i); return d })
     return (
-      <>
+      <KanbanDndContext onDropOnColumn={(evId, ymd) => rescheduleEvent(evId, ymd)}>
         {/* Mobile: lista vertical, um dia após o outro */}
         <div className="md:hidden space-y-2">
-          {days.map((d,i) => {
-            const ymd = toYMD(d), isT = ymd===toYMD(today)
-            const evs = (byDate[ymd]??[]).sort((a,b)=>(a.time??'').localeCompare(b.time??''))
-            return (
-              <div key={i} className="rounded-2xl border border-border/60 overflow-hidden shadow-sm">
-                <div
-                  onClick={() => { setSelDate(ymd); setView('dia') }}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
-                >
-                  <span className={`text-base font-bold inline-flex h-9 w-9 items-center justify-center rounded-full shrink-0 transition-colors
-                    ${isT ? 'bg-primary text-primary-foreground' : ''}`}>
-                    {d.getDate()}
-                  </span>
-                  <span className="text-sm font-medium text-muted-foreground flex-1 text-left">{WEEKDAYS_FULL[d.getDay()]}</span>
-                  {evs.length > 0 && (
-                    <span className="text-[10px] font-semibold text-muted-foreground bg-background rounded-full px-2 py-0.5">{evs.length}</span>
-                  )}
-                  <button
-                    onClick={e => { e.stopPropagation(); openQuickCreate(ymd) }}
-                    className="h-6 w-6 rounded-md hover:bg-primary hover:text-primary-foreground flex items-center justify-center transition-all text-muted-foreground shrink-0"
-                    title="Criar evento">
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                {evs.length > 0 && (
-                  <div className="p-2 space-y-1 bg-background">
-                    {evs.map(ev => <Pill key={ev.id} ev={ev} />)}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+          {days.map((d,i) => <WeekMobileDayBlock key={i} d={d} i={i} />)}
         </div>
 
         {/* Desktop: grade de 7 colunas */}
         <div className="hidden md:block rounded-2xl border border-border/60 overflow-hidden shadow-sm">
           <div className="grid grid-cols-7 bg-muted/30">
-            {days.map((d,i) => {
-              const ymd = toYMD(d), isT = ymd===toYMD(today)
-              return (
-                <div key={i} onClick={() => { setSelDate(ymd); setView('dia') }}
-                  className="py-4 text-center border-r border-border/40 last:border-r-0 cursor-pointer hover:bg-muted/30 transition-colors">
-                  <p className="text-[11px] font-medium text-muted-foreground mb-1">{WEEKDAYS_FULL[d.getDay()]}</p>
-                  <span className={`text-xl font-bold inline-flex h-10 w-10 items-center justify-center rounded-full mx-auto transition-colors
-                    ${isT ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
-                    {d.getDate()}
-                  </span>
-                </div>
-              )
-            })}
+            {days.map((d,i) => <WeekDesktopHeaderCell key={i} d={d} i={i} />)}
           </div>
           <div className="grid grid-cols-7 bg-background min-h-[360px]">
-            {days.map((d,i) => {
-              const ymd = toYMD(d)
-              const evs = (byDate[ymd]??[]).sort((a,b)=>(a.time??'').localeCompare(b.time??''))
-              return (
-                <div key={i} className="group relative border-r border-border/40 last:border-r-0 p-2 space-y-1 cursor-pointer hover:bg-muted/10 transition-colors min-h-[80px]"
-                  onClick={() => { setSelDate(ymd); setView('dia') }}>
-                  <button
-                    onClick={e => { e.stopPropagation(); openQuickCreate(ymd) }}
-                    className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 h-5 w-5 rounded-md hover:bg-primary hover:text-primary-foreground flex items-center justify-center transition-all text-muted-foreground"
-                    title="Criar evento">
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                  {evs.map(ev => <Pill key={ev.id} ev={ev} />)}
-                </div>
-              )
-            })}
+            {days.map((d,i) => <WeekDesktopDayCell key={i} d={d} i={i} />)}
           </div>
         </div>
-      </>
+      </KanbanDndContext>
     )
   }
 
