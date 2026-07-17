@@ -30,7 +30,7 @@ export function PortalLayout({ children, basePath = '/portal', previewMode = fal
   const [unread, setUnread] = useState(0)
 
   useEffect(() => {
-    supabase.from('office_settings').select('name, logo_url, primary_color').limit(1).maybeSingle().then(({ data }) => {
+    supabase.from('office_settings').select('name, logo_url, primary_color').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
       if (data) setOffice({ name: data.name ?? 'Escritório', logo_url: data.logo_url })
       applyThemeColor(data?.primary_color)
     })
