@@ -129,6 +129,7 @@ export interface ClientFormData {
   potential_value: string; drive_url: string; drive_folder_id: string; tags: string; notes: string
   status: string; portal_visible: boolean; birth_date: string
   signed_at: string; first_contact_at: string
+  rep_name: string; rep_cpf: string; rep_role: string; rep_document_type: string; rep_address: string
 }
 
 export const emptyClientForm: ClientFormData = {
@@ -141,10 +142,13 @@ export const emptyClientForm: ClientFormData = {
   potential_value: '', drive_url: '', drive_folder_id: '', tags: '', notes: '',
   status: 'ativo', portal_visible: false, birth_date: '',
   signed_at: '', first_contact_at: '',
+  rep_name: '', rep_cpf: '', rep_role: '', rep_document_type: 'Contrato Social', rep_address: '',
 }
 
 const GENDERS = ['Masculino', 'Feminino', 'Outro', 'Não informado']
 const MARITAL_STATUSES = ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável', 'Não informado']
+const REP_ROLES = ['Sócio-Administrador', 'Diretor', 'Procurador']
+const REP_DOCUMENT_TYPES = ['Contrato Social', 'Estatuto Social']
 const STATES = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
 const ORIGINS = ['Indicação', 'Google', 'Instagram', 'WhatsApp', 'Site', 'Evento', 'Outro']
 
@@ -263,11 +267,11 @@ export function ClientFormDialog({
 
         <div className="space-y-6 pt-2">
 
-          {/* ── Dados pessoais ── */}
-          <Section title="Dados Pessoais">
+          {/* ── Dados pessoais / da empresa ── */}
+          <Section title={form.type === 'pessoa_juridica' ? 'Dados da Empresa' : 'Dados Pessoais'}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Nome completo *</Label>
+                <Label>{form.type === 'pessoa_juridica' ? 'Razão social *' : 'Nome completo *'}</Label>
                 <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="h-10" />
               </div>
               <div className="space-y-1.5">
@@ -308,50 +312,139 @@ export function ClientFormDialog({
                 <Label>E-mail</Label>
                 <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="h-10" />
               </div>
-              <div className="space-y-1.5">
-                <Label>Data de nascimento</Label>
-                <Input type="date" value={form.birth_date} onChange={e => setForm(f => ({ ...f, birth_date: e.target.value }))} className="h-10" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Gênero</Label>
-                <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>{GENDERS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Estado civil</Label>
-                <Select value={form.marital_status} onValueChange={v => setForm(f => ({ ...f, marital_status: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>{MARITAL_STATUSES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <Label>Nacionalidade</Label>
-                <Input value={form.nationality} onChange={e => setForm(f => ({ ...f, nationality: e.target.value }))} className="h-10" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Profissão</Label>
-                <Input value={form.profession} onChange={e => setForm(f => ({ ...f, profession: e.target.value }))} className="h-10" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>RG</Label>
-                <div className="flex gap-2">
-                  <Input value={form.rg_number} onChange={e => setForm(f => ({ ...f, rg_number: e.target.value }))} placeholder="Número" className="h-10 flex-1" />
-                  <Input value={form.rg_issuer} onChange={e => setForm(f => ({ ...f, rg_issuer: e.target.value }))} placeholder="Órgão" className="h-10 w-20" />
+              {form.type === 'pessoa_fisica' && (
+                <div className="space-y-1.5">
+                  <Label>Data de nascimento</Label>
+                  <Input type="date" value={form.birth_date} onChange={e => setForm(f => ({ ...f, birth_date: e.target.value }))} className="h-10" />
                 </div>
-              </div>
+              )}
             </div>
+
+            {form.type === 'pessoa_fisica' && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>Gênero</Label>
+                    <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v }))}>
+                      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent>{GENDERS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Estado civil</Label>
+                    <Select value={form.marital_status} onValueChange={v => setForm(f => ({ ...f, marital_status: v }))}>
+                      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent>{MARITAL_STATUSES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>Nacionalidade</Label>
+                    <Input value={form.nationality} onChange={e => setForm(f => ({ ...f, nationality: e.target.value }))} className="h-10" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Profissão</Label>
+                    <Input value={form.profession} onChange={e => setForm(f => ({ ...f, profession: e.target.value }))} className="h-10" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>RG</Label>
+                    <div className="flex gap-2">
+                      <Input value={form.rg_number} onChange={e => setForm(f => ({ ...f, rg_number: e.target.value }))} placeholder="Número" className="h-10 flex-1" />
+                      <Input value={form.rg_issuer} onChange={e => setForm(f => ({ ...f, rg_issuer: e.target.value }))} placeholder="Órgão" className="h-10 w-20" />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </Section>
 
+          {/* ── Representante legal (só PJ) ── */}
+          {form.type === 'pessoa_juridica' && (
+            <Section title="Representante Legal">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Nome completo do representante</Label>
+                  <Input value={form.rep_name} onChange={e => setForm(f => ({ ...f, rep_name: e.target.value }))} className="h-10" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Cargo</Label>
+                  <Select value={form.rep_role || 'Sócio-Administrador'} onValueChange={v => setForm(f => ({ ...f, rep_role: v }))}>
+                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>{REP_ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>CPF do representante</Label>
+                  <Input
+                    value={form.rep_cpf}
+                    onChange={e => setForm(f => ({ ...f, rep_cpf: maskCPF(e.target.value) }))}
+                    placeholder="000.000.000-00"
+                    className="h-10"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Documento societário</Label>
+                  <Select value={form.rep_document_type || 'Contrato Social'} onValueChange={v => setForm(f => ({ ...f, rep_document_type: v }))}>
+                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>{REP_DOCUMENT_TYPES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Gênero</Label>
+                  <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v }))}>
+                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>{GENDERS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Estado civil</Label>
+                  <Select value={form.marital_status} onValueChange={v => setForm(f => ({ ...f, marital_status: v }))}>
+                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>{MARITAL_STATUSES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Nacionalidade</Label>
+                  <Input value={form.nationality} onChange={e => setForm(f => ({ ...f, nationality: e.target.value }))} className="h-10" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Profissão</Label>
+                  <Input value={form.profession} onChange={e => setForm(f => ({ ...f, profession: e.target.value }))} className="h-10" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>RG</Label>
+                  <div className="flex gap-2">
+                    <Input value={form.rg_number} onChange={e => setForm(f => ({ ...f, rg_number: e.target.value }))} placeholder="Número" className="h-10 flex-1" />
+                    <Input value={form.rg_issuer} onChange={e => setForm(f => ({ ...f, rg_issuer: e.target.value }))} placeholder="Órgão" className="h-10 w-20" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Endereço do representante</Label>
+                <Input
+                  value={form.rep_address}
+                  onChange={e => setForm(f => ({ ...f, rep_address: e.target.value }))}
+                  placeholder="Rua, número, complemento, bairro, cidade/UF, CEP"
+                  className="h-10"
+                />
+              </div>
+            </Section>
+          )}
+
           {/* ── Endereço ── */}
-          <Section title="Endereço">
+          <Section title={form.type === 'pessoa_juridica' ? 'Endereço da Sede' : 'Endereço'}>
             <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr_90px] gap-4">
               <div className="space-y-1.5">
                 <Label>CEP</Label>
