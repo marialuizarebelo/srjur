@@ -22,6 +22,7 @@ import { ResponsibleSelect, useProfilesMap } from '@/components/ResponsibleSelec
 import { toast } from 'sonner'
 import { fmtBRL, fmtDate, fmtDateLong, getDaysDiff } from '@/lib/format'
 import { ClientCombobox } from '@/components/ClientCombobox'
+import { ClientFormDialog, emptyClientForm, type ClientFormData } from '@/components/ClientForm'
 import {
   Users, Scale, ClipboardList, AlertTriangle, ChevronRight,
   DollarSign, Bell,
@@ -115,14 +116,14 @@ interface StatCardProps {
 function StatCard({ title, value, subtitle, icon: Icon, lightColor, darkColor, bgColor, onClick }: StatCardProps) {
   const isDark = document.documentElement.classList.contains('dark')
   const accent = isDark ? darkColor : lightColor
-  // bgColor entra como cor de destaque (borda + selo do ícone), não mais como
-  // preenchimento do card inteiro — o corpo fica no creme/navy neutro do tema,
-  // pra harmonizar com a identidade visual dos outros sites do escritório.
+  // bgColor entra como cor de destaque (borda, selo do ícone e um preenchimento
+  // bem sutil do card) — só a borda não bastava pra diferenciar os cards de
+  // relance, ficavam todos parecendo iguais (mesmo fundo neutro).
   const border = bgColor.length === 9 ? bgColor.slice(0, 7) : bgColor
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border-l-4 bg-card p-5 shadow-sm transition-transform duration-150 ${onClick ? 'cursor-pointer hover:scale-[1.02] hover:shadow-md active:scale-[0.99]' : ''}`}
-      style={{ borderLeftColor: border }}
+      className={`relative overflow-hidden rounded-2xl border-l-4 p-5 shadow-sm transition-transform duration-150 ${onClick ? 'cursor-pointer hover:scale-[1.02] hover:shadow-md active:scale-[0.99]' : ''}`}
+      style={{ borderLeftColor: border, backgroundColor: border + (isDark ? '14' : '0d') }}
       onClick={onClick}
     >
       <div className="flex items-center gap-2 mb-3">
@@ -206,25 +207,6 @@ function AttentionColumn({
         )}
       </div>
     </div>
-  )
-}
-
-/* ---------- QuickActionsCard ---------- */
-
-function QuickActionsCard({ onLead, onClient, onProcess, onTask }: { onLead: () => void; onClient: () => void; onProcess: () => void; onTask: () => void }) {
-  return (
-    <Card className="p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <Plus className="h-4 w-4 text-primary" />
-        <span className="font-semibold text-sm">Adicionar rápido</span>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="outline" size="sm" className="justify-start text-xs" onClick={onLead}>+ Lead</Button>
-        <Button variant="outline" size="sm" className="justify-start text-xs" onClick={onClient}>+ Cliente</Button>
-        <Button variant="outline" size="sm" className="justify-start text-xs" onClick={onProcess}>+ Processo</Button>
-        <Button variant="outline" size="sm" className="justify-start text-xs" onClick={onTask}>+ Tarefa</Button>
-      </div>
-    </Card>
   )
 }
 
@@ -370,6 +352,114 @@ export default function Dashboard() {
   const [modal, setModal] = useState<QuickViewState>(CLOSED_MODAL)
   const [clientOptions, setClientOptions] = useState<{ id: string; name: string }[]>([])
   const profilesMap = useProfilesMap()
+
+  // ── Atalhos "+ Novo" do cabeçalho: abrem um diálogo aqui mesmo, sem navegar
+  // pra outra página (o ponto de ser atalho é não perder o contexto do painel).
+  const [leadDialogOpen, setLeadDialogOpen] = useState(false)
+  const [leadForm, setLeadForm] = useState({ name: '', phone: '', email: '', source: '', responsible_ids: [] as string[] })
+  const [savingLead, setSavingLead] = useState(false)
+
+  const [clientDialogOpen, setClientDialogOpen] = useState(false)
+  const [clientForm, setClientForm] = useState<ClientFormData>(emptyClientForm)
+  const [savingClient, setSavingClient] = useState(false)
+
+  const [processDialogOpen, setProcessDialogOpen] = useState(false)
+  const [processForm, setProcessForm] = useState({ title: '', client_id: '', responsible_ids: [] as string[] })
+  const [savingProcess, setSavingProcess] = useState(false)
+
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false)
+  const [taskForm, setTaskForm] = useState({ title: '', due_date: '', priority: 'media', client_id: '', responsible_ids: [] as string[] })
+  const [savingTask, setSavingTask] = useState(false)
+
+  const responsibleNames = (ids: string[]) => ids.length > 1
+    ? ids.map(id => profilesMap[id]?.display_name).filter(Boolean).join(' e ')
+    : (profilesMap[ids[0]]?.display_name ?? null)
+
+  const saveQuickLead = async () => {
+    if (!leadForm.name.trim()) { toast.error('Preencha o nome do lead'); return }
+    setSavingLead(true)
+    try {
+      const { error } = await supabase.from('leads').insert({
+        name: leadForm.name, phone: leadForm.phone || null, email: leadForm.email || null,
+        source: leadForm.source || null, status: 'novo',
+        responsible_ids: leadForm.responsible_ids, responsible: responsibleNames(leadForm.responsible_ids),
+      })
+      if (error) { toast.error('Erro ao criar lead: ' + error.message); return }
+      toast.success('Lead criado!')
+      setLeadDialogOpen(false)
+      setLeadForm({ name: '', phone: '', email: '', source: '', responsible_ids: [] })
+    } finally {
+      setSavingLead(false)
+    }
+  }
+
+  const saveQuickClient = async () => {
+    if (!clientForm.name.trim()) { toast.error('Preencha o nome'); return }
+    setSavingClient(true)
+    try {
+      const payload = {
+        name: clientForm.name, email: clientForm.email || null, phone: clientForm.phone || null,
+        cpf_cnpj: clientForm.cpf_cnpj || null, type: clientForm.type, status: 'ativo',
+        responsible_ids: clientForm.responsible_ids, responsible: responsibleNames(clientForm.responsible_ids),
+        portal_visible: false,
+      }
+      const { data: newClient, error } = await supabase.from('clients').insert(payload).select('id').single()
+      if (error) { toast.error('Erro ao criar cliente: ' + error.message); return }
+      if (newClient) {
+        await supabase.from('tasks').insert({
+          title: `Completar cadastro — ${clientForm.name}`,
+          description: 'Verificar e completar todos os dados do cliente: documentos, endereço, pasta no Drive',
+          type: 'tarefa', status: 'pendente', priority: 'alta',
+          due_date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
+          responsible_ids: clientForm.responsible_ids, client_id: newClient.id,
+        })
+      }
+      toast.success('Cliente criado!')
+      setClientDialogOpen(false)
+      setClientForm(emptyClientForm)
+    } finally {
+      setSavingClient(false)
+    }
+  }
+
+  const saveQuickProcess = async () => {
+    if (!processForm.title.trim()) { toast.error('Preencha o título do processo'); return }
+    setSavingProcess(true)
+    try {
+      const { error } = await supabase.from('processes').insert({
+        title: processForm.title, client_id: processForm.client_id || null,
+        type: 'judicial', status: 'em_andamento', phase: 'inicial',
+        responsible_ids: processForm.responsible_ids, responsible: responsibleNames(processForm.responsible_ids),
+        portal_visible: false, updated_at: new Date().toISOString(),
+      })
+      if (error) { toast.error('Erro ao criar processo: ' + error.message); return }
+      toast.success('Processo criado!')
+      setProcessDialogOpen(false)
+      setProcessForm({ title: '', client_id: '', responsible_ids: [] })
+    } finally {
+      setSavingProcess(false)
+    }
+  }
+
+  const saveQuickTask = async () => {
+    if (!taskForm.title.trim()) { toast.error('Preencha o título da tarefa'); return }
+    setSavingTask(true)
+    try {
+      const names = taskForm.responsible_ids.map(id => profilesMap[id]?.display_name).filter(Boolean)
+      const { error } = await supabase.from('tasks').insert({
+        title: taskForm.title, type: 'tarefa', status: 'pendente', priority: taskForm.priority,
+        due_date: taskForm.due_date || null, client_id: taskForm.client_id || null,
+        responsible_ids: taskForm.responsible_ids, responsible: names.length > 1 ? 'Ambas' : (names[0] ?? null),
+        portal_visible: false,
+      })
+      if (error) { toast.error('Erro ao criar tarefa: ' + error.message); return }
+      toast.success('Tarefa criada!')
+      setTaskDialogOpen(false)
+      setTaskForm({ title: '', due_date: '', priority: 'media', client_id: '', responsible_ids: [] })
+    } finally {
+      setSavingTask(false)
+    }
+  }
 
   const firstName = profile?.nickname || profile?.display_name?.split(' ')[0] || 'Usuária'
   const todayStr = fmtDateLong(new Date())
@@ -649,6 +739,124 @@ export default function Dashboard() {
     <div className="space-y-6">
       <QuickViewModal state={modal} onClose={() => setModal(CLOSED_MODAL)} />
 
+      {/* Diálogos dos atalhos "+ Novo" — abrem aqui mesmo, sem sair do painel */}
+      <Dialog open={leadDialogOpen} onOpenChange={setLeadDialogOpen}>
+        <DialogContent className="max-w-[420px] w-[92vw]">
+          <DialogHeader><DialogTitle className="text-lg">Novo Lead</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>Nome *</Label>
+              <Input value={leadForm.name} onChange={e => setLeadForm(f => ({ ...f, name: e.target.value }))} className="h-10" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Telefone</Label>
+                <Input value={leadForm.phone} onChange={e => setLeadForm(f => ({ ...f, phone: e.target.value }))} className="h-10" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>E-mail</Label>
+                <Input type="email" value={leadForm.email} onChange={e => setLeadForm(f => ({ ...f, email: e.target.value }))} className="h-10" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Origem</Label>
+              <Select value={leadForm.source} onValueChange={v => setLeadForm(f => ({ ...f, source: v }))}>
+                <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {['Indicação', 'Google', 'Instagram', 'WhatsApp', 'Site', 'Evento', 'Outro'].map(o => (
+                    <SelectItem key={o} value={o}>{o}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Responsável</Label>
+              <ResponsibleSelect value={leadForm.responsible_ids} onChange={ids => setLeadForm(f => ({ ...f, responsible_ids: ids }))} />
+            </div>
+          </div>
+          <DialogFooter className="pt-4">
+            <Button variant="outline" onClick={() => setLeadDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={saveQuickLead} disabled={savingLead}>{savingLead ? 'Salvando...' : 'Salvar'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ClientFormDialog
+        open={clientDialogOpen}
+        onOpenChange={setClientDialogOpen}
+        form={clientForm}
+        setForm={setClientForm}
+        onSave={saveQuickClient}
+        isEditing={false}
+        saving={savingClient}
+      />
+
+      <Dialog open={processDialogOpen} onOpenChange={setProcessDialogOpen}>
+        <DialogContent className="max-w-[420px] w-[92vw]">
+          <DialogHeader><DialogTitle className="text-lg">Novo Processo</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>Título *</Label>
+              <Input value={processForm.title} onChange={e => setProcessForm(f => ({ ...f, title: e.target.value }))} className="h-10" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Cliente</Label>
+              <ClientCombobox clients={clientOptions} value={processForm.client_id} onChange={id => setProcessForm(f => ({ ...f, client_id: id }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Responsável</Label>
+              <ResponsibleSelect value={processForm.responsible_ids} onChange={ids => setProcessForm(f => ({ ...f, responsible_ids: ids }))} />
+            </div>
+          </div>
+          <DialogFooter className="pt-4">
+            <Button variant="outline" onClick={() => setProcessDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={saveQuickProcess} disabled={savingProcess}>{savingProcess ? 'Salvando...' : 'Salvar'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
+        <DialogContent className="max-w-[420px] w-[92vw]">
+          <DialogHeader><DialogTitle className="text-lg">Nova Tarefa</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>Título *</Label>
+              <Input value={taskForm.title} onChange={e => setTaskForm(f => ({ ...f, title: e.target.value }))} className="h-10" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Vencimento</Label>
+                <Input type="date" value={taskForm.due_date} onChange={e => setTaskForm(f => ({ ...f, due_date: e.target.value }))} className="h-10" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Prioridade</Label>
+                <Select value={taskForm.priority} onValueChange={v => setTaskForm(f => ({ ...f, priority: v }))}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="baixa">Baixa</SelectItem>
+                    <SelectItem value="media">Média</SelectItem>
+                    <SelectItem value="alta">Alta</SelectItem>
+                    <SelectItem value="urgente">Urgente</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Cliente</Label>
+              <ClientCombobox clients={clientOptions} value={taskForm.client_id} onChange={id => setTaskForm(f => ({ ...f, client_id: id }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Responsável</Label>
+              <ResponsibleSelect value={taskForm.responsible_ids} onChange={ids => setTaskForm(f => ({ ...f, responsible_ids: ids }))} />
+            </div>
+          </div>
+          <DialogFooter className="pt-4">
+            <Button variant="outline" onClick={() => setTaskDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={saveQuickTask} disabled={savingTask}>{savingTask ? 'Salvando...' : 'Salvar'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -656,16 +864,16 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground">{todayStr} · Sua central de operação</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate('/clientes?new=lead')}>
+          <Button variant="outline" size="sm" onClick={() => setLeadDialogOpen(true)}>
             <Plus className="h-3 w-3 mr-1" />Lead
           </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate('/clientes?new=cliente')}>
+          <Button variant="outline" size="sm" onClick={() => setClientDialogOpen(true)}>
             <Plus className="h-3 w-3 mr-1" />Cliente
           </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate('/processos?new=1')}>
+          <Button variant="outline" size="sm" onClick={() => setProcessDialogOpen(true)}>
             <Plus className="h-3 w-3 mr-1" />Processo
           </Button>
-          <Button size="sm" onClick={() => navigate('/tarefas?new=1')}>
+          <Button size="sm" onClick={() => setTaskDialogOpen(true)}>
             <Plus className="h-3 w-3 mr-1" />Tarefa
           </Button>
         </div>
@@ -692,9 +900,9 @@ export default function Dashboard() {
               value={stats.processes}
               subtitle={`${recentProcesses.length} consultivos`}
               icon={Scale}
-              lightColor="#6b2010"
-              darkColor="#f5b09a"
-              bgColor="#C4604A88"
+              lightColor="#2e1a5c"
+              darkColor="#c8b8f0"
+              bgColor="#8B7BB888"
               onClick={openProcesses}
             />
             <StatCard
@@ -712,9 +920,9 @@ export default function Dashboard() {
               value={stats.overdueDeadlines}
               subtitle={stats.overdueDeadlines > 0 ? 'atenção' : undefined}
               icon={AlertTriangle}
-              lightColor="#2e1a5c"
-              darkColor="#c8b8f0"
-              bgColor="#8B7BB888"
+              lightColor="#6b2010"
+              darkColor="#f5b09a"
+              bgColor="#C4604A88"
               onClick={openDeadlines}
             />
           </div>
@@ -829,13 +1037,6 @@ export default function Dashboard() {
 
         {/* Right sidebar */}
         <div className="space-y-4 hidden xl:block">
-          <QuickActionsCard
-            onLead={() => navigate('/clientes?new=lead')}
-            onClient={() => navigate('/clientes?new=cliente')}
-            onProcess={() => navigate('/processos?new=1')}
-            onTask={() => navigate('/tarefas?new=1')}
-          />
-
           <PortalActivityCard />
 
           <Card className="p-4">

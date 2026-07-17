@@ -78,8 +78,10 @@
   --accent-foreground: #2d2d2d;
 
   --destructive: #dc2626;
-  --border: #DDD7CE;
-  --input: #DDD7CE;
+  /* mais escura que antes (era #DDD7CE) — os cards/janelas estavam com uma
+     cara "chapada", sem separação visível do fundo creme */
+  --border: #CFC5B3;
+  --input: #CFC5B3;
   --ring: #A9762F;
 
   /* chart colors vibrantes — mantidas, não fazem parte da paleta neutra */
@@ -89,17 +91,18 @@
   --chart-4: #6B8FD4;
   --chart-5: #E06B4A;
 
-  /* sidebar navy, puxando pra identidade dos sites (era preto puro) — hover/
-     ativo usam o bege da paleta como destaque (era navy-sobre-navy, contraste
-     baixo demais pra perceber a diferença). */
-  --sidebar-background: #162846;
+  /* sidebar navy, puxando pra identidade dos sites (era preto puro), um tom
+     mais escuro que a versão anterior pra ficar mais sóbrio/sofisticado —
+     hover/ativo usam um creme claro como destaque (era um bege amarelado
+     puxado demais, lembrava "vômito" segundo o feedback). */
+  --sidebar-background: #101D35;
   --sidebar-foreground: #AEB9CC;
   --sidebar-primary: #A9762F;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #E2D4C0;
+  --sidebar-accent: #EEE8DC;
   --sidebar-accent-foreground: #1E2A3F;
-  --sidebar-border: #22385C;
-  --sidebar-ring: #E2D4C0;
+  --sidebar-border: #1D3255;
+  --sidebar-ring: #EEE8DC;
 
   --finance-income: #D5EAD9;
   --finance-expense: #F2D6D6;
@@ -125,8 +128,10 @@
   /* menos saturado que o modo claro — vermelho puro em cima de navy escuro
      fica "gritando" (neon), destoa de todo o resto da paleta mais sóbria */
   --destructive: oklch(0.6 0.16 25);
-  --border: #22385C;
-  --input: #22385C;
+  /* mais clara que antes (era #22385C) — mesma razão do modo claro, precisa
+     de mais contraste contra o card/fundo pra não ficar tudo "chapado" */
+  --border: #2C4870;
+  --input: #2C4870;
   --ring: #D4A843;
   --chart-1: #818cf8;
   --chart-2: #34d399;
@@ -137,10 +142,10 @@
   --sidebar-foreground: #94A1B8;
   --sidebar-primary: #D4A843;
   --sidebar-primary-foreground: #1E2A3F;
-  --sidebar-accent: #E2D4C0;
+  --sidebar-accent: #EEE8DC;
   --sidebar-accent-foreground: #1E2A3F;
   --sidebar-border: #1E3459;
-  --sidebar-ring: #E2D4C0;
+  --sidebar-ring: #EEE8DC;
   --finance-income: #1a3328;
   --finance-expense: #331a1a;
 }
