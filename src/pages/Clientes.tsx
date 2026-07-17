@@ -82,6 +82,11 @@ interface Client {
   city: string | null
   state: string | null
   tags: string | null
+  rep_name: string | null
+  rep_cpf: string | null
+  rep_role: string | null
+  rep_document_type: string | null
+  rep_address: string | null
 }
 
 interface Lead {
@@ -252,48 +257,119 @@ function fmtAddr(c: Client) {
   return parts.filter(Boolean).join(', ') || null
 }
 
-// Gera o texto de qualificação jurídica padrão (pessoa física) a partir dos
-// dados já cadastrados do cliente. Concordância de gênero (nacionalidade,
-// estado civil, "residente e domiciliado(a)") segue o campo Gênero — quando
-// não informado, assume masculino (convenção mais comum nos modelos usados).
-function generateQualification(c: Client): string | null {
-  if (c.type !== 'pessoa_fisica') return null
-  const feminino = c.gender === 'Feminino'
-
+// Monta o trecho "nacionalidade, estado civil, profissão" com concordância de
+// gênero (nacionalidade, estado civil terminam em -o/-a conforme o gênero) —
+// compartilhado entre a qualificação de pessoa física (o próprio cliente) e a
+// de pessoa jurídica (o representante legal).
+function personQualificationBits(opts: {
+  nationality: string | null; maritalStatus: string | null; profession: string | null
+  feminino: boolean
+}): string[] {
+  const { feminino } = opts
   // Normaliza pra raiz (remove -o/-a final) antes de aplicar o gênero certo,
   // já que o cadastro guarda "brasileira" como padrão mesmo pra clientes
   // homens até alguém editar o campo manualmente.
-  const nationalityRoot = (c.nationality || 'brasileiro').trim().toLowerCase().replace(/[oa]$/, '')
+  const nationalityRoot = (opts.nationality || 'brasileiro').trim().toLowerCase().replace(/[oa]$/, '')
   const nationality = nationalityRoot + (feminino ? 'a' : 'o')
 
-  const maritalBase = (c.marital_status || '').replace(/\s*\(a\)\s*$/i, '').trim()
+  const maritalBase = (opts.maritalStatus || '').replace(/\s*\(a\)\s*$/i, '').trim()
   const marital = maritalBase
     ? (feminino ? maritalBase.replace(/o$/, 'a') : maritalBase).toLowerCase()
     : null
 
-  const profession = c.profession?.trim() || null
-  const cpf = c.cpf_cnpj?.trim() || null
-  const addrParts = [
-    c.street,
-    c.address_number ? `nº ${c.address_number}` : null,
-    c.complement,
-    c.neighborhood ? `Bairro ${c.neighborhood}` : null,
-    c.city && c.state ? `${c.city}/${c.state}` : c.city ?? c.state,
-    c.cep ? `CEP ${c.cep}` : null,
-  ]
-  const addr = addrParts.filter(Boolean).join(', ') || null
-  const email = c.email?.trim() || null
+  const profession = opts.profession?.trim() || null
 
-  const bits: string[] = [c.name.toUpperCase()]
-  bits.push(nationality)
+  const bits = [nationality]
   if (marital) bits.push(marital)
   if (profession) bits.push(profession)
-  if (cpf) bits.push(`inscrito${feminino ? 'a' : ''} no CPF sob o nº ${cpf}`)
-  if (addr) bits.push(`residente e domiciliado${feminino ? 'a' : ''} na ${addr}`)
-  if (email) bits.push(`endereço eletrônico ${email}`)
+  return bits
+}
 
-  if (bits.length <= 1) return null
-  return bits.join(', ') + '.'
+function formatAddress(parts: {
+  street: string | null; number: string | null; complement: string | null
+  neighborhood: string | null; city: string | null; state: string | null; cep: string | null
+}): string | null {
+  const addrParts = [
+    parts.street,
+    parts.number ? `nº ${parts.number}` : null,
+    parts.complement,
+    parts.neighborhood ? `Bairro ${parts.neighborhood}` : null,
+    parts.city && parts.state ? `${parts.city}/${parts.state}` : parts.city ?? parts.state,
+    parts.cep ? `CEP ${parts.cep}` : null,
+  ]
+  return addrParts.filter(Boolean).join(', ') || null
+}
+
+// Gera o texto de qualificação jurídica padrão (pessoa física ou jurídica) a
+// partir dos dados já cadastrados do cliente. Concordância de gênero segue o
+// campo Gênero (do próprio cliente, ou do representante legal no caso de PJ)
+// — quando não informado, assume masculino (convenção mais comum nos modelos
+// usados).
+function generateQualification(c: Client): string | null {
+  if (c.type === 'pessoa_fisica') {
+    const feminino = c.gender === 'Feminino'
+    const [nationality, marital, profession] = personQualificationBits({
+      nationality: c.nationality, maritalStatus: c.marital_status, profession: c.profession, feminino,
+    })
+    const cpf = c.cpf_cnpj?.trim() || null
+    const addr = formatAddress({
+      street: c.street, number: c.address_number, complement: c.complement,
+      neighborhood: c.neighborhood, city: c.city, state: c.state, cep: c.cep,
+    })
+    const email = c.email?.trim() || null
+
+    const bits: string[] = [c.name.toUpperCase(), nationality]
+    if (marital) bits.push(marital)
+    if (profession) bits.push(profession)
+    if (cpf) bits.push(`inscrito${feminino ? 'a' : ''} no CPF sob o nº ${cpf}`)
+    if (addr) bits.push(`residente e domiciliado${feminino ? 'a' : ''} na ${addr}`)
+    if (email) bits.push(`endereço eletrônico ${email}`)
+
+    if (bits.length <= 1) return null
+    return bits.join(', ') + '.'
+  }
+
+  if (c.type === 'pessoa_juridica') {
+    const cnpj = c.cpf_cnpj?.trim() || null
+    const sede = formatAddress({
+      street: c.street, number: c.address_number, complement: c.complement,
+      neighborhood: c.neighborhood, city: c.city, state: c.state, cep: c.cep,
+    })
+    const email = c.email?.trim() || null
+    const repName = c.rep_name?.trim() || null
+    if (!cnpj && !repName) return null
+
+    const feminino = c.gender === 'Feminino'
+    const [nationality, marital, profession] = personQualificationBits({
+      nationality: c.nationality, maritalStatus: c.marital_status, profession: c.profession, feminino,
+    })
+    const repQualBits = [nationality, marital, profession].filter(Boolean)
+    const repRg = c.rg_number?.trim() ? `${c.rg_number.trim()}${c.rg_issuer ? ` ${c.rg_issuer.trim()}` : ''}` : null
+    const repCpf = c.rep_cpf?.trim() || null
+    const repAddr = c.rep_address?.trim() || null
+    const repRole = c.rep_role?.trim() || 'representante legal'
+    const docType = c.rep_document_type?.trim() || 'Contrato Social'
+
+    const bits: string[] = [c.name.toUpperCase(), 'pessoa jurídica de direito privado']
+    if (cnpj) bits.push(`inscrita no CNPJ sob o nº ${cnpj}`)
+    if (sede) bits.push(`com sede na ${sede}`)
+    if (email) bits.push(`com endereço eletrônico ${email}`)
+    if (repName) {
+      bits.push(`neste ato representada por seu(sua) ${repRole}`)
+      let repBit = repName.toUpperCase()
+      if (repQualBits.length > 0) repBit += `, ${repQualBits.join(', ')}`
+      bits.push(repBit)
+      if (repRg) bits.push(`portador${feminino ? 'a' : ''} da Cédula de Identidade RG nº ${repRg}`)
+      if (repCpf) bits.push(`inscrito${feminino ? 'a' : ''} no CPF sob o nº ${repCpf}`)
+      if (repAddr) bits.push(`residente e domiciliado${feminino ? 'a' : ''} na ${repAddr}`)
+      bits.push(`conforme ${docType} anexo`)
+    }
+
+    if (bits.length <= 2) return null
+    return bits.join(', ') + '.'
+  }
+
+  return null
 }
 
 function InfoRow({ label, value, copyable }: { label: string; value?: string | null; copyable?: boolean }) {
@@ -512,12 +588,24 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
             <InfoRow label="Origem" value={client.origin === 'Indicação' && client.referred_by ? `Indicação (${client.referred_by})` : client.origin} />
             <InfoRow label="Área" value={client.area} />
             <InfoRow label="Responsável" value={(client.responsible_ids ?? []).map(id => profilesMap[id]?.display_name).filter(Boolean).join(', ') || null} />
-            <InfoRow label="Nacionalidade" value={client.nationality} />
-            <InfoRow label="Estado Civil" value={client.marital_status} />
-            <InfoRow label="Profissão" value={client.profession} />
-            <InfoRow label="Nascimento" value={client.birth_date ? new Date(client.birth_date + 'T00:00').toLocaleDateString('pt-BR') : null} />
+            {client.type === 'pessoa_juridica' && (
+              <>
+                <InfoRow label="Representante" value={client.rep_name} copyable />
+                <InfoRow label="Cargo do representante" value={client.rep_role} />
+                <InfoRow label="CPF do representante" value={client.rep_cpf} copyable />
+              </>
+            )}
+            <InfoRow label={client.type === 'pessoa_juridica' ? 'Nacionalidade (repr.)' : 'Nacionalidade'} value={client.nationality} />
+            <InfoRow label={client.type === 'pessoa_juridica' ? 'Estado Civil (repr.)' : 'Estado Civil'} value={client.marital_status} />
+            <InfoRow label={client.type === 'pessoa_juridica' ? 'Profissão (repr.)' : 'Profissão'} value={client.profession} />
+            {client.type === 'pessoa_fisica' && (
+              <InfoRow label="Nascimento" value={client.birth_date ? new Date(client.birth_date + 'T00:00').toLocaleDateString('pt-BR') : null} />
+            )}
             {client.rg_number && (
-              <InfoRow label="RG" value={`${client.rg_number}${client.rg_issuer ? ` / ${client.rg_issuer}` : ''}`} />
+              <InfoRow label={client.type === 'pessoa_juridica' ? 'RG (repr.)' : 'RG'} value={`${client.rg_number}${client.rg_issuer ? ` / ${client.rg_issuer}` : ''}`} />
+            )}
+            {client.type === 'pessoa_juridica' && client.rep_address && (
+              <InfoRow label="Endereço do representante" value={client.rep_address} />
             )}
             {client.potential_value && <InfoRow label="Potencial" value={fmtBRL(Number(client.potential_value))} />}
             {client.tags && <InfoRow label="Tags" value={client.tags} />}
@@ -525,12 +613,12 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
 
           {addr && (
             <div className="text-sm">
-              <span className="text-muted-foreground">Endereço: </span>
+              <span className="text-muted-foreground">{client.type === 'pessoa_juridica' ? 'Endereço da sede: ' : 'Endereço: '}</span>
               <span className="font-medium">{addr}</span>
             </div>
           )}
 
-          {client.type === 'pessoa_fisica' && (
+          {(client.type === 'pessoa_fisica' || client.type === 'pessoa_juridica') && (
             <div className="rounded-lg border px-4 py-3 space-y-2">
               <div className="flex items-center justify-between gap-2 min-w-0">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide truncate">Qualificação</p>
@@ -538,7 +626,12 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
                   variant="outline" size="sm" className="h-7 text-xs"
                   onClick={() => {
                     const q = generateQualification(client)
-                    if (!q) { toast.error('Preencha CPF, nacionalidade, estado civil ou endereço para gerar a qualificação.'); return }
+                    if (!q) {
+                      toast.error(client.type === 'pessoa_juridica'
+                        ? 'Preencha o CNPJ e os dados do representante legal para gerar a qualificação.'
+                        : 'Preencha CPF, nacionalidade, estado civil ou endereço para gerar a qualificação.')
+                      return
+                    }
                     setQualification(q)
                   }}
                 >
@@ -1014,6 +1107,8 @@ export default function Clientes() {
       drive_url: c.drive_url ?? '', drive_folder_id: c.drive_folder_id ?? '', tags: c.tags ?? '', notes: c.notes ?? '',
       status: c.status ?? 'ativo', portal_visible: c.portal_visible ?? false,
       birth_date: c.birth_date ?? '', signed_at: c.signed_at ?? '', first_contact_at: c.first_contact_at ?? '',
+      rep_name: c.rep_name ?? '', rep_cpf: c.rep_cpf ?? '', rep_role: c.rep_role ?? '',
+      rep_document_type: c.rep_document_type ?? 'Contrato Social', rep_address: c.rep_address ?? '',
     })
     setEditingClient(c)
     setDialogOpen(true)
@@ -1045,6 +1140,8 @@ export default function Clientes() {
       signed_at: cf.signed_at || null, first_contact_at: cf.first_contact_at || null,
       potential_value: cf.potential_value ? parseFloat(cf.potential_value.replace(',', '.')) : null,
       drive_url: cf.drive_url || null, drive_folder_id: cf.drive_folder_id || null, tags: cf.tags || null,
+      rep_name: cf.rep_name || null, rep_cpf: cf.rep_cpf || null, rep_role: cf.rep_role || null,
+      rep_document_type: cf.rep_document_type || null, rep_address: cf.rep_address || null,
     }
     if (editingClient) {
       const { error } = await supabase.from('clients').update(payload).eq('id', editingClient.id)
