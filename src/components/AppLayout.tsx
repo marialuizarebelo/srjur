@@ -13,23 +13,36 @@ import { setPdfOfficeName } from '@/lib/exportData'
 
 function useDynamicFavicon() {
   useEffect(() => {
-    supabase
-      .from('office_settings')
-      .select('name, logo_url, primary_color')
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!data) return
-        if (data.name) { document.title = data.name; setPdfOfficeName(data.name) }
-        if (data.logo_url) {
-          const link = document.querySelector<HTMLLinkElement>("link[rel='icon']")
-          if (link) link.href = data.logo_url
-          // apple touch icon também
-          const apple = document.querySelector<HTMLLinkElement>("link[rel='apple-touch-icon']")
-          if (apple) apple.href = data.logo_url
-        }
-        applyThemeColor(data.primary_color)
-      })
+    const load = () => {
+      // order by created_at: office_settings deveria ter só 1 linha, mas já
+      // teve linhas fantasma criadas por um bug antigo — pegar sempre a mais
+      // antiga garante a linha real mesmo se isso se repetir.
+      supabase
+        .from('office_settings')
+        .select('name, logo_url, primary_color')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (!data) return
+          if (data.name) { document.title = data.name; setPdfOfficeName(data.name) }
+          if (data.logo_url) {
+            const link = document.querySelector<HTMLLinkElement>("link[rel='icon']")
+            if (link) link.href = data.logo_url
+            // apple touch icon também
+            const apple = document.querySelector<HTMLLinkElement>("link[rel='apple-touch-icon']")
+            if (apple) apple.href = data.logo_url
+          }
+          applyThemeColor(data.primary_color)
+        })
+    }
+    load()
+    // Sem isso, o título da aba do navegador ficava travado no valor de quando
+    // a página carregou — salvar um nome novo em Configurações atualizava o
+    // sidebar (que escuta esse evento) mas não a aba, então parecia que o
+    // nome "não colava".
+    window.addEventListener('office-settings-updated', load)
+    return () => window.removeEventListener('office-settings-updated', load)
   }, [])
 }
 

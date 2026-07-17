@@ -168,7 +168,7 @@ export function AppSidebar() {
                 className="h-7 w-7 text-xs"
               />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-[var(--sidebar-accent-foreground)] truncate">
+                <p className="text-xs font-medium text-white truncate">
                   {profile.nickname || profile.display_name}
                 </p>
                 <p className="text-[10px] text-[var(--sidebar-foreground)] truncate">
