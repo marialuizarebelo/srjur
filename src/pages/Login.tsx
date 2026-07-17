@@ -21,7 +21,7 @@ export default function Login() {
   const [forgotLoading, setForgotLoading] = useState(false)
 
   useEffect(() => {
-    supabase.from('office_settings').select('name, logo_url').limit(1).maybeSingle().then(({ data }) => {
+    supabase.from('office_settings').select('name, logo_url').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
       if (data) setOffice({ name: data.name ?? 'SRJUR', logo_url: data.logo_url })
     })
   }, [])

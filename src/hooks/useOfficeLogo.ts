@@ -8,7 +8,7 @@ export function useOfficeLogo() {
 
   useEffect(() => {
     if (cachedLogo !== undefined) return
-    supabase.from('office_settings').select('logo_url').limit(1).maybeSingle().then(({ data }) => {
+    supabase.from('office_settings').select('logo_url').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
       cachedLogo = data?.logo_url ?? null
       setLogo(cachedLogo)
     })

@@ -241,7 +241,7 @@ export default function Comunicacoes() {
   useEffect(() => { loadData() }, [])
 
   useEffect(() => {
-    supabase.from('office_settings').select('name').limit(1).maybeSingle().then(({ data }) => {
+    supabase.from('office_settings').select('name').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
       const respName = profile?.nickname || profile?.display_name || ''
       setOfficeDefaults({
         ...OFFICE_DEFAULTS,
