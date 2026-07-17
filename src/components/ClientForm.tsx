@@ -188,7 +188,7 @@ export function ClientFormDialog({
   const [generatedPassword, setGeneratedPassword] = useState('')
 
   useEffect(() => {
-    supabase.from('office_settings').select('drive_root_folder_id').limit(1).maybeSingle().then(({ data }) => {
+    supabase.from('office_settings').select('drive_root_folder_id').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
       setDriveRootFolderId(data?.drive_root_folder_id ?? null)
     })
   }, [])

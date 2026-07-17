@@ -77,7 +77,11 @@ export function AppSidebar() {
 
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase.from('office_settings').select('name, logo_url').limit(1).maybeSingle()
+      // office_settings deveria ter só 1 linha, mas já teve linhas fantasma
+      // criadas por um bug antigo (~200 linhas em branco) — limit(1) sem
+      // order pegava uma qualquer, às vezes uma vazia, e o logo sumia. Pegar
+      // sempre a mais antiga garante a linha real mesmo se isso se repetir.
+      const { data } = await supabase.from('office_settings').select('name, logo_url').order('created_at', { ascending: true }).limit(1).maybeSingle()
       if (data) setOffice({ name: data.name ?? 'SRJUR', logo_url: data.logo_url })
     }
     load()
