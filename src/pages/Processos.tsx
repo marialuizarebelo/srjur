@@ -36,6 +36,7 @@ import { DriveFileList } from '@/components/DriveFileList'
 import { toast } from 'sonner'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
+import { SortableStageList, StageColorPicker, EXTENDED_STAGE_COLORS } from '@/components/StageManagerList'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
 import { ActivityTimeline } from '@/components/ActivityTimeline'
@@ -123,8 +124,6 @@ const DEFAULT_EXTRAJUDICIAL_PHASES: StageOption[] = [
   { value: 'encerrado', label: 'Encerrado', color: '#6B7280' },
 ]
 
-const STAGE_COLORS = ['#8B5CF6', '#3B82F6', '#F59E0B', '#EC4899', '#F97316', '#14B8A6', '#6B7280', '#EF4444', '#10B981', '#06B6D4']
-
 const AREAS = [
   'Cível', 'Trabalhista', 'Família', 'Sucessões', 'Empresarial',
   'Consumidor', 'Penal', 'Criminal', 'Tributário', 'Imobiliário',
@@ -193,7 +192,7 @@ export default function Processos() {
   const [stageFormOpen, setStageFormOpen] = useState(false)
   const [stageEditingValue, setStageEditingValue] = useState<string | null>(null)
   const [stageName, setStageName] = useState('')
-  const [stageColor, setStageColor] = useState(STAGE_COLORS[0])
+  const [stageColor, setStageColor] = useState(EXTENDED_STAGE_COLORS[0])
   const [stageSaving, setStageSaving] = useState(false)
 
   async function loadStages() {
@@ -213,7 +212,7 @@ export default function Processos() {
   function openNewStage() {
     setStageEditingValue(null)
     setStageName('')
-    setStageColor(STAGE_COLORS[0])
+    setStageColor(EXTENDED_STAGE_COLORS[0])
     setStageFormOpen(true)
   }
   function openEditStage(s: StageOption) {
@@ -248,6 +247,14 @@ export default function Processos() {
     if (!confirm('Excluir esta etapa? Processos nela ficarão sem etapa até serem movidos.')) return
     await supabase.from('process_stages').delete().eq('type', stagesTab).eq('value', value)
     await loadStages()
+  }
+  async function reorderStages(newOrder: StageOption[]) {
+    // Atualiza local na hora (sem esperar o round-trip) pra não "pular" visualmente.
+    if (stagesTab === 'judicial') setJudicialStages(newOrder)
+    else setExtraStages(newOrder)
+    await Promise.all(newOrder.map((s, i) =>
+      supabase.from('process_stages').update({ position: i }).eq('type', stagesTab).eq('value', s.value)
+    ))
   }
   const pinnedView = usePinnedView('processos_view', 'kanban')
   useEffect(() => { if (pinnedView.loaded && pinnedView.isPinned) setViewMode(pinnedView.pinnedValue as any) }, [pinnedView.loaded])
@@ -1422,19 +1429,24 @@ export default function Processos() {
               Extrajudicial
             </Button>
           </div>
-          <div className="space-y-2 pt-2">
-            {(stagesTab === 'judicial' ? judicialStages : extraStages).map(s => (
-              <div key={s.value} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/20">
-                <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                <span className="text-sm flex-1">{s.label}</span>
-                <button onClick={() => openEditStage(s)} className="p-1 hover:bg-muted rounded">
-                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-                <button onClick={() => deleteStage(s.value)} className="p-1 hover:bg-muted rounded">
-                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
-                </button>
-              </div>
-            ))}
+          <div className="pt-2">
+            <SortableStageList
+              items={(stagesTab === 'judicial' ? judicialStages : extraStages).map(s => ({ id: s.value, label: s.label, color: s.color }))}
+              onReorder={newOrder => reorderStages(newOrder.map(i => ({ value: i.id, label: i.label, color: i.color })))}
+              renderActions={item => {
+                const s = { value: item.id, label: item.label, color: item.color }
+                return (
+                  <>
+                    <button onClick={() => openEditStage(s)} className="p-1 hover:bg-muted rounded">
+                      <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                    <button onClick={() => deleteStage(s.value)} className="p-1 hover:bg-muted rounded">
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
+                    </button>
+                  </>
+                )
+              }}
+            />
           </div>
 
           {stageFormOpen ? (
@@ -1443,13 +1455,7 @@ export default function Processos() {
               <Input placeholder="Nome da etapa" value={stageName} onChange={e => setStageName(e.target.value)} className="h-9" />
               <div className="space-y-1.5">
                 <Label className="text-xs">Cor</Label>
-                <div className="flex flex-wrap gap-2">
-                  {STAGE_COLORS.map(c => (
-                    <button key={c} onClick={() => setStageColor(c)}
-                      className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${stageColor === c ? 'border-foreground scale-110' : 'border-transparent'}`}
-                      style={{ backgroundColor: c }} />
-                  ))}
-                </div>
+                <StageColorPicker value={stageColor} onChange={setStageColor} />
               </div>
               <div className="flex gap-2 pt-1">
                 <Button size="sm" variant="outline" className="flex-1" onClick={() => setStageFormOpen(false)}>Cancelar</Button>

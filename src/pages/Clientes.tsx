@@ -36,6 +36,7 @@ import { toast } from 'sonner'
 import { Sensitive } from '@/components/Sensitive'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
+import { SortableStageList, StageColorPicker } from '@/components/StageManagerList'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
 import { ActivityTimeline, type ExternalEntry } from '@/components/ActivityTimeline'
@@ -972,6 +973,12 @@ export default function Clientes() {
     setLoading(false)
   }
 
+  const reorderPipelineStages = async (newOrder: PipelineStage[]) => {
+    const withPositions = newOrder.map((s, i) => ({ ...s, position: i }))
+    setStages(withPositions)
+    await Promise.all(withPositions.map(s => supabase.from('pipeline_stages').update({ position: s.position }).eq('id', s.id)))
+  }
+
   const [driveRootFolderId, setDriveRootFolderId] = useState<string | null>(null)
 
   useEffect(() => { loadData() }, [])
@@ -1895,73 +1902,49 @@ export default function Clientes() {
               Arraste para reordenar. Etapas com "Kanban" ativo aparecem no quadro.
             </p>
 
-            <div className="space-y-2">
-              {stages.sort((a, b) => a.position - b.position).map((stage, idx) => (
-                <div key={stage.id} className="flex items-center gap-3 p-3 rounded-lg border">
-                  <div className="h-4 w-4 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
-                  <span className="text-sm font-medium flex-1">{stage.label}</span>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7"
-                      disabled={idx === 0}
-                      onClick={async () => {
-                        const prev = stages.sort((a, b) => a.position - b.position)[idx - 1]
-                        if (!prev) return
-                        await supabase.from('pipeline_stages').update({ position: prev.position }).eq('id', stage.id)
-                        await supabase.from('pipeline_stages').update({ position: stage.position }).eq('id', prev.id)
-                        loadData()
-                      }}>
-                      <ChevronUp className="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7"
-                      disabled={idx === stages.length - 1}
-                      onClick={async () => {
-                        const next = stages.sort((a, b) => a.position - b.position)[idx + 1]
-                        if (!next) return
-                        await supabase.from('pipeline_stages').update({ position: next.position }).eq('id', stage.id)
-                        await supabase.from('pipeline_stages').update({ position: stage.position }).eq('id', next.id)
-                        loadData()
-                      }}>
-                      <ChevronDown className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={stage.show_in_kanban}
-                      onCheckedChange={async (v) => {
-                        await supabase.from('pipeline_stages').update({ show_in_kanban: v }).eq('id', stage.id)
-                        loadData()
-                      }}
-                    />
-                    <span className="text-xs text-muted-foreground w-12">Kanban</span>
-                  </div>
-                  {!['novo', 'convertido', 'perdido'].includes(stage.value) && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                      onClick={async () => {
-                        if (!confirm(`Excluir etapa "${stage.label}"?`)) return
-                        await supabase.from('pipeline_stages').delete().eq('id', stage.id)
-                        loadData()
-                      }}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
+            <SortableStageList
+              items={stages.sort((a, b) => a.position - b.position).map(s => ({ id: s.id, label: s.label, color: s.color }))}
+              onReorder={newOrder => reorderPipelineStages(newOrder.map(i => stages.find(s => s.id === i.id)!))}
+              renderActions={item => {
+                const stage = stages.find(s => s.id === item.id)!
+                return (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={stage.show_in_kanban}
+                        onCheckedChange={async (v) => {
+                          await supabase.from('pipeline_stages').update({ show_in_kanban: v }).eq('id', stage.id)
+                          loadData()
+                        }}
+                      />
+                      <span className="text-xs text-muted-foreground w-12">Kanban</span>
+                    </div>
+                    {!['novo', 'convertido', 'perdido'].includes(stage.value) && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                        onClick={async () => {
+                          if (!confirm(`Excluir etapa "${stage.label}"?`)) return
+                          await supabase.from('pipeline_stages').delete().eq('id', stage.id)
+                          loadData()
+                        }}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </>
+                )
+              }}
+            />
 
             {/* Add new stage */}
-            <div className="flex items-center gap-3 pt-2 border-t">
-              <input
-                type="color"
-                value={newStageColor}
-                onChange={e => setNewStageColor(e.target.value)}
-                className="h-8 w-8 rounded cursor-pointer border-0 p-0"
-              />
-              <Input
-                placeholder="Nome da nova etapa"
-                value={newStageLabel}
-                onChange={e => setNewStageLabel(e.target.value)}
-                className="h-9 flex-1"
-              />
+            <div className="space-y-2 pt-2 border-t">
+              <div className="flex items-center gap-3 pt-2">
+                <Input
+                  placeholder="Nome da nova etapa"
+                  value={newStageLabel}
+                  onChange={e => setNewStageLabel(e.target.value)}
+                  className="h-9 flex-1"
+                />
+              </div>
+              <StageColorPicker value={newStageColor} onChange={setNewStageColor} />
               <Button size="sm" disabled={!newStageLabel} onClick={async () => {
                 const maxPos = Math.max(...stages.map(s => s.position), 0)
                 const value = newStageLabel.toLowerCase()
