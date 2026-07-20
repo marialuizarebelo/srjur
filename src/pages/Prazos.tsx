@@ -16,13 +16,14 @@ import {
 import {
   Plus, Search, Bell, AlertTriangle, Clock, CheckCircle2,
   Circle, Calendar, Scale, LayoutGrid, List, Settings2, SlidersHorizontal,
-  GripVertical, Pencil, Trash2, X, ChevronUp, ChevronDown,
+  Pencil, Trash2, X, ChevronUp, ChevronDown,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { fmtDate, getDaysDiff } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
+import { SortableStageList, StageColorPicker, EXTENDED_STAGE_COLORS } from '@/components/StageManagerList'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
 import { ClientCombobox } from '@/components/ClientCombobox'
@@ -76,11 +77,6 @@ const DEFAULT_VISIBLE: Record<string, boolean> = {
   processo: true, responsavel: true, origem: false,
   data: true, dias: true, status: true, notes: false,
 }
-
-const STAGE_COLORS = [
-  '#6B7280','#3B82F6','#10B981','#F59E0B','#EF4444',
-  '#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1',
-]
 
 function getVisibleFields(): Record<string, boolean> {
   try {
@@ -247,7 +243,7 @@ export default function Prazos() {
   // Stage editor state
   const [stageEditing, setStageEditing] = useState<DeadlineStage | null>(null)
   const [stageName, setStageName] = useState('')
-  const [stageColor, setStageColor] = useState(STAGE_COLORS[0])
+  const [stageColor, setStageColor] = useState(EXTENDED_STAGE_COLORS[0])
   const [stageFormOpen, setStageFormOpen] = useState(false)
 
   const profilesMap = useProfilesMap()
@@ -413,7 +409,7 @@ export default function Prazos() {
   const openNewStage = () => {
     setStageEditing(null)
     setStageName('')
-    setStageColor(STAGE_COLORS[0])
+    setStageColor(EXTENDED_STAGE_COLORS[0])
     setStageFormOpen(true)
   }
 
@@ -445,6 +441,12 @@ export default function Prazos() {
     if (!confirm('Excluir esta etapa? Os prazos vinculados perderão a etapa.')) return
     await supabase.from('deadline_stages').delete().eq('id', id)
     loadData()
+  }
+
+  const reorderStages = async (newOrder: DeadlineStage[]) => {
+    const withPositions = newOrder.map((s, i) => ({ ...s, position: i }))
+    setStages(withPositions)
+    await Promise.all(withPositions.map(s => supabase.from('deadline_stages').update({ position: s.position }).eq('id', s.id)))
   }
 
   // Grouping
@@ -1003,22 +1005,27 @@ export default function Prazos() {
           <DialogHeader>
             <DialogTitle>Gerenciar Etapas</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 pt-2">
-            {stages.map(s => (
-              <div key={s.id} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/20">
-                <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                <span className="text-sm flex-1">{s.name}</span>
-                <button onClick={() => openEditStage(s)} className="p-1 hover:bg-muted rounded">
-                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-                <button onClick={() => deleteStage(s.id)} className="p-1 hover:bg-muted rounded">
-                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
-                </button>
-              </div>
-            ))}
-            {stages.length === 0 && (
+          <div className="pt-2">
+            {stages.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">Nenhuma etapa criada</p>
+            ) : (
+              <SortableStageList
+                items={stages.map(s => ({ id: s.id, label: s.name, color: s.color }))}
+                onReorder={newOrder => reorderStages(newOrder.map(i => ({ id: i.id, name: i.label, color: i.color, position: 0 })))}
+                renderActions={item => {
+                  const s = stages.find(st => st.id === item.id)!
+                  return (
+                    <>
+                      <button onClick={() => openEditStage(s)} className="p-1 hover:bg-muted rounded">
+                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                      <button onClick={() => deleteStage(s.id)} className="p-1 hover:bg-muted rounded">
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
+                      </button>
+                    </>
+                  )
+                }}
+              />
             )}
           </div>
 
@@ -1031,13 +1038,7 @@ export default function Prazos() {
               <Input placeholder="Nome da etapa" value={stageName} onChange={e => setStageName(e.target.value)} className="h-9" />
               <div className="space-y-1.5">
                 <Label className="text-xs">Cor</Label>
-                <div className="flex flex-wrap gap-2">
-                  {STAGE_COLORS.map(c => (
-                    <button key={c} onClick={() => setStageColor(c)}
-                      className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${stageColor === c ? 'border-foreground scale-110' : 'border-transparent'}`}
-                      style={{ backgroundColor: c }} />
-                  ))}
-                </div>
+                <StageColorPicker value={stageColor} onChange={setStageColor} />
               </div>
               <div className="flex gap-2 pt-1">
                 <Button size="sm" variant="outline" className="flex-1" onClick={() => setStageFormOpen(false)}>Cancelar</Button>
