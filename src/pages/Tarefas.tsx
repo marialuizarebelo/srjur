@@ -70,6 +70,9 @@ const TYPES = [
   { value: 'diligencia', label: 'Diligência', color: '#F97316' },
   { value: 'interno', label: 'Interno', color: '#6B7280' },
   { value: 'cliente', label: 'Cliente', color: '#14B8A6' },
+  { value: 'lembrete', label: 'Lembrete', color: '#EAB308' },
+  { value: 'atendimento', label: 'Atendimento', color: '#06B6D4' },
+  { value: 'bloqueio', label: 'Bloqueio', color: '#EF4444' },
 ]
 
 const PRIORITIES = [
