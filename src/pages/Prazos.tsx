@@ -86,13 +86,14 @@ function getVisibleFields(): Record<string, boolean> {
 }
 
 // ── View Dialog ──
-function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggleStatus, stages, processes, clients, profilesMap }: {
+function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggleStatus, onConvert, stages, processes, clients, profilesMap }: {
   deadline: Deadline | null
   open: boolean
   onClose: () => void
   onEdit: () => void
   onDelete: () => void
   onToggleStatus: () => void
+  onConvert: () => void
   stages: DeadlineStage[]
   processes: ProcessOption[]
   clients: ClientOption[]
@@ -198,6 +199,7 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
             <Button variant="outline" size="sm" onClick={onToggleStatus}>
               {deadline.status === 'cumprido' ? 'Reabrir' : 'Marcar cumprido'}
             </Button>
+            <Button variant="outline" size="sm" onClick={onConvert}>Transformar em Tarefa</Button>
             <Button size="sm" onClick={onEdit}>Editar</Button>
           </div>
 
@@ -402,6 +404,26 @@ export default function Prazos() {
   const deleteDeadline = async (id: string) => {
     if (!confirm('Excluir este prazo?')) return
     await supabase.from('deadlines').delete().eq('id', id)
+    loadData()
+  }
+
+  // Cadastro errado na importação: deixa transformar prazo <-> tarefa sem perder os dados.
+  const VALID_TASK_TYPES = ['tarefa', 'compromisso', 'reuniao', 'audiencia', 'diligencia', 'interno', 'cliente', 'lembrete', 'atendimento', 'bloqueio']
+  const convertToTask = async (deadline: Deadline) => {
+    if (!confirm('Transformar este prazo em tarefa? O prazo será removido e uma tarefa será criada no lugar.')) return
+    const statusMap: Record<string, string> = { pendente: 'pendente', cumprido: 'concluida', perdido: 'cancelada' }
+    const { error: insertError } = await supabase.from('tasks').insert({
+      title: deadline.title, description: deadline.notes,
+      type: deadline.tipo && VALID_TASK_TYPES.includes(deadline.tipo) ? deadline.tipo : 'tarefa',
+      status: statusMap[deadline.status] ?? 'pendente', priority: 'media',
+      due_date: deadline.due_date, client_id: deadline.client_id, process_id: deadline.process_id,
+      responsible_ids: deadline.responsible_ids, responsible: deadline.responsible,
+      portal_visible: deadline.portal_visible,
+    })
+    if (insertError) { toast.error('Erro ao converter: ' + insertError.message); return }
+    await supabase.from('deadlines').delete().eq('id', deadline.id)
+    toast.success('Prazo transformado em tarefa')
+    setViewDeadline(null)
     loadData()
   }
 
@@ -858,6 +880,7 @@ export default function Prazos() {
         onEdit={() => { const d = viewDeadline; setViewDeadline(null); if (d) openEdit(d) }}
         onDelete={() => { if (viewDeadline) { deleteDeadline(viewDeadline.id); setViewDeadline(null) } }}
         onToggleStatus={() => { if (viewDeadline) { toggleStatus(viewDeadline); setViewDeadline(null) } }}
+        onConvert={() => { if (viewDeadline) convertToTask(viewDeadline) }}
         stages={stages}
         processes={processes}
         clients={clients}

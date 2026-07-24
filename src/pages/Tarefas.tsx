@@ -85,7 +85,7 @@ const PRIORITIES = [
 const RECURRENCES = ['Única', 'Diária', 'Semanal', 'Quinzenal', 'Mensal', 'Trimestral']
 
 // ── View Dialog ──
-function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplete, onMoveStage, clients, processes, profilesMap }: {
+function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplete, onMoveStage, onConvert, clients, processes, profilesMap }: {
   task: Task | null
   open: boolean
   onClose: () => void
@@ -93,6 +93,7 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
   onDelete: () => void
   onToggleComplete: () => void
   onMoveStage: (stage: string) => void
+  onConvert: () => void
   clients: ClientOption[]
   processes: ProcessOption[]
   profilesMap: Record<string, { display_name: string | null; color: string | null }>
@@ -191,6 +192,7 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
             <Button variant="outline" size="sm" onClick={onToggleComplete}>
               {task.status === 'concluida' ? 'Reabrir' : 'Concluir'}
             </Button>
+            <Button variant="outline" size="sm" onClick={onConvert}>Transformar em Prazo</Button>
             <Button size="sm" onClick={onEdit}>Editar</Button>
           </div>
 
@@ -396,6 +398,23 @@ export default function Tarefas() {
   const deleteTask = async (id: string) => {
     if (!confirm('Excluir esta tarefa?')) return
     await supabase.from('tasks').delete().eq('id', id)
+    loadData()
+  }
+
+  // Cadastro errado na importação: deixa transformar tarefa <-> prazo sem perder os dados.
+  const convertToDeadline = async (task: Task) => {
+    if (!confirm('Transformar esta tarefa em prazo? A tarefa será removida e um prazo será criado no lugar.')) return
+    const statusMap: Record<string, string> = { pendente: 'pendente', concluida: 'cumprido', cancelada: 'perdido' }
+    const { error: insertError } = await supabase.from('deadlines').insert({
+      title: task.title, tipo: task.type, due_date: task.due_date, client_id: task.client_id,
+      process_id: task.process_id, status: statusMap[task.status] ?? 'pendente',
+      notes: task.description, responsible_ids: task.responsible_ids, responsible: task.responsible,
+      portal_visible: task.portal_visible, workflow_stage: task.workflow_stage,
+    })
+    if (insertError) { toast.error('Erro ao converter: ' + insertError.message); return }
+    await supabase.from('tasks').delete().eq('id', task.id)
+    toast.success('Tarefa transformada em prazo')
+    setViewTask(null)
     loadData()
   }
 
@@ -689,6 +708,7 @@ export default function Tarefas() {
         onDelete={() => { if (viewTask) { deleteTask(viewTask.id); setViewTask(null) } }}
         onToggleComplete={() => { if (viewTask) { toggleComplete(viewTask); setViewTask(null) } }}
         onMoveStage={stage => { if (viewTask) { moveWorkflowStage(viewTask, stage); setViewTask(null) } }}
+        onConvert={() => { if (viewTask) convertToDeadline(viewTask) }}
         clients={clients}
         processes={processes}
         profilesMap={profilesMap}
