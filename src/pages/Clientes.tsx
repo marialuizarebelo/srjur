@@ -1173,11 +1173,27 @@ export default function Clientes() {
     return list
   }, [clients, tab, search, tableSortColumn, tableSortDir])
 
+  // Período do CRM: filtra o funil (kanban + resumo "no período") por
+  // created_at do lead — "perdido" fica visível de propósito (senão o lead
+  // simplesmente sumia da tela sem deixar rastro de que existiu).
+  const now = new Date()
+  const [crmPeriodMode, setCrmPeriodMode] = useState<'mes' | 'ano' | 'tudo'>('mes')
+  const [crmMonth, setCrmMonth] = useState(now.getMonth())
+  const [crmYear, setCrmYear] = useState(now.getFullYear())
+
+  const inCrmPeriod = (createdAt: string) => {
+    if (crmPeriodMode === 'tudo') return true
+    const d = new Date(createdAt)
+    if (crmPeriodMode === 'ano') return d.getFullYear() === crmYear
+    return d.getFullYear() === crmYear && d.getMonth() === crmMonth
+  }
+
   const filteredLeads = useMemo(() => {
     return leads
-      .filter(l => l.status !== 'convertido' && l.status !== 'perdido')
+      .filter(l => l.status !== 'convertido')
+      .filter(l => inCrmPeriod(l.created_at))
       .filter(l => !search || l.name.toLowerCase().includes(search.toLowerCase()))
-  }, [leads, search])
+  }, [leads, search, crmPeriodMode, crmMonth, crmYear])
 
   const leadsByStage = useMemo(() => {
     const map = new Map<string, Lead[]>()
@@ -1192,10 +1208,18 @@ export default function Clientes() {
 
   // ── Stats ──
   const totalAtivos = clients.filter(c => c.status === 'ativo').length
-  const totalLeads = leads.filter(l => l.status !== 'perdido' && l.status !== 'convertido' && !l.client_id).length
-  const pipelineValue = leads
+  // "Geral" = sempre todos os leads, independente do filtro de período do CRM.
+  const totalLeadsGeral = leads.filter(l => l.status !== 'perdido' && l.status !== 'convertido' && !l.client_id).length
+  const pipelineValueGeral = leads
     .filter(l => l.status !== 'perdido' && !l.client_id)
     .reduce((s, l) => s + (l.potential_value ?? 0), 0)
+  // "No período" = respeita o filtro Mês/Ano/Tudo selecionado no CRM.
+  const leadsNoPeriodo = leads.filter(l => inCrmPeriod(l.created_at))
+  const totalLeadsPeriodo = leadsNoPeriodo.filter(l => l.status !== 'perdido' && l.status !== 'convertido' && !l.client_id).length
+  const pipelineValuePeriodo = leadsNoPeriodo
+    .filter(l => l.status !== 'perdido' && !l.client_id)
+    .reduce((s, l) => s + (l.potential_value ?? 0), 0)
+  const totalLeads = totalLeadsGeral
 
   // ── Client CRUD ──
   const openEditClient = (c: any) => {
@@ -1641,28 +1665,79 @@ export default function Clientes() {
         </div>
       </div>
 
+      {/* CRM: filtro de período */}
+      {tab === 'crm' && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+            <Button variant={crmPeriodMode === 'mes' ? 'default' : 'ghost'} size="sm" className="h-8" onClick={() => setCrmPeriodMode('mes')}>Mês</Button>
+            <Button variant={crmPeriodMode === 'ano' ? 'default' : 'ghost'} size="sm" className="h-8" onClick={() => setCrmPeriodMode('ano')}>Ano</Button>
+            <Button variant={crmPeriodMode === 'tudo' ? 'default' : 'ghost'} size="sm" className="h-8" onClick={() => setCrmPeriodMode('tudo')}>Tudo</Button>
+          </div>
+          {crmPeriodMode === 'mes' && (
+            <Select value={String(crmMonth)} onValueChange={v => setCrmMonth(Number(v))}>
+              <SelectTrigger className="h-8 w-[150px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].map((m, i) => (
+                  <SelectItem key={i} value={String(i)}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {(crmPeriodMode === 'mes' || crmPeriodMode === 'ano') && (
+            <Select value={String(crmYear)} onValueChange={v => setCrmYear(Number(v))}>
+              <SelectTrigger className="h-8 w-[90px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 6 }, (_, i) => now.getFullYear() - i).map(y => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      )}
+
       {/* CRM Kanban */}
       {tab === 'crm' && (
-        <div className="flex items-center gap-6 p-4 rounded-xl bg-muted/50 mb-4">
-          <div>
-            <p className="text-xs text-muted-foreground">Leads ativos</p>
-            <p className="text-lg font-bold">{totalLeads}</p>
+        <div className="rounded-xl bg-muted/50 mb-4 divide-y divide-border/60">
+          <div className="flex items-center gap-6 p-4 flex-wrap">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground w-full sm:w-auto">Geral (tudo)</span>
+            <div>
+              <p className="text-xs text-muted-foreground">Leads ativos</p>
+              <p className="text-lg font-bold">{totalLeadsGeral}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Potencial total</p>
+              <p className="text-lg font-bold text-green-600">{fmtBRL(pipelineValueGeral)}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Potencial total</p>
-            <p className="text-lg font-bold text-green-600">{fmtBRL(pipelineValue)}</p>
+          <div className="flex items-center gap-6 p-4 flex-wrap">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground w-full sm:w-auto">
+              {crmPeriodMode === 'tudo' ? 'Por etapa' : crmPeriodMode === 'mes' ? 'Neste mês' : 'Neste ano'}
+            </span>
+            {crmPeriodMode !== 'tudo' && (
+              <>
+                <div>
+                  <p className="text-xs text-muted-foreground">Leads ativos</p>
+                  <p className="text-lg font-bold">{totalLeadsPeriodo}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Potencial no período</p>
+                  <p className="text-lg font-bold text-green-600">{fmtBRL(pipelineValuePeriodo)}</p>
+                </div>
+              </>
+            )}
+            {stages.filter(s => s.show_in_kanban).map(stage => {
+              const sLeads = leadsByStage.get(stage.value) ?? []
+              if (sLeads.length === 0) return null
+              const val = sLeads.reduce((s, l) => s + (l.potential_value ?? 0), 0)
+              return (
+                <div key={stage.value} className="hidden lg:block">
+                  <p className="text-[10px] text-muted-foreground truncate max-w-[100px]">{stage.label}</p>
+                  <p className="text-sm font-semibold" style={{ color: stage.color }}>{fmtBRL(val)}</p>
+                </div>
+              )
+            })}
           </div>
-          {stages.filter(s => s.show_in_kanban).map(stage => {
-            const sLeads = leadsByStage.get(stage.value) ?? []
-            if (sLeads.length === 0) return null
-            const val = sLeads.reduce((s, l) => s + (l.potential_value ?? 0), 0)
-            return (
-              <div key={stage.value} className="hidden lg:block">
-                <p className="text-[10px] text-muted-foreground truncate max-w-[100px]">{stage.label}</p>
-                <p className="text-sm font-semibold" style={{ color: stage.color }}>{fmtBRL(val)}</p>
-              </div>
-            )
-          })}
         </div>
       )}
       {tab === 'crm' && (
