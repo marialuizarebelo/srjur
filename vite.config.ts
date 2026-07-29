@@ -9,7 +9,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'prompt',
+      // 'autoUpdate' ativa a versão nova sozinho e recarrega a página assim que
+      // detecta um deploy — antes era 'prompt', que espera uma confirmação da
+      // usuária que nunca existia no app, deixando o service worker preso na
+      // versão antiga pra sempre (só saía do travamento com refresh forçado
+      // manual; no PWA instalado no celular nem isso era possível).
+      registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icon-192.svg', 'icon-512.svg'],
       manifest: {
         name: 'SRJUR — Scartezzini & Rebelo',
