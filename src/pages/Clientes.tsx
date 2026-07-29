@@ -1487,7 +1487,7 @@ export default function Clientes() {
           <h1 className="text-2xl font-semibold">Clientes</h1>
           <p className="text-sm text-muted-foreground">
             {totalAtivos} ativos · {totalLeads} leads no pipeline
-            {pipelineValue > 0 && ` · ${fmtBRL(pipelineValue)} potencial`}
+            {pipelineValueGeral > 0 && ` · ${fmtBRL(pipelineValueGeral)} potencial`}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
