@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,6 +50,7 @@ interface Deadline {
   portal_visible: boolean
   stage_id: string | null
   created_at: string
+  created_by: string | null
 }
 
 interface DeadlineStage {
@@ -202,7 +204,7 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
           </div>
 
           <div className="pt-2 border-t min-w-0">
-            <ActivityTimeline entityType="deadline" entityId={deadline.id} createdAt={deadline.created_at} />
+            <ActivityTimeline entityType="deadline" entityId={deadline.id} createdAt={deadline.created_at} createdBy={deadline.created_by} />
           </div>
         </div>
       </DialogContent>
@@ -211,6 +213,7 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
 }
 
 export default function Prazos() {
+  const { profile } = useAuth()
   const [deadlines, setDeadlines] = useState<Deadline[]>([])
   const [stages, setStages] = useState<DeadlineStage[]>([])
   const [processes, setProcesses] = useState<ProcessOption[]>([])
@@ -374,7 +377,7 @@ export default function Prazos() {
         const { error } = await supabase.from('deadlines').update(payload).eq('id', editing.id)
         if (error) { toast.error('Erro ao salvar prazo: ' + error.message); return }
       } else {
-        const { data: created, error } = await supabase.from('deadlines').insert(payload).select().single()
+        const { data: created, error } = await supabase.from('deadlines').insert({ ...payload, created_by: profile?.id ?? null }).select().single()
         if (error) { toast.error('Erro ao salvar prazo: ' + error.message); return }
         // Se veio de "Criar prazo a partir da intimação", vincula de volta.
         if (df._intimacaoId && created) {

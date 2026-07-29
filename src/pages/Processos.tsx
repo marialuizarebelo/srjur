@@ -60,6 +60,7 @@ interface Process {
   portal_visible: boolean
   created_at: string
   updated_at: string
+  created_by: string | null
   access_key: string | null
   cause_value: number | null
   court_url: string | null
@@ -469,7 +470,7 @@ export default function Processos() {
         if (editing.status !== pf.status) logActivity('process', editing.id, `Status alterado para "${formatLabel(pf.status)}"`)
         if (editing.phase !== pf.phase) logActivity('process', editing.id, `Fase alterada para "${pf.phase}"`)
       } else {
-        const { data: created, error } = await supabase.from('processes').insert(payload).select().single()
+        const { data: created, error } = await supabase.from('processes').insert({ ...payload, created_by: profile?.id ?? null }).select().single()
         if (error) throw error
         processId = created?.id
         // Se veio de "Criar processo a partir da intimação", vincula de volta.
@@ -1396,7 +1397,7 @@ export default function Processos() {
 
             {editing && (
               <div className="pt-2 border-t">
-                <ActivityTimeline entityType="process" entityId={editing.id} createdAt={editing.created_at} />
+                <ActivityTimeline entityType="process" entityId={editing.id} createdAt={editing.created_at} createdBy={editing.created_by} />
               </div>
             )}
           </div>

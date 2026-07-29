@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -60,6 +61,7 @@ interface Client {
   address: string | null
   portal_visible: boolean
   created_at: string
+  created_by: string | null
   // extra
   referred_by: string | null
   referral_fee_pct: number | null
@@ -130,6 +132,9 @@ interface Lead {
   rep_role: string | null
   rep_document_type: string | null
   rep_address: string | null
+  tags: string | null
+  birth_date: string | null
+  created_by: string | null
 }
 
 // ── Types ──
@@ -807,7 +812,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
           </div>
 
           <div className="pt-2 border-t min-w-0">
-            <ActivityTimeline entityType="client" entityId={client.id} createdAt={client.created_at} externalEntries={activityExtras} />
+            <ActivityTimeline entityType="client" entityId={client.id} createdAt={client.created_at} createdBy={client.created_by} externalEntries={activityExtras} />
           </div>
         </div>
       </DialogContent>
@@ -971,6 +976,7 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
 
 export default function Clientes() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const profilesMap = useProfilesMap()
   const [clients, setClients] = useState<Client[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
@@ -1029,6 +1035,7 @@ export default function Clientes() {
     profession: '', rg_number: '', rg_issuer: '', cep: '', street: '', address_number: '',
     complement: '', neighborhood: '', city: '', state: '',
     rep_name: '', rep_cpf: '', rep_role: '', rep_document_type: 'Contrato Social', rep_address: '',
+    tags: '', birth_date: '',
   }
   const [lf, setLf] = useState(emptyLf)
   const [lfQualOpen, setLfQualOpen] = useState(false)
@@ -1248,7 +1255,7 @@ export default function Clientes() {
         logActivity('client', editingClient.id, `Status alterado para "${cf.status}"`)
       }
     } else {
-      const { data: newClient, error } = await supabase.from('clients').insert(payload).select('id').single()
+      const { data: newClient, error } = await supabase.from('clients').insert({ ...payload, created_by: profile?.id ?? null }).select('id').single()
       if (error) { toast.error('Erro ao criar cliente: ' + error.message); return }
       // If new client, create task to complete registration
       if (newClient) {
@@ -1291,6 +1298,7 @@ export default function Clientes() {
       city: l.city ?? '', state: l.state ?? '',
       rep_name: l.rep_name ?? '', rep_cpf: l.rep_cpf ?? '', rep_role: l.rep_role ?? '',
       rep_document_type: l.rep_document_type ?? 'Contrato Social', rep_address: l.rep_address ?? '',
+      tags: l.tags ?? '', birth_date: l.birth_date ?? '',
     })
     setEditingLead(l)
     setLeadDialogOpen(true)
@@ -1319,11 +1327,12 @@ export default function Clientes() {
         complement: lf.complement || null, neighborhood: lf.neighborhood || null, city: lf.city || null, state: lf.state || null,
         rep_name: lf.rep_name || null, rep_cpf: lf.rep_cpf || null, rep_role: lf.rep_role || null,
         rep_document_type: lf.rep_document_type || null, rep_address: lf.rep_address || null,
+        tags: lf.tags || null, birth_date: lf.birth_date || null,
       }
       if (editingLead) {
         await supabase.from('leads').update(payload).eq('id', editingLead.id)
       } else {
-        await supabase.from('leads').insert(payload)
+        await supabase.from('leads').insert({ ...payload, created_by: profile?.id ?? null })
       }
       setLeadDialogOpen(false)
       resetLf()
@@ -1387,6 +1396,7 @@ export default function Clientes() {
       complement: lead.complement, neighborhood: lead.neighborhood, city: lead.city, state: lead.state,
       rep_name: lead.rep_name, rep_cpf: lead.rep_cpf, rep_role: lead.rep_role,
       rep_document_type: lead.rep_document_type, rep_address: lead.rep_address,
+      tags: lead.tags, birth_date: lead.birth_date, created_by: lead.created_by,
     }).select('id').single()
 
     // Vincula o lead ao cliente criado, mas mantém o status/etapa do kanban
@@ -2025,6 +2035,18 @@ export default function Clientes() {
                       </div>
                     </div>
                   )}
+
+                  {lf.type === 'pessoa_fisica' && (
+                    <div className="space-y-2">
+                      <Label>Data de nascimento</Label>
+                      <Input type="date" value={lf.birth_date} onChange={e => setLf(f => ({ ...f, birth_date: e.target.value }))} className="h-10" />
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label>Tags</Label>
+                    <Input value={lf.tags} onChange={e => setLf(f => ({ ...f, tags: e.target.value }))} className="h-10" placeholder="Separadas por vírgula" />
+                  </div>
 
                   <div className="space-y-2">
                     <Label>{lf.type === 'pessoa_juridica' ? 'Endereço da sede' : 'Endereço'}</Label>

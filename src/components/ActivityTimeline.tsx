@@ -38,10 +38,11 @@ function fmtWhen(iso: string) {
   return `${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
 }
 
-export function ActivityTimeline({ entityType, entityId, createdAt, externalEntries, title = 'Histórico e comentários', defaultOpen = true }: {
+export function ActivityTimeline({ entityType, entityId, createdAt, createdBy, externalEntries, title = 'Histórico e comentários', defaultOpen = true }: {
   entityType: EntityType
   entityId: string
   createdAt?: string | null
+  createdBy?: string | null
   externalEntries?: ExternalEntry[]
   title?: string
   defaultOpen?: boolean
@@ -209,15 +210,25 @@ export function ActivityTimeline({ entityType, entityId, createdAt, externalEntr
                   </div>
                 )
               })}
-              {createdAt && (
-                <div className="flex gap-2.5 min-w-0">
-                  <UserAvatar name="SRJUR" photoUrl={officeLogo} className="h-6 w-6 text-[10px] mt-0.5 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-muted-foreground italic">Criado</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{fmtWhen(createdAt)}</p>
+              {createdAt && (() => {
+                const creator = createdBy ? profilesMap[createdBy] : undefined
+                return (
+                  <div className="flex gap-2.5 min-w-0">
+                    <UserAvatar
+                      name={creator?.display_name || 'SRJUR'}
+                      photoUrl={creator?.photo_url ?? (creator ? null : officeLogo)}
+                      color={creator?.color}
+                      className="h-6 w-6 text-[10px] mt-0.5 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-muted-foreground italic">
+                        Criado{creator ? ` por ${creator.display_name}` : ''}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{fmtWhen(createdAt)}</p>
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
             </div>
           )}
         </>

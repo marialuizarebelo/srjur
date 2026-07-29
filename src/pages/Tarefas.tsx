@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -48,6 +49,7 @@ interface Task {
   portal_visible: boolean
   workflow_stage: string | null
   created_at: string
+  created_by: string | null
 }
 
 interface ClientOption { id: string; name: string }
@@ -192,7 +194,7 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
           </div>
 
           <div className="pt-2 border-t min-w-0">
-            <ActivityTimeline entityType="task" entityId={task.id} createdAt={task.created_at} />
+            <ActivityTimeline entityType="task" entityId={task.id} createdAt={task.created_at} createdBy={task.created_by} />
           </div>
         </div>
       </DialogContent>
@@ -202,6 +204,7 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
 
 // ── Main ──
 export default function Tarefas() {
+  const { profile } = useAuth()
   const [tasks, setTasks] = useState<Task[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
   const [processes, setProcesses] = useState<ProcessOption[]>([])
@@ -366,7 +369,7 @@ export default function Tarefas() {
         const { error } = await supabase.from('tasks').update(payload).eq('id', editing.id)
         if (error) { toast.error('Erro ao salvar tarefa: ' + error.message); return }
       } else {
-        const { data: created, error } = await supabase.from('tasks').insert(payload).select().single()
+        const { data: created, error } = await supabase.from('tasks').insert({ ...payload, created_by: profile?.id ?? null }).select().single()
         if (error) { toast.error('Erro ao salvar tarefa: ' + error.message); return }
         // Se veio de "Criar tarefa a partir da intimação", vincula de volta.
         if (tf._intimacaoId && created) {

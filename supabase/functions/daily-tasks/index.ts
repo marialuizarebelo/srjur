@@ -97,6 +97,32 @@ Deno.serve(async () => {
       }
     }
 
+    // 2.5) Follow-up de leads agendado para hoje
+    const { data: leadsFollowup } = await supabase
+      .from('leads')
+      .select('id, name, next_followup, responsible_ids')
+      .eq('next_followup', todayStr)
+      .is('client_id', null)
+
+    for (const l of leadsFollowup ?? []) {
+      const { data: existing } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('title', `Follow-up — ${l.name}`)
+        .eq('due_date', todayStr)
+        .limit(1)
+      if (existing && existing.length > 0) continue
+      const { error } = await supabase.from('tasks').insert({
+        title: `Follow-up — ${l.name}`,
+        type: 'cliente',
+        status: 'pendente',
+        priority: 'media',
+        due_date: todayStr,
+        responsible_ids: (l.responsible_ids && l.responsible_ids.length > 0) ? l.responsible_ids : adminIds,
+      })
+      if (!error) created++
+    }
+
     // 3) Conferência mensal do financeiro (todo dia 30)
     if (today.getDate() === 30) {
       await createTaskIfNotExists({
