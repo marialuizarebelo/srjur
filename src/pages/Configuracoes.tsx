@@ -29,6 +29,7 @@ interface OfficeSettings {
   logo_url: string | null
   whatsapp_url: string | null
   primary_color: string | null
+  default_lead_responsible_id: string | null
 }
 
 const THEME_COLORS = [
@@ -106,7 +107,7 @@ export default function Configuracoes() {
 
   // Office
   const [office, setOffice] = useState<OfficeSettings | null>(null)
-  const [officeForm, setOfficeForm] = useState({ name: '', logo_url: '', whatsapp_url: '', drive_root_folder_id: '', drive_root_folder_name: '', primary_color: '' })
+  const [officeForm, setOfficeForm] = useState({ name: '', logo_url: '', whatsapp_url: '', drive_root_folder_id: '', drive_root_folder_name: '', primary_color: '', default_lead_responsible_id: '' })
   const [savingOffice, setSavingOffice] = useState(false)
 
   // Users
@@ -150,7 +151,7 @@ export default function Configuracoes() {
       setOfficeForm({
         name: os.name ?? '', logo_url: os.logo_url ?? '', whatsapp_url: os.whatsapp_url ?? '',
         drive_root_folder_id: os.drive_root_folder_id ?? '', drive_root_folder_name: os.drive_root_folder_name ?? '',
-        primary_color: os.primary_color ?? '',
+        primary_color: os.primary_color ?? '', default_lead_responsible_id: os.default_lead_responsible_id ?? '',
       })
     }
     setUsers((us as ProfileRow[]) ?? [])
@@ -198,10 +199,11 @@ export default function Configuracoes() {
 
   async function saveOffice() {
     setSavingOffice(true)
+    const payload = { ...officeForm, default_lead_responsible_id: officeForm.default_lead_responsible_id || null }
     if (office) {
-      await supabase.from('office_settings').update(officeForm).eq('id', office.id)
+      await supabase.from('office_settings').update(payload).eq('id', office.id)
     } else {
-      await supabase.from('office_settings').insert(officeForm)
+      await supabase.from('office_settings').insert(payload)
     }
     toast.success('Dados do escritório salvos!')
     setSavingOffice(false)
@@ -347,6 +349,23 @@ export default function Configuracoes() {
               placeholder="https://web.whatsapp.com/" className="h-10" />
             <p className="text-[11px] text-muted-foreground">
               URL aberta ao clicar em "Abrir chat" nos cards de lead/cliente. Se vazio, usa o WhatsApp do cliente diretamente.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />Responsável por follow-ups de leads</Label>
+            <Select
+              value={officeForm.default_lead_responsible_id || 'none'}
+              onValueChange={v => setOfficeForm(f => ({ ...f, default_lead_responsible_id: v === 'none' ? '' : v }))}
+            >
+              <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Nenhum</SelectItem>
+                {users.map(u => <SelectItem key={u.id} value={u.id}>{u.nickname || u.display_name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Todo lead novo já nasce com essa pessoa como responsável, e é pra ela que vão as tarefas automáticas de follow-up (quando bater a data marcada no lead). Trocar aqui muda os dois de uma vez — útil se um dia vocês contratarem um SDR ou closer específico pra isso.
             </p>
           </div>
 

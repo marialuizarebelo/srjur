@@ -1038,7 +1038,7 @@ export default function Clientes() {
     tags: '', birth_date: '',
   }
   const [lf, setLf] = useState(emptyLf)
-  const [lfQualOpen, setLfQualOpen] = useState(false)
+  const [lfQualOpen, setLfQualOpen] = useState(true)
 
   const resetCf = () => {
     setCf({ ...emptyClientForm })
@@ -1046,7 +1046,7 @@ export default function Clientes() {
   }
 
   const resetLf = () => {
-    setLf({ ...emptyLf })
+    setLf({ ...emptyLf, responsible_ids: defaultLeadResponsibleId ? [defaultLeadResponsibleId] : [] })
     setEditingLead(null)
   }
 
@@ -1070,11 +1070,13 @@ export default function Clientes() {
   }
 
   const [driveRootFolderId, setDriveRootFolderId] = useState<string | null>(null)
+  const [defaultLeadResponsibleId, setDefaultLeadResponsibleId] = useState<string | null>(null)
 
   useEffect(() => { loadData() }, [])
   useEffect(() => {
-    supabase.from('office_settings').select('drive_root_folder_id').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
+    supabase.from('office_settings').select('drive_root_folder_id, default_lead_responsible_id').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
       setDriveRootFolderId(data?.drive_root_folder_id ?? null)
+      setDefaultLeadResponsibleId(data?.default_lead_responsible_id ?? null)
     })
   }, [])
 
