@@ -27,7 +27,7 @@ import {
 import { fmtBRL, fmtDate } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
-import { ClientFormDialog, emptyClientForm, type ClientFormData } from '@/components/ClientForm'
+import { ClientFormDialog, emptyClientForm, type ClientFormData, GENDERS, MARITAL_STATUSES, REP_ROLES, REP_DOCUMENT_TYPES, STATES } from '@/components/ClientForm'
 import { findDocsByName, isZapSignConfigured, type ZapSignDoc } from '@/lib/zapsign'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { DriveFileList } from '@/components/DriveFileList'
@@ -110,6 +110,26 @@ interface Lead {
   referral_fee_pct: number | null
   first_contact_at: string | null
   created_at: string
+  // dados p/ qualificação (opcionais — dá pra gerar já em fase de lead)
+  type: string | null
+  gender: string | null
+  nationality: string | null
+  marital_status: string | null
+  profession: string | null
+  rg_number: string | null
+  rg_issuer: string | null
+  cep: string | null
+  street: string | null
+  address_number: string | null
+  complement: string | null
+  neighborhood: string | null
+  city: string | null
+  state: string | null
+  rep_name: string | null
+  rep_cpf: string | null
+  rep_role: string | null
+  rep_document_type: string | null
+  rep_address: string | null
 }
 
 // ── Types ──
@@ -306,7 +326,32 @@ function formatAddress(parts: {
 // campo Gênero (do próprio cliente, ou do representante legal no caso de PJ)
 // — quando não informado, assume masculino (convenção mais comum nos modelos
 // usados).
-function generateQualification(c: Client): string | null {
+interface QualificationSource {
+  name: string
+  type: string | null
+  gender: string | null
+  nationality: string | null
+  marital_status: string | null
+  profession: string | null
+  cpf_cnpj: string | null
+  email: string | null
+  street: string | null
+  address_number: string | null
+  complement: string | null
+  neighborhood: string | null
+  city: string | null
+  state: string | null
+  cep: string | null
+  rg_number: string | null
+  rg_issuer: string | null
+  rep_name: string | null
+  rep_cpf: string | null
+  rep_role: string | null
+  rep_document_type: string | null
+  rep_address: string | null
+}
+
+function generateQualification(c: QualificationSource): string | null {
   if (c.type === 'pessoa_fisica') {
     const feminino = c.gender === 'Feminino'
     const [nationality, marital, profession] = personQualificationBits({
@@ -811,6 +856,8 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
   stages: PipelineStage[]
 }) {
   const profilesMap = useProfilesMap()
+  const [qualification, setQualification] = useState<string | null>(null)
+  useEffect(() => { setQualification(null) }, [lead?.id])
   if (!lead) return null
   const stageInfo = stages.find(s => s.value === lead.status)
   const kanbanStages = stages.filter(s => s.show_in_kanban)
@@ -858,6 +905,38 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
             )}
             {lead.referral_fee_pct != null && (
               <div><p className="text-[11px] text-muted-foreground">% repasse</p><p className="font-medium">{lead.referral_fee_pct}%</p></div>
+            )}
+          </div>
+
+          <div className="rounded-lg border px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide truncate">Qualificação</p>
+              <Button
+                variant="outline" size="sm" className="h-7 text-xs"
+                onClick={() => {
+                  const q = generateQualification(lead)
+                  if (!q) {
+                    toast.error(lead.type === 'pessoa_juridica'
+                      ? 'Preencha o CNPJ e os dados do representante legal para gerar a qualificação.'
+                      : 'Preencha CPF, nacionalidade, estado civil ou endereço para gerar a qualificação.')
+                    return
+                  }
+                  setQualification(q)
+                }}
+              >
+                Gerar qualificação
+              </Button>
+            </div>
+            {qualification && (
+              <div className="flex items-start gap-2">
+                <p className="text-sm flex-1 whitespace-pre-wrap">{qualification}</p>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(qualification); toast.success('Qualificação copiada!') }}
+                  className="p-1 hover:bg-muted rounded shrink-0" title="Copiar qualificação"
+                >
+                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </div>
             )}
           </div>
 
@@ -941,12 +1020,18 @@ export default function Clientes() {
   })
 
   // Lead form
-  const [lf, setLf] = useState({
+  const emptyLf = {
     name: '', email: '', phone: '', cpf_cnpj: '', source: '',
     status: 'novo', potential_value: '', notes: '', responsible: '', responsible_ids: [] as string[],
     next_followup: '', drive_folder_id: '', drive_url: '',
     referred_by: '', referral_fee_pct: '', first_contact_at: '',
-  })
+    type: 'pessoa_fisica', gender: 'Não informado', nationality: 'brasileira', marital_status: 'Não informado',
+    profession: '', rg_number: '', rg_issuer: '', cep: '', street: '', address_number: '',
+    complement: '', neighborhood: '', city: '', state: '',
+    rep_name: '', rep_cpf: '', rep_role: '', rep_document_type: 'Contrato Social', rep_address: '',
+  }
+  const [lf, setLf] = useState(emptyLf)
+  const [lfQualOpen, setLfQualOpen] = useState(false)
 
   const resetCf = () => {
     setCf({ ...emptyClientForm })
@@ -954,9 +1039,7 @@ export default function Clientes() {
   }
 
   const resetLf = () => {
-    setLf({ name: '', email: '', phone: '', cpf_cnpj: '', source: '',
-      status: 'novo', potential_value: '', notes: '', responsible: '', responsible_ids: [], next_followup: '',
-      drive_folder_id: '', drive_url: '', referred_by: '', referral_fee_pct: '', first_contact_at: '' })
+    setLf({ ...emptyLf })
     setEditingLead(null)
   }
 
@@ -1201,6 +1284,13 @@ export default function Clientes() {
       notes: l.notes ?? '', responsible: l.responsible ?? '', responsible_ids: l.responsible_ids ?? [], next_followup: l.next_followup ?? '',
       drive_folder_id: l.drive_folder_id ?? '', drive_url: l.drive_url ?? '',
       referred_by: l.referred_by ?? '', referral_fee_pct: l.referral_fee_pct ? String(l.referral_fee_pct) : '', first_contact_at: l.first_contact_at ?? '',
+      type: l.type ?? 'pessoa_fisica', gender: l.gender ?? 'Não informado', nationality: l.nationality ?? 'brasileira',
+      marital_status: l.marital_status ?? 'Não informado', profession: l.profession ?? '',
+      rg_number: l.rg_number ?? '', rg_issuer: l.rg_issuer ?? '', cep: l.cep ?? '', street: l.street ?? '',
+      address_number: l.address_number ?? '', complement: l.complement ?? '', neighborhood: l.neighborhood ?? '',
+      city: l.city ?? '', state: l.state ?? '',
+      rep_name: l.rep_name ?? '', rep_cpf: l.rep_cpf ?? '', rep_role: l.rep_role ?? '',
+      rep_document_type: l.rep_document_type ?? 'Contrato Social', rep_address: l.rep_address ?? '',
     })
     setEditingLead(l)
     setLeadDialogOpen(true)
@@ -1222,6 +1312,13 @@ export default function Clientes() {
         next_followup: lf.next_followup || null,
         drive_folder_id: lf.drive_folder_id || null, drive_url: lf.drive_url || null,
         referred_by: lf.referred_by || null, referral_fee_pct: lf.referral_fee_pct ? parseFloat(lf.referral_fee_pct) : null, first_contact_at: lf.first_contact_at || null,
+        type: lf.type || null, gender: lf.gender || null, nationality: lf.nationality || null,
+        marital_status: lf.marital_status || null, profession: lf.profession || null,
+        rg_number: lf.rg_number || null, rg_issuer: lf.rg_issuer || null,
+        cep: lf.cep || null, street: lf.street || null, address_number: lf.address_number || null,
+        complement: lf.complement || null, neighborhood: lf.neighborhood || null, city: lf.city || null, state: lf.state || null,
+        rep_name: lf.rep_name || null, rep_cpf: lf.rep_cpf || null, rep_role: lf.rep_role || null,
+        rep_document_type: lf.rep_document_type || null, rep_address: lf.rep_address || null,
       }
       if (editingLead) {
         await supabase.from('leads').update(payload).eq('id', editingLead.id)
@@ -1282,6 +1379,14 @@ export default function Clientes() {
       cpf_cnpj: lead.cpf_cnpj, status: 'ativo', responsible: lead.responsible,
       responsible_ids: lead.responsible_ids,
       notes: lead.notes, drive_folder_id: finalFolderId, drive_url: finalDriveUrl,
+      // Dados de qualificação já preenchidos em fase de lead não podem se perder na conversão.
+      type: lead.type || 'pessoa_fisica', gender: lead.gender, nationality: lead.nationality,
+      marital_status: lead.marital_status, profession: lead.profession,
+      rg_number: lead.rg_number, rg_issuer: lead.rg_issuer,
+      cep: lead.cep, street: lead.street, address_number: lead.address_number,
+      complement: lead.complement, neighborhood: lead.neighborhood, city: lead.city, state: lead.state,
+      rep_name: lead.rep_name, rep_cpf: lead.rep_cpf, rep_role: lead.rep_role,
+      rep_document_type: lead.rep_document_type, rep_address: lead.rep_address,
     }).select('id').single()
 
     // Vincula o lead ao cliente criado, mas mantém o status/etapa do kanban
@@ -1814,6 +1919,128 @@ export default function Clientes() {
               {lf.drive_folder_id && (
                 <div className="rounded-xl border border-border/60 p-3 mt-2">
                   <DriveFileList folderId={lf.drive_folder_id} />
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-border/60">
+              <button
+                type="button"
+                onClick={() => setLfQualOpen(o => !o)}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium"
+              >
+                <span>Dados para qualificação (opcional)</span>
+                {lfQualOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+              {lfQualOpen && (
+                <div className="px-4 pb-4 space-y-4 border-t pt-4">
+                  <p className="text-xs text-muted-foreground -mt-2">
+                    Preenchendo esses dados já dá pra gerar a qualificação jurídica mesmo antes de converter o lead em cliente. Se converter depois, esses dados vão junto.
+                  </p>
+                  <div className="space-y-2">
+                    <Label>Tipo</Label>
+                    <Select value={lf.type} onValueChange={v => setLf(f => ({ ...f, type: v }))}>
+                      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pessoa_fisica">Pessoa Física</SelectItem>
+                        <SelectItem value="pessoa_juridica">Pessoa Jurídica</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {lf.type === 'pessoa_fisica' ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Gênero</Label>
+                        <Select value={lf.gender} onValueChange={v => setLf(f => ({ ...f, gender: v }))}>
+                          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                          <SelectContent>{GENDERS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Estado Civil</Label>
+                        <Select value={lf.marital_status} onValueChange={v => setLf(f => ({ ...f, marital_status: v }))}>
+                          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                          <SelectContent>{MARITAL_STATUSES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Nacionalidade</Label>
+                        <Input value={lf.nationality} onChange={e => setLf(f => ({ ...f, nationality: e.target.value }))} className="h-10" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Profissão</Label>
+                        <Input value={lf.profession} onChange={e => setLf(f => ({ ...f, profession: e.target.value }))} className="h-10" />
+                      </div>
+                      <div className="space-y-2 col-span-2">
+                        <Label>RG</Label>
+                        <div className="flex gap-2">
+                          <Input value={lf.rg_number} onChange={e => setLf(f => ({ ...f, rg_number: e.target.value }))} placeholder="Número" className="h-10 flex-1" />
+                          <Input value={lf.rg_issuer} onChange={e => setLf(f => ({ ...f, rg_issuer: e.target.value }))} placeholder="Órgão emissor" className="h-10 flex-1" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2 col-span-2">
+                        <Label>Nome do representante legal</Label>
+                        <Input value={lf.rep_name} onChange={e => setLf(f => ({ ...f, rep_name: e.target.value }))} className="h-10" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Cargo do representante</Label>
+                        <Select value={lf.rep_role} onValueChange={v => setLf(f => ({ ...f, rep_role: v }))}>
+                          <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                          <SelectContent>{REP_ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Documento societário</Label>
+                        <Select value={lf.rep_document_type} onValueChange={v => setLf(f => ({ ...f, rep_document_type: v }))}>
+                          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                          <SelectContent>{REP_DOCUMENT_TYPES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>CPF do representante</Label>
+                        <Input value={lf.rep_cpf} onChange={e => setLf(f => ({ ...f, rep_cpf: e.target.value }))} className="h-10" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Nacionalidade (repr.)</Label>
+                        <Input value={lf.nationality} onChange={e => setLf(f => ({ ...f, nationality: e.target.value }))} className="h-10" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Estado Civil (repr.)</Label>
+                        <Select value={lf.marital_status} onValueChange={v => setLf(f => ({ ...f, marital_status: v }))}>
+                          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                          <SelectContent>{MARITAL_STATUSES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Profissão (repr.)</Label>
+                        <Input value={lf.profession} onChange={e => setLf(f => ({ ...f, profession: e.target.value }))} className="h-10" />
+                      </div>
+                      <div className="space-y-2 col-span-2">
+                        <Label>Endereço do representante</Label>
+                        <Input value={lf.rep_address} onChange={e => setLf(f => ({ ...f, rep_address: e.target.value }))} className="h-10" placeholder="Endereço completo em texto livre" />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label>{lf.type === 'pessoa_juridica' ? 'Endereço da sede' : 'Endereço'}</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input value={lf.cep} onChange={e => setLf(f => ({ ...f, cep: e.target.value }))} placeholder="CEP" className="h-10" />
+                      <Input value={lf.street} onChange={e => setLf(f => ({ ...f, street: e.target.value }))} placeholder="Rua" className="h-10 col-span-2" />
+                      <Input value={lf.address_number} onChange={e => setLf(f => ({ ...f, address_number: e.target.value }))} placeholder="Número" className="h-10" />
+                      <Input value={lf.complement} onChange={e => setLf(f => ({ ...f, complement: e.target.value }))} placeholder="Complemento" className="h-10" />
+                      <Input value={lf.neighborhood} onChange={e => setLf(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" className="h-10" />
+                      <Input value={lf.city} onChange={e => setLf(f => ({ ...f, city: e.target.value }))} placeholder="Cidade" className="h-10 col-span-2" />
+                      <Select value={lf.state} onValueChange={v => setLf(f => ({ ...f, state: v }))}>
+                        <SelectTrigger className="h-10"><SelectValue placeholder="UF" /></SelectTrigger>
+                        <SelectContent>{STATES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

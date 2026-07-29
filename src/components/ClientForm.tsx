@@ -145,11 +145,11 @@ export const emptyClientForm: ClientFormData = {
   rep_name: '', rep_cpf: '', rep_role: '', rep_document_type: 'Contrato Social', rep_address: '',
 }
 
-const GENDERS = ['Masculino', 'Feminino', 'Outro', 'Não informado']
-const MARITAL_STATUSES = ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável', 'Não informado']
-const REP_ROLES = ['Sócio-Administrador', 'Diretor', 'Procurador']
-const REP_DOCUMENT_TYPES = ['Contrato Social', 'Estatuto Social']
-const STATES = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
+export const GENDERS = ['Masculino', 'Feminino', 'Outro', 'Não informado']
+export const MARITAL_STATUSES = ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável', 'Não informado']
+export const REP_ROLES = ['Sócio-Administrador', 'Diretor', 'Procurador']
+export const REP_DOCUMENT_TYPES = ['Contrato Social', 'Estatuto Social']
+export const STATES = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
 const ORIGINS = ['Indicação', 'Google', 'Instagram', 'WhatsApp', 'Site', 'Evento', 'Outro']
 
 interface ClientFormDialogProps {

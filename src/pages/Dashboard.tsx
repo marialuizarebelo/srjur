@@ -26,8 +26,9 @@ import { ClientFormDialog, emptyClientForm, type ClientFormData } from '@/compon
 import {
   Users, Scale, ClipboardList, AlertTriangle, ChevronRight,
   DollarSign, Bell,
-  Clock, Plus, ArrowRight, Loader2,
+  Clock, Plus, ArrowRight, Loader2, KeyRound,
 } from 'lucide-react'
+import { generateTOTP, secondsRemaining } from '@/lib/totp'
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer } from 'recharts'
 
 /* ---------- QuickView Modal ---------- */
@@ -330,6 +331,71 @@ function PortalActivityCard() {
             </div>
           )
         })}
+      </div>
+    </Card>
+  )
+}
+
+/* ---------- AuthenticatorWidget ---------- */
+
+interface AuthSystem { id: string; name: string; totp_secret: string | null; color: string | null }
+
+function AuthenticatorCode({ secret }: { secret: string }) {
+  const [code, setCode] = useState('------')
+  const [seconds, setSeconds] = useState(30)
+
+  useEffect(() => {
+    let active = true
+    async function tick() {
+      const c = await generateTOTP(secret)
+      if (active) { setCode(c); setSeconds(secondsRemaining()) }
+    }
+    tick()
+    const interval = setInterval(tick, 1000)
+    return () => { active = false; clearInterval(interval) }
+  }, [secret])
+
+  return (
+    <span className={`text-sm font-mono font-bold tracking-widest ${seconds <= 5 ? 'text-red-500' : ''}`}>
+      {code.slice(0, 3)} {code.slice(3)}
+    </span>
+  )
+}
+
+function AuthenticatorWidget() {
+  const [systems, setSystems] = useState<AuthSystem[]>([])
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('electronic_systems').select('id, name, totp_secret, color').not('totp_secret', 'is', null).order('name')
+      setSystems((data as AuthSystem[]) ?? [])
+    })()
+  }, [])
+
+  if (systems.length === 0) return null
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <KeyRound className="h-4 w-4 text-primary" />
+        <span className="font-semibold text-sm">Códigos Authenticator</span>
+      </div>
+      <div className="space-y-1.5">
+        {systems.map(s => (
+          <button
+            key={s.id}
+            onClick={async () => {
+              const code = await generateTOTP(s.totp_secret!)
+              navigator.clipboard.writeText(code)
+              toast.success('Código copiado!')
+            }}
+            className="w-full flex items-center justify-between text-left rounded-lg px-2.5 py-2 hover:bg-muted/50 transition-colors"
+            title="Copiar código"
+          >
+            <span className="text-xs font-medium truncate" style={{ color: s.color ?? undefined }}>{s.name}</span>
+            <AuthenticatorCode secret={s.totp_secret!} />
+          </button>
+        ))}
       </div>
     </Card>
   )
@@ -1057,6 +1123,7 @@ export default function Dashboard() {
         {/* Right sidebar */}
         <div className="space-y-4 hidden xl:block">
           <PortalActivityCard />
+          <AuthenticatorWidget />
 
           <Card className="p-4">
             <div className="flex items-center justify-between gap-2 mb-3">
