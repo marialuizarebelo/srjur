@@ -284,6 +284,19 @@ export default function Tarefas() {
     }
   }, [])
 
+  // Abre a tarefa específica quando vem de um link direto (ex: lista de
+  // "Tarefas Vinculadas" na ficha do cliente).
+  useEffect(() => {
+    if (loading) return
+    const params = new URLSearchParams(window.location.search)
+    const openId = params.get('open')
+    if (openId) {
+      const task = tasks.find(t => t.id === openId)
+      if (task) setViewTask(task)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [loading])
+
   // ── Filtered ──
   const filtered = useMemo(() => {
     return tasks
