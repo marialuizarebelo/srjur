@@ -358,7 +358,15 @@ export default function Configuracoes() {
               value={officeForm.default_lead_responsible_id || 'none'}
               onValueChange={v => setOfficeForm(f => ({ ...f, default_lead_responsible_id: v === 'none' ? '' : v }))}
             >
-              <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Selecione">
+                  {officeForm.default_lead_responsible_id
+                    ? (users.find(u => u.id === officeForm.default_lead_responsible_id)?.nickname
+                        || users.find(u => u.id === officeForm.default_lead_responsible_id)?.display_name
+                        || 'Selecione')
+                    : 'Nenhum'}
+                </SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Nenhum</SelectItem>
                 {users.map(u => <SelectItem key={u.id} value={u.id}>{u.nickname || u.display_name}</SelectItem>)}
