@@ -404,6 +404,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
   const [qualification, setQualification] = useState<string | null>(null)
   const [activityExtras, setActivityExtras] = useState<ExternalEntry[]>([])
   const profilesMap = useProfilesMap()
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (!client || !open) return
@@ -668,7 +669,11 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
               </p>
               <div className="space-y-1.5">
                 {detail!.processes!.map(p => (
-                  <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 min-w-0">
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 min-w-0 cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => { onClose(); navigate(`/processos?open=${p.id}`) }}
+                  >
                     <p className="text-sm truncate flex-1 min-w-0">
                       {p.title}{p.number ? ` (${p.number})` : ''}
                     </p>
@@ -690,7 +695,11 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
               </p>
               <div className="space-y-1.5">
                 {detail!.tasks!.map(t => (
-                  <div key={t.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                  <div
+                    key={t.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => { onClose(); navigate(`/tarefas?open=${t.id}`) }}
+                  >
                     <p className="text-sm truncate flex-1">{t.title}</p>
                     <div className="flex gap-1 shrink-0">
                       {t.priority && <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${PRIORITY_COLORS[t.priority] ?? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>{t.priority.toUpperCase()}</span>}

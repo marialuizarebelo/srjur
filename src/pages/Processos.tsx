@@ -376,6 +376,19 @@ export default function Processos() {
     }
   }, [])
 
+  // Abre o detalhe de um processo específico quando vem de um link direto
+  // (ex: lista de "Processos Vinculados" na ficha do cliente).
+  useEffect(() => {
+    if (loading) return
+    const params = new URLSearchParams(window.location.search)
+    const openId = params.get('open')
+    if (openId) {
+      const proc = processes.find(p => p.id === openId)
+      if (proc) openDetail(proc)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [loading])
+
   // ── Filtered ──
   const filtered = useMemo(() => {
     return processes
