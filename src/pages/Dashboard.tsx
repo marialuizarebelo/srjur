@@ -550,7 +550,7 @@ export default function Dashboard() {
     try {
       const { error } = await supabase.from('processes').insert({
         title: processForm.title, client_id: processForm.client_id || null,
-        type: 'judicial', status: 'em_andamento', phase: 'inicial',
+        type: 'consultivo', status: 'em_andamento', phase: 'inicial',
         responsible_ids: processForm.responsible_ids, responsible: responsibleNames(processForm.responsible_ids),
         portal_visible: false, updated_at: new Date().toISOString(),
       })
