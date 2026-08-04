@@ -39,6 +39,7 @@ interface Deadline {
   client_id: string | null
   title: string
   tipo: string | null
+  start_date: string | null
   due_date: string
   status: string
   responsible: string | null
@@ -140,6 +141,12 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
 
         <div className="px-6 py-4 space-y-4">
           <div className="grid grid-cols-2 gap-3 text-sm">
+            {deadline.start_date && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Início</p>
+                <p className="font-medium">{fmtDate(deadline.start_date)}</p>
+              </div>
+            )}
             <div>
               <p className="text-[11px] text-muted-foreground">Data limite</p>
               <p className="font-medium">{fmtDate(deadline.due_date)}</p>
@@ -251,13 +258,13 @@ export default function Prazos() {
   const profilesMap = useProfilesMap()
 
   const [df, setDf] = useState({
-    title: '', tipo: '', due_date: '', client_id: '', process_id: '', status: 'pendente',
+    title: '', tipo: '', start_date: '', due_date: '', client_id: '', process_id: '', status: 'pendente',
     responsible_ids: [] as string[], notes: '', source: 'Manual', portal_visible: false, stage_id: '', drive_url: '',
     _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '',
   })
 
   const resetDf = () => {
-    setDf({ title: '', tipo: '', due_date: '', client_id: '', process_id: '', status: 'pendente',
+    setDf({ title: '', tipo: '', start_date: '', due_date: '', client_id: '', process_id: '', status: 'pendente',
       responsible_ids: [], notes: '', source: 'Manual', portal_visible: false, stage_id: '', drive_url: '',
       _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '' })
     setEditing(null)
@@ -348,7 +355,7 @@ export default function Prazos() {
   const openEdit = (d: Deadline) => {
     const linkedProcess = processes.find(p => p.id === d.process_id)
     setDf({
-      title: d.title, tipo: d.tipo ?? '', due_date: d.due_date,
+      title: d.title, tipo: d.tipo ?? '', start_date: d.start_date ?? '', due_date: d.due_date,
       client_id: d.client_id ?? linkedProcess?.client_id ?? '',
       process_id: d.process_id ?? '',
       status: d.status, responsible_ids: d.responsible_ids ?? [], notes: d.notes ?? '',
@@ -364,7 +371,7 @@ export default function Prazos() {
     setSaving(true)
     try {
       const payload = {
-        title: df.title, tipo: df.tipo || null, due_date: df.due_date,
+        title: df.title, tipo: df.tipo || null, start_date: df.start_date || null, due_date: df.due_date,
         client_id: df.client_id || null, process_id: df.process_id || null,
         status: df.status, notes: df.notes || null,
         responsible_ids: df.responsible_ids,
@@ -905,9 +912,15 @@ export default function Prazos() {
                 <TipoPrazoCombobox value={df.tipo} onChange={v => setDf(f => ({ ...f, tipo: v }))} />
               </div>
               <div className="space-y-1.5 min-w-0">
-                <Label>Data limite</Label>
+                <Label>Data limite (prazo fatal)</Label>
                 <Input type="date" value={df.due_date} onChange={e => setDf(f => ({ ...f, due_date: e.target.value }))} className="h-10" />
               </div>
+            </div>
+
+            <div className="space-y-1.5 min-w-0">
+              <Label>Data de início</Label>
+              <Input type="date" value={df.start_date} onChange={e => setDf(f => ({ ...f, start_date: e.target.value }))} className="h-10" />
+              <p className="text-[11px] text-muted-foreground">Opcional — a partir de quando o prazo deve começar a aparecer para o responsável. O calendário sempre mostra pela data limite.</p>
             </div>
 
             <div className="space-y-1.5 min-w-0">

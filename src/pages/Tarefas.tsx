@@ -38,6 +38,7 @@ interface Task {
   type: string
   status: string
   priority: string
+  start_date: string | null
   due_date: string | null
   due_time: string | null
   responsible: string | null
@@ -139,9 +140,15 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
           )}
 
           <div className="grid grid-cols-2 gap-3 text-sm">
+            {task.start_date && (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Início</p>
+                <p className="font-medium">{fmtDate(task.start_date)}</p>
+              </div>
+            )}
             {task.due_date && (
               <div>
-                <p className="text-[11px] text-muted-foreground">Data</p>
+                <p className="text-[11px] text-muted-foreground">Data limite</p>
                 <p className="font-medium">{fmtDate(task.due_date)}{task.due_time ? ` às ${task.due_time}` : ''}</p>
               </div>
             )}
@@ -240,7 +247,7 @@ export default function Tarefas() {
   // Form
   const [tf, setTf] = useState({
     title: '', description: '', type: 'tarefa', status: 'pendente',
-    priority: 'media', due_date: '', due_time: '', responsible_ids: [] as string[],
+    priority: 'media', start_date: '', due_date: '', due_time: '', responsible_ids: [] as string[],
     client_id: '', process_id: '', recurrence: 'Única', portal_visible: false,
     workflow_stage: 'a_fazer',
     _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '',
@@ -248,7 +255,7 @@ export default function Tarefas() {
 
   const resetTf = () => {
     setTf({ title: '', description: '', type: 'tarefa', status: 'pendente',
-      priority: 'media', due_date: '', due_time: '', responsible_ids: [],
+      priority: 'media', start_date: '', due_date: '', due_time: '', responsible_ids: [],
       client_id: '', process_id: '', recurrence: 'Única', portal_visible: false,
       workflow_stage: 'a_fazer',
       _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '' })
@@ -354,7 +361,7 @@ export default function Tarefas() {
   const openEdit = (t: Task) => {
     setTf({
       title: t.title, description: t.description ?? '', type: t.type,
-      status: t.status, priority: t.priority, due_date: t.due_date ?? '',
+      status: t.status, priority: t.priority, start_date: t.start_date ?? '', due_date: t.due_date ?? '',
       due_time: t.due_time ?? '', responsible_ids: t.responsible_ids ?? [],
       client_id: t.client_id ?? '', process_id: t.process_id ?? '',
       recurrence: t.recurrence ?? 'Única', portal_visible: t.portal_visible,
@@ -371,7 +378,7 @@ export default function Tarefas() {
       const names = tf.responsible_ids.map(id => profilesMap[id]?.display_name).filter(Boolean)
       const payload = {
         title: tf.title, description: tf.description || null, type: tf.type,
-        status: tf.status, priority: tf.priority, due_date: tf.due_date || null,
+        status: tf.status, priority: tf.priority, start_date: tf.start_date || null, due_date: tf.due_date || null,
         due_time: tf.due_time || null,
         responsible_ids: tf.responsible_ids,
         responsible: names.length > 1 ? 'Ambas' : (names[0] ?? null), // legado, mantido para telas antigas
@@ -769,9 +776,14 @@ export default function Tarefas() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Data</Label>
+                <Label>Data de início</Label>
+                <Input type="date" value={tf.start_date} onChange={e => setTf(f => ({ ...f, start_date: e.target.value }))} className="h-10" />
+                <p className="text-[11px] text-muted-foreground">Opcional — a partir de quando a tarefa deve começar a aparecer para o responsável.</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Data limite (prazo fatal)</Label>
                 <Input type="date" value={tf.due_date} onChange={e => setTf(f => ({ ...f, due_date: e.target.value }))} className="h-10" />
               </div>
               <div className="space-y-2">
