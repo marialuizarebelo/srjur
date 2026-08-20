@@ -214,6 +214,11 @@ function LeadCard({ lead, onClick, onStatusChange, stages }: {
       {lead.potential_value ? (
         <p className="text-xs font-medium text-green-600 mt-1">{fmtBRL(lead.potential_value)}</p>
       ) : null}
+      {lead.first_contact_at && (
+        <p className="text-[10px] text-muted-foreground mt-1">
+          1º contato: {new Date(lead.first_contact_at + 'T00:00').toLocaleDateString('pt-BR')}
+        </p>
+      )}
       {lead.next_followup && (
         <p className="text-[10px] text-muted-foreground mt-1">
           Follow-up: {new Date(lead.next_followup + 'T00:00').toLocaleDateString('pt-BR')}
