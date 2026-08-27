@@ -25,6 +25,7 @@ import Processos from '@/pages/Processos'
 import Tarefas from '@/pages/Tarefas'
 import Prazos from '@/pages/Prazos'
 import Financeiro from '@/pages/Financeiro'
+import SolicitacoesFinanceiras from '@/pages/SolicitacoesFinanceiras'
 import Calendario from '@/pages/Calendario'
 import Comunicacoes from '@/pages/Comunicacoes'
 import Calculadora from '@/pages/Calculadora'
@@ -79,6 +80,7 @@ function AdminRoutes() {
         <Route path="/prazos" element={<ModuleGuard url="/prazos"><Prazos /></ModuleGuard>} />
         <Route path="/calendario" element={<ModuleGuard url="/calendario"><Calendario /></ModuleGuard>} />
         <Route path="/financeiro" element={<ModuleGuard url="/financeiro"><Financeiro /></ModuleGuard>} />
+        <Route path="/solicitacoes-financeiras" element={<ModuleGuard url="/solicitacoes-financeiras"><SolicitacoesFinanceiras /></ModuleGuard>} />
         <Route path="/calculadora" element={<ModuleGuard url="/calculadora"><Calculadora /></ModuleGuard>} />
         <Route path="/marketing" element={<ModuleGuard url="/marketing"><Marketing /></ModuleGuard>} />
         <Route path="/comunicacoes" element={<ModuleGuard url="/comunicacoes"><Comunicacoes /></ModuleGuard>} />
