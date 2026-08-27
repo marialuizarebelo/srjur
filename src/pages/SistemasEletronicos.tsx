@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { searchDjen, stripHtml, type DjenItem } from '@/lib/djen'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -76,6 +77,7 @@ function IntimacaoTexto({ texto }: { texto: string | null }) {
 }
 
 export default function SistemasEletronicos() {
+  const { profile } = useAuth()
   const navigate = useNavigate()
   const [configs, setConfigs] = useState<OabConfig[]>([])
   const [intimacoes, setIntimacoes] = useState<Intimacao[]>([])
@@ -126,7 +128,7 @@ export default function SistemasEletronicos() {
   async function addConfig() {
     if (!newNome.trim() || !newOab.trim()) return
     if (configs.length >= 3) { toast.error('Limite de 3 OABs monitoradas atingido'); return }
-    await supabase.from('oab_config').insert({ nome: newNome, numero_oab: newOab.replace(/\D/g,''), uf_oab: newUf })
+    await supabase.from('oab_config').insert({ nome: newNome, numero_oab: newOab.replace(/\D/g,''), uf_oab: newUf, created_by: profile?.id ?? null })
     setNewNome(''); setNewOab(''); setNewUf('RS')
     loadData()
   }

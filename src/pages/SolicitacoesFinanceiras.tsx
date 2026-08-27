@@ -12,13 +12,14 @@ import {
 } from '@/components/ui/select'
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
-import { Send, Receipt, Clock, CheckCircle2, XCircle, Check, X } from 'lucide-react'
+import { Send, Receipt, Clock, CheckCircle2, XCircle, Check, X, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { fmtBRL, fmtDate } from '@/lib/format'
 
 const CATEGORIES_RECEITA = ['Honorários Iniciais', 'Mensalidade', 'Acordo', 'Consultoria', 'Êxito', 'Outros']
 const CATEGORIES_DESPESA = ['Operacional', 'Pessoal', 'Pró-labore/Salário', 'Impostos', 'Software', 'Marketing', 'Aluguel', 'Outros']
 const PAYMENT_METHODS = ['PIX/Transferência', 'Boleto', 'Cartão de Crédito', 'Cartão de Débito', 'Dinheiro']
+const PARTNERSHIP_CATEGORY = 'Parceria'
 
 interface ClientOption { id: string; name: string }
 
@@ -36,6 +37,15 @@ interface FinanceRequest {
   created_by: string | null
   reviewed_at: string | null
   created_at: string
+  giovanna_pct: number | null
+}
+
+interface FinanceRow {
+  id: string
+  type: string
+  value: number
+  paid: boolean
+  due_date: string | null
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = {
@@ -49,23 +59,26 @@ export default function SolicitacoesFinanceiras() {
   const profilesMap = useProfilesMap()
   const [clients, setClients] = useState<ClientOption[]>([])
   const [requests, setRequests] = useState<FinanceRequest[]>([])
+  const [partnershipFinance, setPartnershipFinance] = useState<FinanceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const isReviewer = !profile?.restricted_to_responsible
 
   const [form, setForm] = useState({
     type: 'receita', category: '', description: '', value: '', client_id: '',
-    due_date: '', payment_method: '', notes: '',
+    due_date: '', payment_method: '', notes: '', giovanna_pct: '50',
   })
 
   const loadData = async () => {
     setLoading(true)
-    const [{ data: c }, { data: r }] = await Promise.all([
+    const [{ data: c }, { data: r }, { data: pf }] = await Promise.all([
       supabase.from('clients').select('id, name').order('name'),
       supabase.from('finance_requests').select('*').order('created_at', { ascending: false }),
+      supabase.from('finance').select('id, type, value, paid, due_date').eq('category', PARTNERSHIP_CATEGORY),
     ])
     setClients((c as ClientOption[]) ?? [])
     setRequests((r as FinanceRequest[]) ?? [])
+    setPartnershipFinance((pf as FinanceRow[]) ?? [])
     setLoading(false)
   }
 
@@ -73,13 +86,15 @@ export default function SolicitacoesFinanceiras() {
 
   const resetForm = () => setForm({
     type: 'receita', category: '', description: '', value: '', client_id: '',
-    due_date: '', payment_method: '', notes: '',
+    due_date: '', payment_method: '', notes: '', giovanna_pct: '50',
   })
 
   const submit = async () => {
     if (!form.description.trim()) { toast.error('Preencha a descrição'); return }
     const value = parseFloat(form.value.replace(',', '.'))
     if (!value || value <= 0) { toast.error('Preencha um valor válido'); return }
+    const pct = parseFloat(form.giovanna_pct.replace(',', '.'))
+    if (isNaN(pct) || pct < 0 || pct > 100) { toast.error('A % da Giovanna precisa estar entre 0 e 100'); return }
     if (saving) return
     setSaving(true)
     try {
@@ -87,7 +102,7 @@ export default function SolicitacoesFinanceiras() {
         type: form.type, category: form.category || null, description: form.description,
         value, client_id: form.client_id || null, due_date: form.due_date || null,
         payment_method: form.payment_method || null, notes: form.notes || null,
-        created_by: profile?.id ?? null,
+        giovanna_pct: pct, created_by: profile?.id ?? null,
       })
       if (error) { toast.error('Erro ao enviar: ' + error.message); return }
       toast.success('Solicitação enviada — a Luiza vai revisar e lançar no financeiro')
@@ -99,12 +114,16 @@ export default function SolicitacoesFinanceiras() {
   }
 
   const approve = async (r: FinanceRequest) => {
-    if (!confirm(`Aprovar "${r.description}" e lançar no financeiro?`)) return
+    const pct = r.giovanna_pct ?? 50
+    const luizaShare = r.value * (100 - pct) / 100
+    const giovannaShare = r.value * pct / 100
+    if (!confirm(`Aprovar "${r.description}"?\n\nValor total: ${fmtBRL(r.value)}\nParte da Luiza (${100 - pct}%): ${fmtBRL(luizaShare)}\nParte da Giovanna (${pct}%): ${fmtBRL(giovannaShare)}\n\nSerá lançado no Financeiro apenas o valor da Luiza, na categoria "Parceria".`)) return
     const requester = r.created_by ? profilesMap[r.created_by]?.display_name : null
+    const splitNote = `Solicitação de ${requester ?? 'parceria'} — valor total ${fmtBRL(r.value)}, dividido ${100 - pct}% Luiza / ${pct}% Giovanna. Este lançamento reflete só a parte da Luiza (${fmtBRL(luizaShare)}).`
     const { data: financeRow, error: financeError } = await supabase.from('finance').insert({
-      type: r.type, category: r.category, description: r.description, value: r.value,
+      type: r.type, category: PARTNERSHIP_CATEGORY, description: r.description, value: luizaShare,
       client_id: r.client_id, due_date: r.due_date, date: new Date().toISOString().slice(0, 10),
-      payment_method: r.payment_method, notes: r.notes,
+      payment_method: r.payment_method, notes: [r.notes, splitNote].filter(Boolean).join('\n\n'),
       responsible: requester ? `Solicitado por ${requester}` : null,
       created_by: profile?.id ?? null,
     }).select('id').single()
@@ -147,6 +166,7 @@ export default function SolicitacoesFinanceiras() {
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               {r.type === 'receita' ? 'Receita' : 'Despesa'}{r.category ? ` · ${r.category}` : ''}{client ? ` · ${client.name}` : ''}{r.due_date ? ` · vence ${fmtDate(r.due_date)}` : ''}
+              {r.giovanna_pct != null && ` · Giovanna ${r.giovanna_pct}% / Luiza ${100 - r.giovanna_pct}%`}
             </p>
             {r.notes && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{r.notes}</p>}
           </div>
@@ -239,10 +259,56 @@ export default function SolicitacoesFinanceiras() {
             <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} placeholder="Qualquer detalhe que ajude a Luiza a conferir e lançar certo" />
           </div>
 
+          <div className="space-y-2 rounded-lg border p-3 bg-muted/30">
+            <Label>Divisão da parceria — % que é sua (Giovanna)</Label>
+            <div className="flex items-center gap-3">
+              <Input
+                type="number" min="0" max="100" value={form.giovanna_pct}
+                onChange={e => setForm(f => ({ ...f, giovanna_pct: e.target.value }))}
+                className="h-10 w-24"
+              />
+              <span className="text-xs text-muted-foreground">
+                Giovanna {form.giovanna_pct || 0}% · Luiza {100 - (parseFloat(form.giovanna_pct) || 0)}%
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Isso vai pra categoria "Parceria" no financeiro, já com o valor calculado só na parte da Luiza.</p>
+          </div>
+
           <Button className="w-full" onClick={submit} disabled={saving}>
             <Send className="h-4 w-4 mr-2" />{saving ? 'Enviando...' : 'Enviar solicitação'}
           </Button>
         </Card>
+      )}
+
+      {!isReviewer && (
+        <div>
+          <h2 className="font-semibold text-sm mb-3 flex items-center gap-2"><Wallet className="h-4 w-4" />Resumo da parceria</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {(() => {
+              const receitas = partnershipFinance.filter(f => f.type === 'receita')
+              const despesas = partnershipFinance.filter(f => f.type === 'despesa')
+              const recebido = receitas.filter(f => f.paid).reduce((s, f) => s + f.value, 0)
+              const aReceber = receitas.filter(f => !f.paid).reduce((s, f) => s + f.value, 0)
+              const pago = despesas.filter(f => f.paid).reduce((s, f) => s + f.value, 0)
+              const saldo = recebido - pago
+              const cards = [
+                { label: 'Recebido', value: recebido, color: '#10B981' },
+                { label: 'A receber', value: aReceber, color: '#F59E0B' },
+                { label: 'Pago', value: pago, color: '#EF4444' },
+                { label: 'Saldo', value: saldo, color: saldo >= 0 ? '#10B981' : '#EF4444' },
+              ]
+              return cards.map(c => (
+                <Card key={c.label} className="p-3">
+                  <p className="text-[11px] text-muted-foreground">{c.label}</p>
+                  <p className="text-base font-semibold" style={{ color: c.color }}>{fmtBRL(c.value)}</p>
+                </Card>
+              ))
+            })()}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-2">
+            Considera tudo que já entrou pela categoria "Parceria" — o que veio de solicitações aprovadas e o que a Luiza cadastrou direto nessa categoria.
+          </p>
+        </div>
       )}
 
       {isReviewer && (

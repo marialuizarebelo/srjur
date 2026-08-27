@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { generateTOTP, secondsRemaining } from '@/lib/totp'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -78,6 +79,7 @@ function TOTPDisplay({ secret }: { secret: string }) {
 }
 
 export default function Autenticador() {
+  const { profile } = useAuth()
   const [systems, setSystems] = useState<System[]>([])
   const [loading, setLoading] = useState(true)
   const [revealedPw, setRevealedPw] = useState<Record<string, boolean>>({})
@@ -114,7 +116,7 @@ export default function Autenticador() {
       totp_secret: form.totp_secret.replace(/\s/g, '') || null, notes: form.notes || null, color: form.color,
     }
     if (editing) await supabase.from('electronic_systems').update(payload).eq('id', editing.id)
-    else await supabase.from('electronic_systems').insert(payload)
+    else await supabase.from('electronic_systems').insert({ ...payload, created_by: profile?.id ?? null })
     setDialogOpen(false)
     load()
   }
