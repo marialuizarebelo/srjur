@@ -1264,7 +1264,7 @@ export default function Clientes() {
     setSaving(true)
     try {
     const payload = {
-      name: cf.name, email: cf.email || null, phone: cf.phone || null,
+      name: cf.name, email: cf.email ? cf.email.trim().toLowerCase() : null, phone: cf.phone || null,
       cpf_cnpj: cf.cpf_cnpj || null, type: cf.type,
       area: cf.areas_selected.length > 0 ? cf.areas_selected.join(', ') : null,
       status: cf.status,
@@ -1424,7 +1424,7 @@ export default function Clientes() {
 
     // Create client
     const { data: newClient } = await supabase.from('clients').insert({
-      name: lead.name, email: lead.email, phone: lead.phone,
+      name: lead.name, email: lead.email ? lead.email.trim().toLowerCase() : lead.email, phone: lead.phone,
       cpf_cnpj: lead.cpf_cnpj, status: 'ativo', responsible: lead.responsible,
       responsible_ids: lead.responsible_ids,
       notes: lead.notes, drive_folder_id: finalFolderId, drive_url: finalDriveUrl,
