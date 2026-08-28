@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client'
 import {
   LayoutDashboard, Users, Scale, ClipboardList, Calendar,
   DollarSign, Megaphone, MessageSquare, Calculator, KeyRound,
-  Inbox, Settings, LogOut, Bell, MonitorSmartphone, Receipt,
+  Inbox, Settings, LogOut, Bell, MonitorSmartphone, Receipt, HeartHandshake,
 } from 'lucide-react'
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -51,6 +51,7 @@ const sections = [
       { title: 'Financeiro', url: '/financeiro', icon: DollarSign },
       { title: 'Solicitações Financeiras', url: '/solicitacoes-financeiras', icon: Receipt },
       { title: 'Calculadora', url: '/calculadora', icon: Calculator },
+      { title: 'Calculadora de Alimentos', url: 'https://tabelaluizaborges.srjur.com/', icon: HeartHandshake, external: true },
       { title: 'Marketing', url: '/marketing', icon: Megaphone },
       { title: 'Portal do Cliente', url: '/portal-admin', icon: MonitorSmartphone },
       { title: 'Comunicações', url: '/comunicacoes', icon: MessageSquare },
@@ -124,7 +125,7 @@ export function AppSidebar() {
         {/* Nav */}
         <div className="flex-1 overflow-y-auto py-2">
           {sections.map(section => {
-            const visibleItems = section.items.filter(item => isModuleAllowed(item.url, profile?.allowed_modules))
+            const visibleItems = section.items.filter(item => (item as any).external || isModuleAllowed(item.url, profile?.allowed_modules))
             if (visibleItems.length === 0) return null
             return (
             <SidebarGroup key={section.label}>
@@ -134,14 +135,17 @@ export function AppSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {visibleItems.map(item => {
-                    const isActive = location.pathname === item.url ||
-                      (item.url !== '/' && location.pathname.startsWith(item.url))
+                    const isExternal = (item as any).external
+                    const isActive = !isExternal && (location.pathname === item.url ||
+                      (item.url !== '/' && location.pathname.startsWith(item.url)))
                     return (
                       <SidebarMenuItem key={item.url}>
                         <SidebarMenuButton
                           isActive={isActive}
                           className="text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] data-[active=true]:bg-[var(--sidebar-accent)] data-[active=true]:text-[var(--sidebar-accent-foreground)] data-[active=true]:font-semibold"
-                          render={<NavLink to={item.url} />}
+                          render={isExternal
+                            ? <a href={item.url} target="_blank" rel="noopener noreferrer" />
+                            : <NavLink to={item.url} />}
                         >
                           <item.icon className="h-4 w-4" />
                           {!collapsed && <span>{item.title}</span>}
