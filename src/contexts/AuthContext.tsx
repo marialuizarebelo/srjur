@@ -61,8 +61,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const newUserId = s?.user?.id ?? null
       if (newUserId !== currentUserId) {
         currentUserId = newUserId
+        // Limpa o perfil antes de buscar o novo — nunca deixa o role da sessão
+        // anterior "vazar" na tela enquanto o perfil da nova sessão carrega.
+        setProfile(null)
         if (s?.user) await fetchProfile(s.user.id)
-        else setProfile(null)
       }
     })
 
