@@ -1084,13 +1084,19 @@ export default function Clientes() {
   }
 
   const [driveRootFolderId, setDriveRootFolderId] = useState<string | null>(null)
+  const [drivePartnershipFolderId, setDrivePartnershipFolderId] = useState<string | null>(null)
   const [defaultLeadResponsibleId, setDefaultLeadResponsibleId] = useState<string | null>(null)
+
+  // Giovanna Pinheiro (parceria) — leads com ela como responsável nascem na
+  // pasta da parceria em vez da pasta raiz normal do escritório.
+  const GIOVANNA_PROFILE_ID = '35d0ffbd-5ce6-48fb-bfdc-26d92160e5b4'
 
   useEffect(() => { loadData() }, [])
   useEffect(() => {
-    supabase.from('office_settings').select('drive_root_folder_id, default_lead_responsible_id').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
+    supabase.from('office_settings').select('drive_root_folder_id, default_lead_responsible_id, drive_partnership_folder_id').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
       setDriveRootFolderId(data?.drive_root_folder_id ?? null)
       setDefaultLeadResponsibleId(data?.default_lead_responsible_id ?? null)
+      setDrivePartnershipFolderId(data?.drive_partnership_folder_id ?? null)
     })
   }, [])
 
@@ -2010,11 +2016,14 @@ export default function Clientes() {
 
             <div className="space-y-2">
               <Label>Pasta no Google Drive</Label>
+              {lf.responsible_ids.includes(GIOVANNA_PROFILE_ID) && drivePartnershipFolderId && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">Giovanna está nos responsáveis — a pasta nova vai nascer dentro da pasta da Parceria, não da raiz normal.</p>
+              )}
               <DriveFolderPicker
                 value={{ folder_id: lf.drive_folder_id, drive_url: lf.drive_url }}
                 onChange={f => setLf(prev => ({ ...prev, drive_folder_id: f.folder_id, drive_url: f.drive_url }))}
                 folderNameSuggestion={lf.name ? `${lf.name} - LEAD` : ''}
-                parentFolderId={driveRootFolderId}
+                parentFolderId={(lf.responsible_ids.includes(GIOVANNA_PROFILE_ID) && drivePartnershipFolderId) ? drivePartnershipFolderId : driveRootFolderId}
                 createColor={DRIVE_COLOR_RED}
               />
               {lf.drive_folder_id && (

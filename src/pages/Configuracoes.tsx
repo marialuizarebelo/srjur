@@ -107,7 +107,7 @@ export default function Configuracoes() {
 
   // Office
   const [office, setOffice] = useState<OfficeSettings | null>(null)
-  const [officeForm, setOfficeForm] = useState({ name: '', logo_url: '', whatsapp_url: '', drive_root_folder_id: '', drive_root_folder_name: '', primary_color: '', default_lead_responsible_id: '' })
+  const [officeForm, setOfficeForm] = useState({ name: '', logo_url: '', whatsapp_url: '', drive_root_folder_id: '', drive_root_folder_name: '', primary_color: '', default_lead_responsible_id: '', drive_partnership_folder_id: '', drive_partnership_folder_name: '' })
   const [savingOffice, setSavingOffice] = useState(false)
 
   // Users
@@ -151,6 +151,7 @@ export default function Configuracoes() {
       setOfficeForm({
         name: os.name ?? '', logo_url: os.logo_url ?? '', whatsapp_url: os.whatsapp_url ?? '',
         drive_root_folder_id: os.drive_root_folder_id ?? '', drive_root_folder_name: os.drive_root_folder_name ?? '',
+        drive_partnership_folder_id: os.drive_partnership_folder_id ?? '', drive_partnership_folder_name: os.drive_partnership_folder_name ?? '',
         primary_color: os.primary_color ?? '', default_lead_responsible_id: os.default_lead_responsible_id ?? '',
       })
     }
@@ -389,6 +390,21 @@ export default function Configuracoes() {
               value={{ folder_id: officeForm.drive_root_folder_id, drive_url: officeForm.drive_root_folder_id ? `https://drive.google.com/drive/folders/${officeForm.drive_root_folder_id}` : '' }}
               onChange={f => setOfficeForm(prev => ({ ...prev, drive_root_folder_id: f.folder_id, drive_root_folder_name: f.name ?? '' }))}
               folderNameSuggestion="02. CLIENTES"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Pasta raiz da Parceria (Giovanna)</Label>
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              Selecione a pasta específica da parceria com a Giovanna. Todo cliente/processo em que ela estiver marcada como responsável nasce dentro dessa pasta em vez da pasta raiz normal acima.
+            </p>
+            {officeForm.drive_partnership_folder_name && (
+              <p className="text-[11px] text-muted-foreground">Selecionada: <strong className="text-foreground">{officeForm.drive_partnership_folder_name}</strong></p>
+            )}
+            <DriveFolderPicker
+              value={{ folder_id: officeForm.drive_partnership_folder_id, drive_url: officeForm.drive_partnership_folder_id ? `https://drive.google.com/drive/folders/${officeForm.drive_partnership_folder_id}` : '' }}
+              onChange={f => setOfficeForm(prev => ({ ...prev, drive_partnership_folder_id: f.folder_id, drive_partnership_folder_name: f.name ?? '' }))}
+              folderNameSuggestion="Parceria Giovanna"
             />
           </div>
 

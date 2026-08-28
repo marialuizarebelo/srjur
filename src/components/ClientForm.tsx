@@ -181,13 +181,21 @@ export function ClientFormDialog({
 }: ClientFormDialogProps) {
   const [cepLoading, setCepLoading] = useState(false)
   const [driveRootFolderId, setDriveRootFolderId] = useState<string | null>(null)
+  const [drivePartnershipFolderId, setDrivePartnershipFolderId] = useState<string | null>(null)
   const [creatingAccess, setCreatingAccess] = useState(false)
   const [credentialsOpen, setCredentialsOpen] = useState(false)
   const [generatedPassword, setGeneratedPassword] = useState('')
 
+  // Giovanna Pinheiro (parceria) — clientes com ela como responsável nascem
+  // na pasta da parceria em vez da pasta raiz normal do escritório.
+  const GIOVANNA_PROFILE_ID = '35d0ffbd-5ce6-48fb-bfdc-26d92160e5b4'
+  const isPartnership = form.responsible_ids.includes(GIOVANNA_PROFILE_ID)
+  const effectiveParentFolderId = (isPartnership && drivePartnershipFolderId) ? drivePartnershipFolderId : driveRootFolderId
+
   useEffect(() => {
-    supabase.from('office_settings').select('drive_root_folder_id').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
+    supabase.from('office_settings').select('drive_root_folder_id, drive_partnership_folder_id').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
       setDriveRootFolderId(data?.drive_root_folder_id ?? null)
+      setDrivePartnershipFolderId(data?.drive_partnership_folder_id ?? null)
     })
   }, [])
 
@@ -568,11 +576,14 @@ export function ClientFormDialog({
 
             <div className="space-y-1.5">
               <Label>Pasta no Google Drive</Label>
+              {isPartnership && drivePartnershipFolderId && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">Giovanna está nos responsáveis — a pasta nova vai nascer dentro da pasta da Parceria, não da raiz normal.</p>
+              )}
               <DriveFolderPicker
                 value={{ folder_id: form.drive_folder_id, drive_url: form.drive_url }}
                 onChange={f => setForm(prev => ({ ...prev, drive_folder_id: f.folder_id, drive_url: f.drive_url }))}
                 folderNameSuggestion={form.name}
-                parentFolderId={driveRootFolderId}
+                parentFolderId={effectiveParentFolderId}
               />
               {form.drive_folder_id && (
                 <div className="rounded-xl border border-border/60 p-3 mt-2">
