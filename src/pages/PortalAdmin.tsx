@@ -146,12 +146,13 @@ function ManageAccessDialog({ client, open, onClose }: { client: ClientLite; ope
     try {
       // Garante que o e-mail do cadastro do cliente está sincronizado —
       // é por esse e-mail que o acesso do portal é vinculado ao cliente.
-      if (email.trim() !== client.email) {
-        await supabase.from('clients').update({ email: email.trim() }).eq('id', client.id)
+      const normalizedEmail = email.trim().toLowerCase()
+      if (normalizedEmail !== client.email) {
+        await supabase.from('clients').update({ email: normalizedEmail }).eq('id', client.id)
       }
       const { data: { session } } = await supabase.auth.getSession()
       const { data, error } = await supabase.functions.invoke('create-client-user', {
-        body: { email: email.trim(), password, display_name: client.name, client_id: client.id },
+        body: { email: normalizedEmail, password, display_name: client.name, client_id: client.id },
         headers: session ? { Authorization: `Bearer ${session.access_token}` } : undefined,
       })
       if (error || data?.error) throw new Error(data?.error ?? error?.message ?? 'Falha ao criar acesso')

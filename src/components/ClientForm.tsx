@@ -208,7 +208,7 @@ export function ClientFormDialog({
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-client-user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ email: form.email, password, display_name: form.name, client_id: clientId }),
+        body: JSON.stringify({ email: form.email.trim().toLowerCase(), password, display_name: form.name, client_id: clientId }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Erro desconhecido')
