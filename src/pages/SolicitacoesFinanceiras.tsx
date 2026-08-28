@@ -125,7 +125,6 @@ export default function SolicitacoesFinanceiras() {
       client_id: r.client_id, due_date: r.due_date, date: new Date().toISOString().slice(0, 10),
       payment_method: r.payment_method, notes: [r.notes, splitNote].filter(Boolean).join('\n\n'),
       responsible: requester ? `Solicitado por ${requester}` : null,
-      created_by: profile?.id ?? null,
     }).select('id').single()
     if (financeError) { toast.error('Erro ao lançar no financeiro: ' + financeError.message); return }
     const { error: updateError } = await supabase.from('finance_requests').update({
