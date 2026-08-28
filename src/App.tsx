@@ -111,22 +111,30 @@ function PortalRoutes() {
   )
 }
 
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="text-center">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-muted-foreground text-sm">Carregando...</p>
+      </div>
+    </div>
+  )
+}
+
 function ProtectedRoutes() {
   const { session, loading, role } = useAuth()
   const location = useLocation()
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-muted-foreground text-sm">Carregando...</p>
-        </div>
-      </div>
-    )
-  }
+  if (loading) return <LoadingScreen />
 
   if (!session) return <Navigate to="/login" replace />
+
+  // O perfil (e o role) é buscado de forma assíncrona logo após a sessão existir.
+  // Nesse intervalo `role` ainda é null — nunca podemos cair no ramo de admin
+  // nesse meio-tempo, ou uma cliente logando veria o painel administrativo
+  // por uma fração de segundo antes do role real resolver.
+  if (role === null) return <LoadingScreen />
 
   if (role === 'admin' && location.pathname.startsWith('/preview/')) return <PortalPreviewRoutes />
 
