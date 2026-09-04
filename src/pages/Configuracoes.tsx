@@ -107,7 +107,10 @@ export default function Configuracoes() {
 
   // Office
   const [office, setOffice] = useState<OfficeSettings | null>(null)
-  const [officeForm, setOfficeForm] = useState({ name: '', logo_url: '', whatsapp_url: '', drive_root_folder_id: '', drive_root_folder_name: '', primary_color: '', default_lead_responsible_id: '', drive_partnership_folder_id: '', drive_partnership_folder_name: '' })
+  const [officeForm, setOfficeForm] = useState({ name: '', logo_url: '', whatsapp_url: '', drive_root_folder_id: '', drive_root_folder_name: '', primary_color: '', default_lead_responsible_id: '' })
+  // Pasta da parceria é compartilhada entre as duas contas (não é por escritório) —
+  // vive numa tabela própria pra evitar duplicar/dessincronizar o valor entre elas.
+  const [partnership, setPartnership] = useState<{ id: string; drive_folder_id: string | null; drive_folder_name: string | null } | null>(null)
   const [savingOffice, setSavingOffice] = useState(false)
 
   // Users
@@ -141,20 +144,21 @@ export default function Configuracoes() {
   }, [])
 
   async function loadData() {
-    const [{ data: os }, { data: us }, { data: gc }] = await Promise.all([
+    const [{ data: os }, { data: us }, { data: gc }, { data: ps }] = await Promise.all([
       supabase.from('office_settings').select('*').order('created_at', { ascending: true }).limit(1).maybeSingle(),
       supabase.from('profiles').select('*').eq('role', 'admin').eq('tenant_id', profile?.tenant_id ?? '').order('created_at'),
       supabase.from('google_calendar_connections').select('*'),
+      supabase.from('partnership_settings').select('*').limit(1).maybeSingle(),
     ])
     if (os) {
       setOffice(os as OfficeSettings)
       setOfficeForm({
         name: os.name ?? '', logo_url: os.logo_url ?? '', whatsapp_url: os.whatsapp_url ?? '',
         drive_root_folder_id: os.drive_root_folder_id ?? '', drive_root_folder_name: os.drive_root_folder_name ?? '',
-        drive_partnership_folder_id: os.drive_partnership_folder_id ?? '', drive_partnership_folder_name: os.drive_partnership_folder_name ?? '',
         primary_color: os.primary_color ?? '', default_lead_responsible_id: os.default_lead_responsible_id ?? '',
       })
     }
+    setPartnership(ps ?? null)
     setUsers((us as ProfileRow[]) ?? [])
     const connMap: Record<string, any> = {}
     for (const c of gc ?? []) {
@@ -195,6 +199,15 @@ export default function Configuracoes() {
       await supabase.from('office_settings').insert({ ...officeForm, primary_color: color, tenant_id: profile?.tenant_id ?? null })
     }
     toast.success('Cor do sistema atualizada!')
+    loadData()
+  }
+
+  async function savePartnershipFolder(folderId: string, folderName: string) {
+    if (partnership) {
+      await supabase.from('partnership_settings').update({ drive_folder_id: folderId, drive_folder_name: folderName, updated_at: new Date().toISOString() }).eq('id', partnership.id)
+    } else {
+      await supabase.from('partnership_settings').insert({ drive_folder_id: folderId, drive_folder_name: folderName })
+    }
     loadData()
   }
 
@@ -393,24 +406,24 @@ export default function Configuracoes() {
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Pasta raiz da Parceria (Giovanna)</Label>
-            <p className="text-[11px] text-muted-foreground -mt-1">
-              Selecione a pasta específica da parceria com a Giovanna. Todo cliente/processo em que ela estiver marcada como responsável nasce dentro dessa pasta em vez da pasta raiz normal acima.
-            </p>
-            {officeForm.drive_partnership_folder_name && (
-              <p className="text-[11px] text-muted-foreground">Selecionada: <strong className="text-foreground">{officeForm.drive_partnership_folder_name}</strong></p>
-            )}
-            <DriveFolderPicker
-              value={{ folder_id: officeForm.drive_partnership_folder_id, drive_url: officeForm.drive_partnership_folder_id ? `https://drive.google.com/drive/folders/${officeForm.drive_partnership_folder_id}` : '' }}
-              onChange={f => setOfficeForm(prev => ({ ...prev, drive_partnership_folder_id: f.folder_id, drive_partnership_folder_name: f.name ?? '' }))}
-              folderNameSuggestion="Parceria Giovanna"
-            />
-          </div>
-
           <Button onClick={saveOffice} disabled={savingOffice} className="rounded-xl">
             <Save className="h-3.5 w-3.5 mr-1.5" />Salvar
           </Button>
+
+          <div className="space-y-1.5 pt-2 border-t">
+            <Label>Pasta raiz da Parceria</Label>
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              Pasta compartilhada entre você e a outra parte da parceria — a mesma dos dois lados, sem precisar selecionar de novo aqui. Todo cliente/processo em que a outra pessoa estiver marcada como responsável nasce dentro dela em vez da pasta raiz normal acima. Quem trocar aqui, troca pros dois.
+            </p>
+            {partnership?.drive_folder_name && (
+              <p className="text-[11px] text-muted-foreground">Selecionada: <strong className="text-foreground">{partnership.drive_folder_name}</strong></p>
+            )}
+            <DriveFolderPicker
+              value={{ folder_id: partnership?.drive_folder_id ?? '', drive_url: partnership?.drive_folder_id ? `https://drive.google.com/drive/folders/${partnership.drive_folder_id}` : '' }}
+              onChange={f => savePartnershipFolder(f.folder_id, f.name ?? '')}
+              folderNameSuggestion="Parceria"
+            />
+          </div>
 
           <div className="pt-2 border-t border-border/40 space-y-3">
             <Label className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Conta Google do escritório</Label>
