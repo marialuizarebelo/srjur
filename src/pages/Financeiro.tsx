@@ -36,7 +36,7 @@ import { fmtBRL, fmtDate, getDaysDiff } from '@/lib/format'
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { useCollapsibleSection } from '@/hooks/useCollapsibleSection'
 import { PinViewButton } from '@/components/PinViewButton'
-import { getAdminProfiles } from '@/components/ResponsibleSelect'
+import { getAdminProfiles, ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ImportExtrato } from '@/components/ImportExtrato'
@@ -61,6 +61,8 @@ interface FinanceRow {
   nature: string | null
   impacts_cash: boolean
   responsible: string | null
+  responsible_ids: string[] | null
+  tenant_id: string | null
   notes: string | null
   portal_visible: boolean
   payment_method: string | null
@@ -574,6 +576,7 @@ function FinanceViewDialog({ row, open, onClose, onEdit, onDelete, clients, paym
 // ── Main ──
 export default function Financeiro() {
   const { profile } = useAuth()
+  const profilesMap = useProfilesMap()
   const [rows, setRows] = useState<FinanceRow[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
   const [paymentsMap, setPaymentsMap] = useState<Record<string, FinancePayment[]>>({})
@@ -655,6 +658,7 @@ export default function Financeiro() {
     impacts_cash: true,
     nature: 'real' as 'real' | 'previsto',
     responsible: '',
+    responsible_ids: [] as string[],
     notes: '',
     portal_visible: false,
     payment_method: '',
@@ -669,7 +673,7 @@ export default function Financeiro() {
       type: 'receita', description: '', value: '',
       date: new Date().toISOString().slice(0, 10), due_date: '', category: '',
       origin: '', paid: false, payment_date: '', client_id: '',
-      impacts_cash: true, nature: 'real', responsible: '', notes: '',
+      impacts_cash: true, nature: 'real', responsible: '', responsible_ids: [], notes: '',
       portal_visible: false, payment_method: '', installments: '1',
       recurrence: 'Única', payment_link: '', card_fee_percent: '',
     })
@@ -960,6 +964,7 @@ export default function Financeiro() {
       impacts_cash: form.impacts_cash,
       nature: autoNature,
       responsible: form.responsible || null,
+      responsible_ids: form.responsible_ids,
       notes: form.notes || null,
       portal_visible: form.portal_visible,
       payment_method: form.payment_method || null,
@@ -1126,6 +1131,7 @@ export default function Financeiro() {
       impacts_cash: row.impacts_cash,
       nature: (row.nature ?? 'real') as 'real' | 'previsto',
       responsible: row.responsible ?? '',
+      responsible_ids: row.responsible_ids ?? [],
       notes: row.notes ?? '',
       portal_visible: row.portal_visible,
       payment_method: row.payment_method ?? '',
@@ -1722,6 +1728,14 @@ export default function Financeiro() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label>Compartilhar com (pode selecionar mais de uma)</Label>
+                  <ResponsibleSelect value={form.responsible_ids} onChange={ids => setForm(f => ({ ...f, responsible_ids: ids }))} />
+                  <p className="text-[11px] text-muted-foreground">
+                    Marcar alguém aqui faz esse lançamento aparecer também no financeiro dela, com o valor total (não divide) — útil pra despesas compartilhadas com a parceria.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
                   <Label>Observações</Label>
                   <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
                 </div>
@@ -2092,6 +2106,14 @@ export default function Financeiro() {
                       {row.client_id && <span className="truncate">{getClientName(row.client_id)}</span>}
                       {row.category && <span>· {row.category}</span>}
                       {row.responsible && <span>· @{row.responsible}</span>}
+                      {row.tenant_id && row.tenant_id !== profile?.tenant_id && (
+                        <Badge variant="outline" className="h-4 px-1.5 text-[10px] border-purple-300 text-purple-600 dark:text-purple-400">
+                          De {profilesMap[row.tenant_id]?.display_name ?? 'parceria'}
+                        </Badge>
+                      )}
+                      {row.responsible_ids && row.responsible_ids.length > 0 && (
+                        <ResponsibleAvatars ids={row.responsible_ids} profilesMap={profilesMap} size="xs" />
+                      )}
                     </div>
                   </div>
                   <div className="text-right shrink-0" onClick={e => e.stopPropagation()}>
@@ -2158,6 +2180,14 @@ export default function Financeiro() {
                   <TableCell className="text-sm max-w-[140px] truncate">
                     {row.description}
                     {row.responsible && <span className="text-xs text-muted-foreground ml-1">@{row.responsible}</span>}
+                    {row.tenant_id && row.tenant_id !== profile?.tenant_id && (
+                      <Badge variant="outline" className="h-4 px-1.5 text-[10px] ml-1 border-purple-300 text-purple-600 dark:text-purple-400">
+                        De {profilesMap[row.tenant_id]?.display_name ?? 'parceria'}
+                      </Badge>
+                    )}
+                    {row.responsible_ids && row.responsible_ids.length > 0 && (
+                      <span className="ml-1 inline-flex align-middle"><ResponsibleAvatars ids={row.responsible_ids} profilesMap={profilesMap} size="xs" /></span>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm">{getClientName(row.client_id)}</TableCell>
                   <TableCell className="text-sm">{row.category ?? '—'}</TableCell>
