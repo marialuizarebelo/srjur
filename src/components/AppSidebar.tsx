@@ -15,6 +15,14 @@ import {
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { UserAvatar } from '@/components/UserAvatar'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+
+// Contas de tenant conhecidas (parceria Luiza + Giovanna) — só usado pelo
+// seletor "Visualizando como", que só aparece pra login com is_superadmin.
+const TENANTS = [
+  { id: 'f2523561-ba07-4ed3-b1aa-5a48765037fa', label: 'Luiza Borges' },
+  { id: '35d0ffbd-5ce6-48fb-bfdc-26d92160e5b4', label: 'Giovanna Pinheiro' },
+]
 
 // Módulos sempre visíveis independente de restrição (dashboard e as próprias
 // configurações — nunca faz sentido travar uma usuária fora da tela onde ela
@@ -90,6 +98,16 @@ export function AppSidebar() {
     window.addEventListener('office-settings-updated', load)
     return () => window.removeEventListener('office-settings-updated', load)
   }, [])
+
+  const [switching, setSwitching] = useState(false)
+  async function switchTenant(tenantId: string) {
+    if (!profile || tenantId === profile.tenant_id) return
+    setSwitching(true)
+    await supabase.from('profiles').update({ tenant_id: tenantId }).eq('id', profile.id)
+    // Recarrega tudo do zero — mais simples e seguro do que tentar refazer
+    // manualmente o fetch de cada tela já montada.
+    window.location.reload()
+  }
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
@@ -181,6 +199,19 @@ export function AppSidebar() {
                 </p>
               </div>
             </div>
+          )}
+
+          {!collapsed && profile?.is_superadmin && (
+            <Select value={profile.tenant_id ?? ''} onValueChange={switchTenant} disabled={switching}>
+              <SelectTrigger className="h-8 text-xs bg-[var(--sidebar-accent)] border-[var(--sidebar-border)] text-[var(--sidebar-foreground)]">
+                <SelectValue placeholder="Visualizando como..." />
+              </SelectTrigger>
+              <SelectContent>
+                {TENANTS.map(t => (
+                  <SelectItem key={t.id} value={t.id}>Visualizando: {t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
 
           <Button
