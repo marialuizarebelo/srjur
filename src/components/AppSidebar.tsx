@@ -204,7 +204,9 @@ export function AppSidebar() {
           {!collapsed && profile?.is_superadmin && (
             <Select value={profile.tenant_id ?? ''} onValueChange={switchTenant} disabled={switching}>
               <SelectTrigger className="h-8 text-xs bg-[var(--sidebar-accent)] border-[var(--sidebar-border)] text-[var(--sidebar-foreground)]">
-                <SelectValue placeholder="Visualizando como..." />
+                <SelectValue placeholder="Visualizando como...">
+                  {`Visualizando: ${TENANTS.find(t => t.id === profile.tenant_id)?.label ?? '—'}`}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {TENANTS.map(t => (
