@@ -46,7 +46,7 @@ async function handleAuthUrl(req: Request) {
   if (caller?.role !== 'admin') return json({ error: 'Apenas administradoras' }, 403)
 
   const { owner_type, profile_id, return_to } = await req.json()
-  const state = btoa(JSON.stringify({ owner_type, profile_id: profile_id ?? null, return_to }))
+  const state = btoa(JSON.stringify({ owner_type, profile_id: profile_id ?? null, return_to, tenant_id: caller.tenant_id }))
 
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
@@ -67,7 +67,7 @@ async function handleCallback(req: Request) {
   const state = url.searchParams.get('state')
   if (!code || !state) return new Response('Faltando code/state', { status: 400 })
 
-  const { owner_type, profile_id, return_to } = JSON.parse(atob(state))
+  const { owner_type, profile_id, return_to, tenant_id } = JSON.parse(atob(state))
 
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -92,12 +92,12 @@ async function handleCallback(req: Request) {
   // Não usamos upsert com onConflict aqui porque profile_id=NULL (caso "office")
   // quebra a comparação de unicidade do Postgres (NULL nunca é igual a NULL).
   // Em vez disso, apagamos qualquer conexão existente e inserimos uma nova.
-  let selQ = adminClient.from('google_calendar_connections').select('refresh_token').eq('owner_type', owner_type)
+  let selQ = adminClient.from('google_calendar_connections').select('refresh_token').eq('owner_type', owner_type).eq('tenant_id', tenant_id)
   selQ = owner_type === 'office' ? selQ.is('profile_id', null) : selQ.eq('profile_id', profile_id)
   const { data: existingRows } = await selQ.order('created_at', { ascending: false }).limit(1)
   const existing = existingRows?.[0] ?? null
 
-  let delQ = adminClient.from('google_calendar_connections').delete().eq('owner_type', owner_type)
+  let delQ = adminClient.from('google_calendar_connections').delete().eq('owner_type', owner_type).eq('tenant_id', tenant_id)
   delQ = owner_type === 'office' ? delQ.is('profile_id', null) : delQ.eq('profile_id', profile_id)
   await delQ
 
@@ -110,6 +110,7 @@ async function handleCallback(req: Request) {
   await adminClient.from('google_calendar_connections').insert({
     owner_type,
     profile_id: owner_type === 'office' ? null : profile_id,
+    tenant_id,
     google_email: userInfo.email ?? null,
     access_token: tokens.access_token,
     refresh_token: refreshToken,
@@ -129,7 +130,7 @@ async function handleDisconnect(req: Request) {
   if (caller?.role !== 'admin') return json({ error: 'Apenas administradoras' }, 403)
 
   const { owner_type, profile_id } = await req.json()
-  let q = adminClient.from('google_calendar_connections').delete().eq('owner_type', owner_type)
+  let q = adminClient.from('google_calendar_connections').delete().eq('owner_type', owner_type).eq('tenant_id', caller.tenant_id)
   q = owner_type === 'office' ? q.is('profile_id', null) : q.eq('profile_id', profile_id)
   await q
   return json({ success: true })
@@ -339,7 +340,7 @@ async function handleSync(req: Request) {
   if (!caller) return json({ error: 'Não autenticado' }, 401)
 
   const { data: connections } = await adminClient
-    .from('google_calendar_connections').select('*, profiles(display_name)')
+    .from('google_calendar_connections').select('*, profiles(display_name)').eq('tenant_id', caller.tenant_id)
 
   if (!connections || connections.length === 0) {
     return json({ results: [], warning: 'Nenhuma conexão Google encontrada na tabela google_calendar_connections.' })
