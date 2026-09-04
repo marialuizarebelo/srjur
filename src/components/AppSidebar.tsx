@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client'
 import {
   LayoutDashboard, Users, Scale, ClipboardList, Calendar,
   DollarSign, Megaphone, MessageSquare, Calculator, KeyRound,
-  Inbox, Settings, LogOut, Bell, MonitorSmartphone, Receipt, HeartHandshake,
+  Inbox, Settings, LogOut, Bell, MonitorSmartphone, Receipt,
 } from 'lucide-react'
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -51,7 +51,6 @@ const sections = [
       { title: 'Financeiro', url: '/financeiro', icon: DollarSign },
       { title: 'Solicitações Financeiras', url: '/solicitacoes-financeiras', icon: Receipt },
       { title: 'Calculadora', url: '/calculadora', icon: Calculator },
-      { title: 'Calculadora de Alimentos', url: 'https://tabelaluizaborges.srjur.com/', icon: HeartHandshake, external: true },
       { title: 'Marketing', url: '/marketing', icon: Megaphone },
       { title: 'Portal do Cliente', url: '/portal-admin', icon: MonitorSmartphone },
       { title: 'Comunicações', url: '/comunicacoes', icon: MessageSquare },
