@@ -135,6 +135,7 @@ interface Lead {
   tags: string | null
   birth_date: string | null
   created_by: string | null
+  tenant_id: string | null
 }
 
 // ── Types ──
@@ -1301,7 +1302,7 @@ export default function Clientes() {
         logActivity('client', editingClient.id, `Status alterado para "${cf.status}"`)
       }
     } else {
-      const { data: newClient, error } = await supabase.from('clients').insert({ ...payload, created_by: profile?.id ?? null }).select('id').single()
+      const { data: newClient, error } = await supabase.from('clients').insert({ ...payload, created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null }).select('id').single()
       if (error) { toast.error('Erro ao criar cliente: ' + error.message); return }
       // If new client, create task to complete registration
       if (newClient) {
@@ -1311,6 +1312,7 @@ export default function Clientes() {
           type: 'tarefa', status: 'pendente', priority: 'alta',
           due_date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
           responsible_ids: cf.responsible_ids, client_id: newClient.id,
+          created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
         })
       }
     }
@@ -1378,7 +1380,7 @@ export default function Clientes() {
       if (editingLead) {
         await supabase.from('leads').update(payload).eq('id', editingLead.id)
       } else {
-        await supabase.from('leads').insert({ ...payload, created_by: profile?.id ?? null })
+        await supabase.from('leads').insert({ ...payload, created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null })
       }
       setLeadDialogOpen(false)
       resetLf()
@@ -1442,7 +1444,7 @@ export default function Clientes() {
       complement: lead.complement, neighborhood: lead.neighborhood, city: lead.city, state: lead.state,
       rep_name: lead.rep_name, rep_cpf: lead.rep_cpf, rep_role: lead.rep_role,
       rep_document_type: lead.rep_document_type, rep_address: lead.rep_address,
-      tags: lead.tags, birth_date: lead.birth_date, created_by: lead.created_by,
+      tags: lead.tags, birth_date: lead.birth_date, created_by: lead.created_by, tenant_id: lead.tenant_id,
     }).select('id').single()
 
     // Vincula o lead ao cliente criado, mas mantém o status/etapa do kanban
@@ -1495,7 +1497,7 @@ export default function Clientes() {
           type: 'compromisso', status: 'pendente', priority: 'media',
           due_date: in15days, responsible_ids: lead.responsible_ids, client_id: newClient.id,
         },
-      ])
+      ].map(t => ({ ...t, created_by: profile?.id ?? null, tenant_id: lead.tenant_id })))
     }
   }
 
@@ -2234,6 +2236,8 @@ export default function Clientes() {
                   phone: quickPhone || null,
                   source: 'WhatsApp',
                   status: 'novo',
+                  created_by: profile?.id ?? null,
+                  tenant_id: profile?.tenant_id ?? null,
                 })
                 setQuickSaving(false)
                 setQuickLeadOpen(false)

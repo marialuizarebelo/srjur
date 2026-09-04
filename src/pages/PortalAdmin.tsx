@@ -317,6 +317,7 @@ function ClientDetail({ client, onBack }: { client: ClientLite; onBack: () => vo
     const { error } = await supabase.from('documents').insert({
       client_id: client.id, title: docForm.title.trim(), drive_url: docForm.drive_url.trim(),
       type: docForm.type || null, portal_visible: true,
+      tenant_id: profile?.tenant_id ?? null,
     })
     setSaving(false)
     if (error) { toast.error('Erro ao salvar documento'); return }

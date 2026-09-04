@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -84,6 +85,7 @@ function daysInMonth(y: number, m: number) { return new Date(y, m+1, 0).getDate(
 
 export default function Calendario() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const [events, setEvents]   = useState<CalEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -131,6 +133,7 @@ export default function Calendario() {
           title: qf.title, due_date: qf.date, status: 'pendente',
           responsible_ids: qf.responsible_ids, responsible: namesFor(qf.responsible_ids), source: 'Manual',
           notes: qf.description || null, drive_url: qf.link || null,
+          created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
         })
       } else {
         await supabase.from('tasks').insert({
@@ -139,6 +142,7 @@ export default function Calendario() {
           description: qf.description || null, link: qf.link || null,
           type: qf.tipo, status: 'pendente',
           responsible_ids: qf.responsible_ids, responsible: namesFor(qf.responsible_ids),
+          created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
         })
       }
       toast.success('Criado!')

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -572,6 +573,7 @@ function FinanceViewDialog({ row, open, onClose, onEdit, onDelete, clients, paym
 
 // ── Main ──
 export default function Financeiro() {
+  const { profile } = useAuth()
   const [rows, setRows] = useState<FinanceRow[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
   const [paymentsMap, setPaymentsMap] = useState<Record<string, FinancePayment[]>>({})
@@ -981,6 +983,7 @@ export default function Financeiro() {
           ...basePayload,
           value: netValue,
           description: `${form.description} (${numInstallments}x no cartão)`,
+          tenant_id: profile?.tenant_id ?? null,
         })
         if (error) throw error
       } else if (numInstallments > 1) {
@@ -1005,6 +1008,7 @@ export default function Financeiro() {
             series_id: seriesId,
             // primeira parcela pode já ser real (se for hoje/passado); as futuras são sempre previstas
             nature: (i === 0 ? autoNature : (installDate <= todayStr ? 'real' : 'previsto')),
+            tenant_id: profile?.tenant_id ?? null,
           })
         }
         const { error } = await supabase.from('finance').insert(inserts)
@@ -1025,10 +1029,11 @@ export default function Financeiro() {
             due_date: checkDate,
             client_id: form.client_id || null,
             responsible_ids: admins.map(a => a.id),
+            created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
           })
         }
       } else {
-        const { error } = await supabase.from('finance').insert(basePayload)
+        const { error } = await supabase.from('finance').insert({ ...basePayload, tenant_id: profile?.tenant_id ?? null })
         if (error) throw error
       }
       toast.success(editingId ? 'Lançamento atualizado!' : 'Lançamento criado!')

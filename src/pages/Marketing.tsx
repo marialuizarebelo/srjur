@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -163,6 +164,7 @@ function MarketingViewDialog({ item, open, onClose, onEdit, onDelete, onMoveStat
 }
 
 export default function Marketing() {
+  const { profile } = useAuth()
   const [items, setItems] = useState<MarketingItem[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -238,7 +240,7 @@ export default function Marketing() {
         updated_at: new Date().toISOString(),
       }
       if (editing) await supabase.from('marketing_content').update(payload).eq('id', editing.id)
-      else await supabase.from('marketing_content').insert(payload)
+      else await supabase.from('marketing_content').insert({ ...payload, tenant_id: profile?.tenant_id ?? null })
       setDialogOpen(false)
       resetMf()
       loadData()

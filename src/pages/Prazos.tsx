@@ -384,7 +384,7 @@ export default function Prazos() {
         const { error } = await supabase.from('deadlines').update(payload).eq('id', editing.id)
         if (error) { toast.error('Erro ao salvar prazo: ' + error.message); return }
       } else {
-        const { data: created, error } = await supabase.from('deadlines').insert({ ...payload, created_by: profile?.id ?? null }).select().single()
+        const { data: created, error } = await supabase.from('deadlines').insert({ ...payload, created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null }).select().single()
         if (error) { toast.error('Erro ao salvar prazo: ' + error.message); return }
         // Se veio de "Criar prazo a partir da intimação", vincula de volta.
         if (df._intimacaoId && created) {

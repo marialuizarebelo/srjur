@@ -143,7 +143,7 @@ export default function Configuracoes() {
   async function loadData() {
     const [{ data: os }, { data: us }, { data: gc }] = await Promise.all([
       supabase.from('office_settings').select('*').order('created_at', { ascending: true }).limit(1).maybeSingle(),
-      supabase.from('profiles').select('*').eq('role', 'admin').order('created_at'),
+      supabase.from('profiles').select('*').eq('role', 'admin').eq('tenant_id', profile?.tenant_id ?? '').order('created_at'),
       supabase.from('google_calendar_connections').select('*'),
     ])
     if (os) {
@@ -192,7 +192,7 @@ export default function Configuracoes() {
     if (office) {
       await supabase.from('office_settings').update({ primary_color: color }).eq('id', office.id)
     } else {
-      await supabase.from('office_settings').insert({ ...officeForm, primary_color: color })
+      await supabase.from('office_settings').insert({ ...officeForm, primary_color: color, tenant_id: profile?.tenant_id ?? null })
     }
     toast.success('Cor do sistema atualizada!')
     loadData()
@@ -204,7 +204,7 @@ export default function Configuracoes() {
     if (office) {
       await supabase.from('office_settings').update(payload).eq('id', office.id)
     } else {
-      await supabase.from('office_settings').insert(payload)
+      await supabase.from('office_settings').insert({ ...payload, tenant_id: profile?.tenant_id ?? null })
     }
     toast.success('Dados do escritório salvos!')
     setSavingOffice(false)

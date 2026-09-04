@@ -116,7 +116,7 @@ export default function Autenticador() {
       totp_secret: form.totp_secret.replace(/\s/g, '') || null, notes: form.notes || null, color: form.color,
     }
     if (editing) await supabase.from('electronic_systems').update(payload).eq('id', editing.id)
-    else await supabase.from('electronic_systems').insert({ ...payload, created_by: profile?.id ?? null })
+    else await supabase.from('electronic_systems').insert({ ...payload, created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null })
     setDialogOpen(false)
     load()
   }

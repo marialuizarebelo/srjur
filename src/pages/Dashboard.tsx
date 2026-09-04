@@ -505,6 +505,7 @@ export default function Dashboard() {
         name: leadForm.name, phone: leadForm.phone || null, email: leadForm.email || null,
         source: leadForm.source || null, status: 'novo',
         responsible_ids: leadForm.responsible_ids, responsible: responsibleNames(leadForm.responsible_ids),
+        created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
       })
       if (error) { toast.error('Erro ao criar lead: ' + error.message); return }
       toast.success('Lead criado!')
@@ -524,6 +525,7 @@ export default function Dashboard() {
         cpf_cnpj: clientForm.cpf_cnpj || null, type: clientForm.type, status: 'ativo',
         responsible_ids: clientForm.responsible_ids, responsible: responsibleNames(clientForm.responsible_ids),
         portal_visible: false,
+        created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
       }
       const { data: newClient, error } = await supabase.from('clients').insert(payload).select('id').single()
       if (error) { toast.error('Erro ao criar cliente: ' + error.message); return }
@@ -534,6 +536,7 @@ export default function Dashboard() {
           type: 'tarefa', status: 'pendente', priority: 'alta',
           due_date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
           responsible_ids: clientForm.responsible_ids, client_id: newClient.id,
+          created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
         })
       }
       toast.success('Cliente criado!')
@@ -553,6 +556,7 @@ export default function Dashboard() {
         type: 'consultivo', status: 'em_andamento', phase: 'inicial',
         responsible_ids: processForm.responsible_ids, responsible: responsibleNames(processForm.responsible_ids),
         portal_visible: false, updated_at: new Date().toISOString(),
+        created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
       })
       if (error) { toast.error('Erro ao criar processo: ' + error.message); return }
       toast.success('Processo criado!')
@@ -573,6 +577,7 @@ export default function Dashboard() {
         due_date: taskForm.due_date || null, client_id: taskForm.client_id || null,
         responsible_ids: taskForm.responsible_ids, responsible: names.length > 1 ? 'Ambas' : (names[0] ?? null),
         portal_visible: false,
+        created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
       })
       if (error) { toast.error('Erro ao criar tarefa: ' + error.message); return }
       toast.success('Tarefa criada!')

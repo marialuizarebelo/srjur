@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     if (!caller) return json({ error: 'Token inválido' }, 401)
 
     const { data: callerProfile } = await adminClient
-      .from('profiles').select('role').eq('user_id', caller.id).maybeSingle()
+      .from('profiles').select('role, tenant_id').eq('user_id', caller.id).maybeSingle()
     if (callerProfile?.role !== 'admin') {
       return json({ error: 'Apenas administradoras podem criar usuárias' }, 403)
     }
@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
     }
 
     const { count } = await adminClient
-      .from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'admin')
+      .from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'admin').eq('tenant_id', callerProfile.tenant_id)
     if ((count ?? 0) >= 3) {
       return json({ error: 'Limite de 3 usuárias administradoras atingido' }, 400)
     }
@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
       role_title: role_title ?? null,
       allowed_modules: allowed_modules ?? null,
       created_by: caller.id,
+      tenant_id: callerProfile.tenant_id,
     }).eq('user_id', userId)
 
     return json({ success: true, user_id: userId })

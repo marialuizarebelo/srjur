@@ -128,7 +128,7 @@ export default function SistemasEletronicos() {
   async function addConfig() {
     if (!newNome.trim() || !newOab.trim()) return
     if (configs.length >= 3) { toast.error('Limite de 3 OABs monitoradas atingido'); return }
-    await supabase.from('oab_config').insert({ nome: newNome, numero_oab: newOab.replace(/\D/g,''), uf_oab: newUf, created_by: profile?.id ?? null })
+    await supabase.from('oab_config').insert({ nome: newNome, numero_oab: newOab.replace(/\D/g,''), uf_oab: newUf, created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null })
     setNewNome(''); setNewOab(''); setNewUf('RS')
     loadData()
   }

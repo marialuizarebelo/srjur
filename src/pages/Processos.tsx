@@ -483,7 +483,7 @@ export default function Processos() {
         if (editing.status !== pf.status) logActivity('process', editing.id, `Status alterado para "${formatLabel(pf.status)}"`)
         if (editing.phase !== pf.phase) logActivity('process', editing.id, `Fase alterada para "${pf.phase}"`)
       } else {
-        const { data: created, error } = await supabase.from('processes').insert({ ...payload, created_by: profile?.id ?? null }).select().single()
+        const { data: created, error } = await supabase.from('processes').insert({ ...payload, created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null }).select().single()
         if (error) throw error
         processId = created?.id
         // Se veio de "Criar processo a partir da intimação", vincula de volta.

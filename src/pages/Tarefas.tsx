@@ -389,7 +389,7 @@ export default function Tarefas() {
         const { error } = await supabase.from('tasks').update(payload).eq('id', editing.id)
         if (error) { toast.error('Erro ao salvar tarefa: ' + error.message); return }
       } else {
-        const { data: created, error } = await supabase.from('tasks').insert({ ...payload, created_by: profile?.id ?? null }).select().single()
+        const { data: created, error } = await supabase.from('tasks').insert({ ...payload, created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null }).select().single()
         if (error) { toast.error('Erro ao salvar tarefa: ' + error.message); return }
         // Se veio de "Criar tarefa a partir da intimação", vincula de volta.
         if (tf._intimacaoId && created) {

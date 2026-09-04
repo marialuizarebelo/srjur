@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { parseExtrato, type ExtratoTransaction } from '@/lib/parse-extrato'
 import { fmtBRL, fmtDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ interface ImportExtratoProps {
 }
 
 export function ImportExtrato({ open, onOpenChange, onComplete }: ImportExtratoProps) {
+  const { profile } = useAuth()
   const [items, setItems] = useState<ParsedItem[]>([])
   const [step, setStep] = useState<'upload' | 'review' | 'done'>('upload')
   const [importing, setImporting] = useState(false)
@@ -95,6 +97,7 @@ export function ImportExtrato({ open, onOpenChange, onComplete }: ImportExtratoP
       impacts_cash: true,
       origin: 'Extrato bancário',
       portal_visible: false,
+      tenant_id: profile?.tenant_id ?? null,
     }))
 
     if (inserts.length > 0) {
