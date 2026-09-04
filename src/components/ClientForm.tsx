@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -179,6 +180,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function ClientFormDialog({
   open, onOpenChange, form, setForm, onSave, onDelete, isEditing, clientId, saving,
 }: ClientFormDialogProps) {
+  const { profile } = useAuth()
   const [cepLoading, setCepLoading] = useState(false)
   const [driveRootFolderId, setDriveRootFolderId] = useState<string | null>(null)
   const [drivePartnershipFolderId, setDrivePartnershipFolderId] = useState<string | null>(null)
@@ -186,16 +188,19 @@ export function ClientFormDialog({
   const [credentialsOpen, setCredentialsOpen] = useState(false)
   const [generatedPassword, setGeneratedPassword] = useState('')
 
-  // Giovanna Pinheiro (parceria) — clientes com ela como responsável nascem
-  // na pasta da parceria em vez da pasta raiz normal do escritório.
-  const GIOVANNA_PROFILE_ID = '35d0ffbd-5ce6-48fb-bfdc-26d92160e5b4'
-  const isPartnership = form.responsible_ids.includes(GIOVANNA_PROFILE_ID)
+  // Parceria Luiza x Giovanna — clientes com a OUTRA parte como responsável
+  // nascem na pasta da parceria (compartilhada, ver partnership_settings)
+  // em vez da pasta raiz normal do escritório de quem está cadastrando.
+  const PARTNERSHIP_PROFILE_IDS = ['f2523561-ba07-4ed3-b1aa-5a48765037fa', '35d0ffbd-5ce6-48fb-bfdc-26d92160e5b4']
+  const isPartnership = form.responsible_ids.some(id => PARTNERSHIP_PROFILE_IDS.includes(id) && id !== profile?.id)
   const effectiveParentFolderId = (isPartnership && drivePartnershipFolderId) ? drivePartnershipFolderId : driveRootFolderId
 
   useEffect(() => {
-    supabase.from('office_settings').select('drive_root_folder_id, drive_partnership_folder_id').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
+    supabase.from('office_settings').select('drive_root_folder_id').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
       setDriveRootFolderId(data?.drive_root_folder_id ?? null)
-      setDrivePartnershipFolderId(data?.drive_partnership_folder_id ?? null)
+    })
+    supabase.from('partnership_settings').select('drive_folder_id').limit(1).maybeSingle().then(({ data }) => {
+      setDrivePartnershipFolderId(data?.drive_folder_id ?? null)
     })
   }, [])
 
@@ -577,7 +582,7 @@ export function ClientFormDialog({
             <div className="space-y-1.5">
               <Label>Pasta no Google Drive</Label>
               {isPartnership && drivePartnershipFolderId && (
-                <p className="text-[11px] text-amber-600 dark:text-amber-400">Giovanna está nos responsáveis — a pasta nova vai nascer dentro da pasta da Parceria, não da raiz normal.</p>
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">A outra parte da parceria está nos responsáveis — a pasta nova vai nascer dentro da pasta da Parceria, não da raiz normal.</p>
               )}
               <DriveFolderPicker
                 value={{ folder_id: form.drive_folder_id, drive_url: form.drive_url }}
