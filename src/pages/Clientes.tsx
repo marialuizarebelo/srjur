@@ -150,6 +150,7 @@ interface PipelineStage {
 
 // ── Constants ──
 const AREAS = ['Família', 'Cível', 'Trabalhista', 'Empresarial', 'Consumidor', 'Sucessões', 'Criminal', 'Outro']
+const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 const LEAD_SOURCES = ['Indicação', 'Google', 'Instagram', 'WhatsApp', 'Site', 'Evento', 'Outro']
 
 
@@ -1730,9 +1731,11 @@ export default function Clientes() {
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <Select value={String(crmMonth)} onValueChange={v => setCrmMonth(Number(v))}>
-                <SelectTrigger className="h-8 w-[150px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 w-[150px]">
+                  <SelectValue>{MONTH_NAMES[crmMonth]}</SelectValue>
+                </SelectTrigger>
                 <SelectContent>
-                  {['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].map((m, i) => (
+                  {MONTH_NAMES.map((m, i) => (
                     <SelectItem key={i} value={String(i)}>{m}</SelectItem>
                   ))}
                 </SelectContent>
