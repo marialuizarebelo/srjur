@@ -179,9 +179,9 @@ function SortableHead({ label, active, dir, onClick }: {
 }
 
 // ── Lead Card (Kanban) ──
-function LeadCard({ lead, onClick, onStatusChange, stages }: {
+function LeadCard({ lead, onClick, onStatusChange, stages, displaySignedAt }: {
   lead: Lead; onClick: () => void; onStatusChange: (id: string, status: string) => void
-  stages: PipelineStage[]
+  stages: PipelineStage[]; displaySignedAt?: string | null
 }) {
   const kanbanStages = stages.filter(s => s.show_in_kanban)
   const currentIdx = kanbanStages.findIndex(s => s.value === lead.status)
@@ -220,9 +220,9 @@ function LeadCard({ lead, onClick, onStatusChange, stages }: {
           1º contato: {new Date(lead.first_contact_at + 'T00:00').toLocaleDateString('pt-BR')}
         </p>
       )}
-      {lead.signed_at && (
+      {(displaySignedAt ?? lead.signed_at) && (
         <p className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 mt-1">
-          ✓ Fechado em: {new Date(lead.signed_at + 'T00:00').toLocaleDateString('pt-BR')}
+          ✓ Fechado em: {new Date((displaySignedAt ?? lead.signed_at) + 'T00:00').toLocaleDateString('pt-BR')}
         </p>
       )}
       {lead.next_followup && (
@@ -1210,7 +1210,18 @@ export default function Clientes() {
     if (crmPeriodMode === 'ano') return d.getFullYear() === crmYear
     return d.getFullYear() === crmYear && d.getMonth() === crmMonth
   }
-  const inCrmPeriodLead = (lead: Lead) => inCrmPeriod(lead.signed_at ?? lead.created_at)
+  // Lead já convertido em cliente: a data de assinatura "oficial" é editada
+  // na ficha do cliente (tela mais completa), não na do lead — então usamos
+  // ela aqui como fonte da verdade, com o campo do próprio lead como reserva
+  // (ex.: alguém preencheu só no lead, ou o cliente ainda não tem essa data).
+  const clientSignedAtById = useMemo(() => {
+    const map = new Map<string, string | null>()
+    clients.forEach(c => map.set(c.id, c.signed_at ?? null))
+    return map
+  }, [clients])
+  const effectiveSignedAt = (lead: Lead) =>
+    (lead.client_id ? clientSignedAtById.get(lead.client_id) : null) ?? lead.signed_at
+  const inCrmPeriodLead = (lead: Lead) => inCrmPeriod(effectiveSignedAt(lead) ?? lead.created_at)
 
   const filteredLeads = useMemo(() => {
     return leads
@@ -1797,7 +1808,7 @@ export default function Clientes() {
                     <DroppableColumn id={stage.value} className="space-y-2 min-h-[60px] p-1 -m-1">
                       {stageLeads.map(lead => (
                         <DraggableCard key={lead.id} id={lead.id}>
-                          <LeadCard lead={lead} onClick={() => setViewLead(lead)} onStatusChange={updateLeadStatus} stages={stages} />
+                          <LeadCard lead={lead} onClick={() => setViewLead(lead)} onStatusChange={updateLeadStatus} stages={stages} displaySignedAt={effectiveSignedAt(lead)} />
                         </DraggableCard>
                       ))}
                       {stageLeads.length === 0 && (
