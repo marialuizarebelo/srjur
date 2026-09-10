@@ -111,6 +111,7 @@ interface Lead {
   referred_by: string | null
   referral_fee_pct: number | null
   first_contact_at: string | null
+  signed_at: string | null
   created_at: string
   // dados p/ qualificação (opcionais — dá pra gerar já em fase de lead)
   type: string | null
@@ -217,6 +218,11 @@ function LeadCard({ lead, onClick, onStatusChange, stages }: {
       {lead.first_contact_at && (
         <p className="text-[10px] text-muted-foreground mt-1">
           1º contato: {new Date(lead.first_contact_at + 'T00:00').toLocaleDateString('pt-BR')}
+        </p>
+      )}
+      {lead.signed_at && (
+        <p className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 mt-1">
+          ✓ Fechado em: {new Date(lead.signed_at + 'T00:00').toLocaleDateString('pt-BR')}
         </p>
       )}
       {lead.next_followup && (
@@ -1187,9 +1193,12 @@ export default function Clientes() {
     return list
   }, [clients, tab, search, tableSortColumn, tableSortDir])
 
-  // Período do CRM: filtra o funil (kanban + resumo "no período") por
-  // created_at do lead — "perdido" fica visível de propósito (senão o lead
-  // simplesmente sumia da tela sem deixar rastro de que existiu).
+  // Período do CRM: filtra o funil (kanban + resumo "no período"). Lead com
+  // contrato já assinado usa a data de FECHAMENTO (signed_at) — assim o card
+  // aparece no mês em que o negócio foi efetivamente fechado, não no mês em
+  // que o lead entrou no funil. Os demais (ainda em aberto) usam created_at.
+  // "perdido" fica visível de propósito (senão o lead simplesmente sumia da
+  // tela sem deixar rastro de que existiu).
   const now = new Date()
   const [crmPeriodMode, setCrmPeriodMode] = useState<'mes' | 'ano' | 'tudo'>('mes')
   const [crmMonth, setCrmMonth] = useState(now.getMonth())
@@ -1201,11 +1210,12 @@ export default function Clientes() {
     if (crmPeriodMode === 'ano') return d.getFullYear() === crmYear
     return d.getFullYear() === crmYear && d.getMonth() === crmMonth
   }
+  const inCrmPeriodLead = (lead: Lead) => inCrmPeriod(lead.signed_at ?? lead.created_at)
 
   const filteredLeads = useMemo(() => {
     return leads
       .filter(l => l.status !== 'convertido')
-      .filter(l => inCrmPeriod(l.created_at))
+      .filter(inCrmPeriodLead)
       .filter(l => !search || l.name.toLowerCase().includes(search.toLowerCase()))
   }, [leads, search, crmPeriodMode, crmMonth, crmYear])
 
@@ -1396,12 +1406,18 @@ export default function Clientes() {
   }
 
   const updateLeadStatus = async (leadId: string, newStatus: string) => {
-    await supabase.from('leads').update({ status: newStatus }).eq('id', leadId)
+    const lead = leads.find(l => l.id === leadId)
+    // Data de fechamento do contrato — registrada automaticamente na primeira
+    // vez que o lead entra em "Contrato Assinado", pra sempre sabermos em que
+    // mês o negócio foi efetivamente fechado (não muda se já tiver sido setada).
+    const signedAt = newStatus === 'contrato_assinado' && !lead?.signed_at
+      ? new Date().toISOString().slice(0, 10)
+      : undefined
+    await supabase.from('leads').update({ status: newStatus, ...(signedAt ? { signed_at: signedAt } : {}) }).eq('id', leadId)
 
     if (newStatus === 'contrato_assinado') {
-      const lead = leads.find(l => l.id === leadId)
       // só converte se ainda não tiver virado cliente (evita duplicar tarefas/pasta)
-      if (lead && !lead.client_id) await autoConvertLead(lead)
+      if (lead && !lead.client_id) await autoConvertLead({ ...lead, signed_at: signedAt ?? lead.signed_at })
     }
 
     loadData()
@@ -1436,7 +1452,7 @@ export default function Clientes() {
       complement: lead.complement, neighborhood: lead.neighborhood, city: lead.city, state: lead.state,
       rep_name: lead.rep_name, rep_cpf: lead.rep_cpf, rep_role: lead.rep_role,
       rep_document_type: lead.rep_document_type, rep_address: lead.rep_address,
-      tags: lead.tags, birth_date: lead.birth_date, created_by: lead.created_by,
+      tags: lead.tags, birth_date: lead.birth_date, created_by: lead.created_by, signed_at: lead.signed_at,
     }).select('id').single()
 
     // Vincula o lead ao cliente criado, mas mantém o status/etapa do kanban
