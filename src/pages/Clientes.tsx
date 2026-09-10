@@ -1050,7 +1050,7 @@ export default function Clientes() {
     name: '', email: '', phone: '', cpf_cnpj: '', source: '',
     status: 'novo', potential_value: '', notes: '', responsible: '', responsible_ids: [] as string[],
     next_followup: '', drive_folder_id: '', drive_url: '',
-    referred_by: '', referral_fee_pct: '', first_contact_at: '',
+    referred_by: '', referral_fee_pct: '', first_contact_at: '', signed_at: '',
     type: 'pessoa_fisica', gender: 'Não informado', nationality: 'brasileira', marital_status: 'Não informado',
     profession: '', rg_number: '', rg_issuer: '', cep: '', street: '', address_number: '',
     complement: '', neighborhood: '', city: '', state: '',
@@ -1340,7 +1340,7 @@ export default function Clientes() {
       source: l.source ?? '', status: l.status, potential_value: l.potential_value ? String(l.potential_value) : '',
       notes: l.notes ?? '', responsible: l.responsible ?? '', responsible_ids: l.responsible_ids ?? [], next_followup: l.next_followup ?? '',
       drive_folder_id: l.drive_folder_id ?? '', drive_url: l.drive_url ?? '',
-      referred_by: l.referred_by ?? '', referral_fee_pct: l.referral_fee_pct ? String(l.referral_fee_pct) : '', first_contact_at: l.first_contact_at ?? '',
+      referred_by: l.referred_by ?? '', referral_fee_pct: l.referral_fee_pct ? String(l.referral_fee_pct) : '', first_contact_at: l.first_contact_at ?? '', signed_at: l.signed_at ?? '',
       type: l.type ?? 'pessoa_fisica', gender: l.gender ?? 'Não informado', nationality: l.nationality ?? 'brasileira',
       marital_status: l.marital_status ?? 'Não informado', profession: l.profession ?? '',
       rg_number: l.rg_number ?? '', rg_issuer: l.rg_issuer ?? '', cep: l.cep ?? '', street: l.street ?? '',
@@ -1369,7 +1369,7 @@ export default function Clientes() {
           : (profilesMap[lf.responsible_ids[0]]?.display_name ?? null),
         next_followup: lf.next_followup || null,
         drive_folder_id: lf.drive_folder_id || null, drive_url: lf.drive_url || null,
-        referred_by: lf.referred_by || null, referral_fee_pct: lf.referral_fee_pct ? parseFloat(lf.referral_fee_pct) : null, first_contact_at: lf.first_contact_at || null,
+        referred_by: lf.referred_by || null, referral_fee_pct: lf.referral_fee_pct ? parseFloat(lf.referral_fee_pct) : null, first_contact_at: lf.first_contact_at || null, signed_at: lf.signed_at || null,
         type: lf.type || null, gender: lf.gender || null, nationality: lf.nationality || null,
         marital_status: lf.marital_status || null, profession: lf.profession || null,
         rg_number: lf.rg_number || null, rg_issuer: lf.rg_issuer || null,
@@ -2001,6 +2001,14 @@ export default function Clientes() {
             <div className="space-y-2">
               <Label>Data do primeiro contato</Label>
               <Input type="date" value={lf.first_contact_at} onChange={e => setLf(f => ({ ...f, first_contact_at: e.target.value }))} className="h-10" />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Data de assinatura do contrato</Label>
+              <Input type="date" value={lf.signed_at} onChange={e => setLf(f => ({ ...f, signed_at: e.target.value }))} className="h-10" />
+              <p className="text-[11px] text-muted-foreground">
+                Preenchida automaticamente quando o lead entra em "Contrato Assinado" — ajuste aqui se a data real for outra. É essa data que decide em qual mês o card aparece no CRM.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
