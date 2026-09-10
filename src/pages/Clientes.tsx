@@ -22,7 +22,7 @@ import {
 import {
   Plus, Search, Users, TrendingUp, UserCheck, UserX, Pencil, Trash2,
   Phone, Mail, GripVertical, LayoutGrid, List, Eye, Settings2,
-  ChevronUp, ChevronDown, X, ExternalLink, Scale, ClipboardList, FileText,
+  ChevronUp, ChevronDown, ChevronLeft, ChevronRight, X, ExternalLink, Scale, ClipboardList, FileText,
   ArrowUp, ArrowDown, ArrowUpDown, Copy,
 } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
@@ -1006,7 +1006,7 @@ export default function Clientes() {
   const [tab, setTab] = useState<'crm' | 'ativos' | 'encerrados'>('ativos')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
-  const [tableSortColumn, setTableSortColumn] = useState<'name' | 'type' | 'area' | 'phone' | 'email' | 'responsible' | 'status' | null>(null)
+  const [tableSortColumn, setTableSortColumn] = useState<'name' | 'type' | 'area' | 'phone' | 'email' | 'responsible' | 'status' | 'signed_at' | null>(null)
   const [tableSortDir, setTableSortDir] = useState<'asc' | 'desc'>('asc')
   const toggleTableSort = (col: typeof tableSortColumn) => {
     if (tableSortColumn === col) setTableSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
@@ -1196,6 +1196,7 @@ export default function Clientes() {
           case 'email': return (a.email ?? '').localeCompare(b.email ?? '') * dir
           case 'responsible': return (a.responsible ?? '').localeCompare(b.responsible ?? '') * dir
           case 'status': return (a.status ?? '').localeCompare(b.status ?? '') * dir
+          case 'signed_at': return (a.signed_at ?? '').localeCompare(b.signed_at ?? '') * dir
           default: return 0
         }
       })
@@ -1213,6 +1214,15 @@ export default function Clientes() {
   const [crmPeriodMode, setCrmPeriodMode] = useState<'mes' | 'ano' | 'tudo'>('mes')
   const [crmMonth, setCrmMonth] = useState(now.getMonth())
   const [crmYear, setCrmYear] = useState(now.getFullYear())
+
+  const goPrevMonth = () => {
+    if (crmMonth === 0) { setCrmMonth(11); setCrmYear(y => y - 1) }
+    else setCrmMonth(m => m - 1)
+  }
+  const goNextMonth = () => {
+    if (crmMonth === 11) { setCrmMonth(0); setCrmYear(y => y + 1) }
+    else setCrmMonth(m => m + 1)
+  }
 
   const inCrmPeriod = (createdAt: string) => {
     if (crmPeriodMode === 'tudo') return true
@@ -1726,24 +1736,44 @@ export default function Clientes() {
             <Button variant={crmPeriodMode === 'tudo' ? 'default' : 'ghost'} size="sm" className="h-8" onClick={() => setCrmPeriodMode('tudo')}>Tudo</Button>
           </div>
           {crmPeriodMode === 'mes' && (
-            <Select value={String(crmMonth)} onValueChange={v => setCrmMonth(Number(v))}>
-              <SelectTrigger className="h-8 w-[150px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].map((m, i) => (
-                  <SelectItem key={i} value={String(i)}>{m}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goPrevMonth}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Select value={String(crmMonth)} onValueChange={v => setCrmMonth(Number(v))}>
+                <SelectTrigger className="h-8 w-[150px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].map((m, i) => (
+                    <SelectItem key={i} value={String(i)}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goNextMonth}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           )}
           {(crmPeriodMode === 'mes' || crmPeriodMode === 'ano') && (
-            <Select value={String(crmYear)} onValueChange={v => setCrmYear(Number(v))}>
-              <SelectTrigger className="h-8 w-[90px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 6 }, (_, i) => now.getFullYear() - i).map(y => (
-                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1">
+              {crmPeriodMode === 'ano' && (
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCrmYear(y => y - 1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              )}
+              <Select value={String(crmYear)} onValueChange={v => setCrmYear(Number(v))}>
+                <SelectTrigger className="h-8 w-[90px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 6 }, (_, i) => now.getFullYear() - i).map(y => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {crmPeriodMode === 'ano' && (
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCrmYear(y => y + 1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -1865,13 +1895,14 @@ export default function Clientes() {
                 <SortableHead label="E-mail" active={tableSortColumn === 'email'} dir={tableSortDir} onClick={() => toggleTableSort('email')} />
                 <SortableHead label="Responsável" active={tableSortColumn === 'responsible'} dir={tableSortDir} onClick={() => toggleTableSort('responsible')} />
                 <SortableHead label="Status" active={tableSortColumn === 'status'} dir={tableSortDir} onClick={() => toggleTableSort('status')} />
+                <SortableHead label="Fechamento" active={tableSortColumn === 'signed_at'} dir={tableSortDir} onClick={() => toggleTableSort('signed_at')} />
                 <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredClients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     Nenhum cliente encontrado
                   </TableCell>
                 </TableRow>
@@ -1897,6 +1928,7 @@ export default function Clientes() {
                         {c.status.toUpperCase()}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-sm">{c.signed_at ? fmtDateBR(c.signed_at) : '—'}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditClient(c)}>
