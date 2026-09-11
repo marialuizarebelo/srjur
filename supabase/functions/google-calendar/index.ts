@@ -194,6 +194,17 @@ async function pushItem(conn: any, token: string, sourceTable: 'tasks' | 'deadli
     body: JSON.stringify(eventBody),
   })
   if (!res.ok) {
+    // 404/410 num PATCH = a usuária excluiu o evento direto no Google. Sem
+    // isso, a próxima sincronização ficaria tentando atualizar um evento que
+    // não existe mais — e em alguns casos o Google chega a "ressuscitar" o
+    // evento (voltar ele da lixeira) só por causa desse PATCH. Em vez de
+    // insistir, apagamos o vínculo órfão; se o item ainda estiver ativo no
+    // sistema, ele nasce de novo no Google normalmente na próxima sync.
+    if (method === 'PATCH' && (res.status === 404 || res.status === 410)) {
+      await adminClient.from('google_event_links').delete()
+        .eq('source_table', sourceTable).eq('source_id', item.id).eq('connection_id', conn.id)
+      return { ok: true, unlinked: true }
+    }
     const errBody = await res.text()
     return { ok: false, error: `${res.status} ${errBody.slice(0, 300)}`, title: item.title }
   }
@@ -266,10 +277,14 @@ async function syncConnection(conn: any) {
   // Regra: 1 responsável → agenda pessoal dele; 0 ou 2+ → agenda do escritório.
   let pushed = 0
 
+  // Tarefa concluída/cancelada ou prazo cumprido/perdido não entra mais como
+  // candidato a push — assim o CLEANUP logo abaixo detecta que ela "não
+  // pertence mais" à agenda e apaga o evento do Google, em vez de continuar
+  // empurrando atualização (e mantendo o evento "vivo") pra algo já resolvido.
   const [{ data: allTasks }, { data: allDeadlines }] = await Promise.all([
-    adminClient.from('tasks').select('*').neq('status', 'cancelada')
+    adminClient.from('tasks').select('*').not('status', 'in', '(cancelada,concluida)')
       .gte('due_date', dateMinStr).lte('due_date', dateMaxStr),
-    adminClient.from('deadlines').select('*')
+    adminClient.from('deadlines').select('*').eq('status', 'pendente')
       .gte('due_date', dateMinStr).lte('due_date', dateMaxStr),
   ])
 
@@ -310,8 +325,11 @@ async function syncConnection(conn: any) {
     // Confere se o item ainda existe e se a falta de "pertencimento" é real
     // (não apenas porque saiu da janela de datas considerada)
     const { data: rec } = await adminClient.from(link.source_table)
-      .select('responsible_ids').eq('id', link.source_id).maybeSingle()
-    const shouldBeGone = !rec || !belongsToConnection(rec.responsible_ids)
+      .select('responsible_ids, status').eq('id', link.source_id).maybeSingle()
+    const isDone = rec && (link.source_table === 'tasks'
+      ? (rec.status === 'concluida' || rec.status === 'cancelada')
+      : (rec.status === 'cumprido' || rec.status === 'perdido'))
+    const shouldBeGone = !rec || isDone || !belongsToConnection(rec.responsible_ids)
     if (!shouldBeGone) continue
 
     await fetch(
