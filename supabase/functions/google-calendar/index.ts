@@ -197,16 +197,19 @@ async function pushItem(conn: any, token: string, sourceTable: 'tasks' | 'deadli
     body: JSON.stringify(eventBody),
   })
   if (!res.ok) {
-    // 404/410 num PATCH = a usuária excluiu o evento direto no Google. Sem
-    // isso, a próxima sincronização ficaria tentando atualizar um evento que
-    // não existe mais — e em alguns casos o Google chega a "ressuscitar" o
-    // evento (voltar ele da lixeira) só por causa desse PATCH. Em vez de
-    // insistir, apagamos o vínculo órfão; se o item ainda estiver ativo no
-    // sistema, ele nasce de novo no Google normalmente na próxima sync.
+    // 404/410 num PATCH = a usuária excluiu o evento direto no Google. Isso
+    // conta como "resolvido" pra ela — tratamos como concluído/cumprido no
+    // sistema também, em vez de deixar pendente (o que faria a próxima
+    // sincronização recriar um evento novo do zero, parecendo que "voltou
+    // sozinho"). Também evita o Google "ressuscitar" o evento antigo só por
+    // causa do PATCH em cima de algo já excluído.
     if (method === 'PATCH' && (res.status === 404 || res.status === 410)) {
+      await adminClient.from(sourceTable)
+        .update({ status: sourceTable === 'tasks' ? 'concluida' : 'cumprido' })
+        .eq('id', item.id)
       await adminClient.from('google_event_links').delete()
         .eq('source_table', sourceTable).eq('source_id', item.id).eq('connection_id', conn.id)
-      return { ok: true, unlinked: true }
+      return { ok: true, autoCompleted: true }
     }
     const errBody = await res.text()
     return { ok: false, error: `${res.status} ${errBody.slice(0, 300)}`, title: item.title }
@@ -215,7 +218,7 @@ async function pushItem(conn: any, token: string, sourceTable: 'tasks' | 'deadli
   const created = await res.json()
   await adminClient.from('google_event_links').upsert({
     source_table: sourceTable, source_id: item.id, connection_id: conn.id,
-    google_event_id: created.id, synced_at: new Date().toISOString(),
+    google_event_id: created.id, synced_at: new Date().toISOString(), origin: 'push',
   }, { onConflict: 'source_table,source_id,connection_id' })
   return { ok: true }
 }
@@ -270,10 +273,24 @@ async function syncConnection(conn: any) {
       if (taskId) {
         await adminClient.from('google_event_links').upsert({
           source_table: 'tasks', source_id: taskId, connection_id: conn.id,
-          google_event_id: ev.id, synced_at: new Date().toISOString(),
+          google_event_id: ev.id, synced_at: new Date().toISOString(), origin: 'pull',
         }, { onConflict: 'source_table,source_id,connection_id' })
       }
     }
+  }
+
+  // ── PULL-CLEANUP: tarefa que só existe porque foi puxada de um evento do
+  // Google que a usuária excluiu direto lá (sem passar pelo sistema) — sem
+  // isso ela ficava pra sempre na agenda do sistema, "duplicada" na prática.
+  // Só mexe em vínculos origin='pull' — o que foi criado a partir do próprio
+  // sistema (origin='push') é tratado à parte, no CLEANUP do push abaixo.
+  const seenGoogleIds = new Set((list.items ?? []).filter((ev: any) => ev.status !== 'cancelled').map((ev: any) => ev.id))
+  const { data: pullLinks } = await adminClient.from('google_event_links')
+    .select('*').eq('connection_id', conn.id).eq('source_table', 'tasks').eq('origin', 'pull')
+  for (const link of pullLinks ?? []) {
+    if (seenGoogleIds.has(link.google_event_id)) continue
+    await adminClient.from('tasks').delete().eq('id', link.source_id)
+    await adminClient.from('google_event_links').delete().eq('id', link.id)
   }
 
   // ── PUSH: tasks + deadlines → Google ──
