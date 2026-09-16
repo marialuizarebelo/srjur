@@ -134,7 +134,7 @@ function StatCard({ title, value, subtitle, icon: Icon, lightColor, darkColor, b
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
       </div>
       <p className="text-4xl font-bold text-foreground"><Sensitive>{value}</Sensitive></p>
-      {subtitle && <p className="text-xs mt-1.5 font-medium" style={{ color: accent }}>{subtitle}</p>}
+      {subtitle && <p className="text-xs mt-1.5 font-medium" style={{ color: accent }}><Sensitive>{subtitle}</Sensitive></p>}
       {onClick && (
         <div className="absolute bottom-2 right-3 opacity-40">
           <ChevronRight className="h-3.5 w-3.5" style={{ color: accent }} />
@@ -420,7 +420,7 @@ function AuthenticatorCode({ secret }: { secret: string }) {
       </div>
       <div className="text-left min-w-0 flex-1">
         <p className="text-sm font-mono font-bold tracking-widest group-hover:text-primary transition-colors">
-          {code.slice(0, 3)} {code.slice(3)}
+          <Sensitive>{code.slice(0, 3)} {code.slice(3)}</Sensitive>
         </p>
       </div>
     </button>
