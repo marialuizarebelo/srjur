@@ -20,6 +20,7 @@ import {
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { fmtBRL, fmtDate } from '@/lib/format'
+import { ResponsibleSelect, useProfilesMap } from '@/components/ResponsibleSelect'
 
 // ── Label colors (soft/muted palette) ────────────────────────────────────
 const LABEL_COLORS = [
@@ -133,6 +134,9 @@ interface Template {
   variables: string[]
   tag_ids?: string[]
   created_at: string
+  tenant_id?: string | null
+  responsible_ids?: string[]
+  created_by?: string | null
 }
 
 interface Client {
@@ -212,6 +216,7 @@ const DEFAULT_TEMPLATES: Omit<Template, 'id' | 'created_at'>[] = [
 // ── Component ─────────────────────────────────────────────────────────────
 export default function Comunicacoes() {
   const { profile } = useAuth()
+  const profilesMap = useProfilesMap()
   const [officeDefaults, setOfficeDefaults] = useState<Record<string, string>>(OFFICE_DEFAULTS)
   const [templates, setTemplates] = useState<Template[]>([])
   const [clients, setClients]     = useState<Client[]>([])
@@ -232,7 +237,7 @@ export default function Comunicacoes() {
   const [editing, setEditing]       = useState<Template | null>(null)
   const [form, setForm] = useState({
     name: '', category: 'Geral', channel: 'whatsapp' as Template['channel'],
-    subject: '', body: '', tag_ids: [] as string[],
+    subject: '', body: '', tag_ids: [] as string[], responsible_ids: [] as string[],
   })
 
   // Send dialog
@@ -267,6 +272,7 @@ export default function Comunicacoes() {
     if (tpls.length === 0) {
       const toInsert = DEFAULT_TEMPLATES.map(t => ({
         ...t, variables: extractVars(t.body, t.subject), tag_ids: [],
+        tenant_id: profile?.tenant_id ?? null, created_by: profile?.id ?? null,
       }))
       const { data: ins, error } = await supabase.from('communications').insert(toInsert).select()
       if (error) { toast.error('Erro ao criar templates padrão: ' + error.message) }
@@ -330,22 +336,25 @@ export default function Comunicacoes() {
 
   function openNew() {
     setEditing(null)
-    setForm({ name: '', category: 'Geral', channel: 'whatsapp', subject: '', body: '', tag_ids: [] })
+    setForm({ name: '', category: 'Geral', channel: 'whatsapp', subject: '', body: '', tag_ids: [], responsible_ids: [] })
     setEditorOpen(true)
   }
   function openEdit(t: Template) {
     setEditing(t)
     setForm({ name: t.name, category: t.category, channel: t.channel,
-      subject: t.subject ?? '', body: t.body, tag_ids: t.tag_ids ?? [] })
+      subject: t.subject ?? '', body: t.body, tag_ids: t.tag_ids ?? [], responsible_ids: t.responsible_ids ?? [] })
     setEditorOpen(true)
   }
   async function saveTemplate() {
     const vars = extractVars(form.body, form.subject)
     const payload = { name: form.name, category: form.category, channel: form.channel,
-      subject: form.subject || null, body: form.body, variables: vars, tag_ids: form.tag_ids }
+      subject: form.subject || null, body: form.body, variables: vars, tag_ids: form.tag_ids,
+      responsible_ids: form.responsible_ids }
     const { error } = editing
       ? await supabase.from('communications').update(payload).eq('id', editing.id)
-      : await supabase.from('communications').insert(payload)
+      : await supabase.from('communications').insert({
+          ...payload, tenant_id: profile?.tenant_id ?? null, created_by: profile?.id ?? null,
+        })
     if (error) { toast.error('Erro ao salvar template: ' + error.message); return }
     toast.success(editing ? 'Template atualizado!' : 'Template criado!')
     setEditorOpen(false)
@@ -492,6 +501,11 @@ export default function Comunicacoes() {
                 {CHANNEL_LABELS[t.channel]}
               </span>
               {tagIds.map(id => <LabelChip key={id} labelId={id} />)}
+              {t.tenant_id && t.tenant_id !== profile?.tenant_id && (
+                <span className="inline-flex items-center rounded-full text-[10px] px-2 py-0.5 font-medium bg-violet-50 text-violet-600 border border-violet-200 dark:bg-violet-900/20 dark:border-violet-800 dark:text-violet-400">
+                  De {profilesMap[t.tenant_id]?.display_name ?? 'parceria'}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
@@ -694,6 +708,12 @@ export default function Comunicacoes() {
                   {labels.length === 0 && <span className="text-[10px] text-muted-foreground">Crie etiquetas na sidebar</span>}
                 </div>
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Compartilhar com</Label>
+              <ResponsibleSelect value={form.responsible_ids} onChange={ids => setForm(f => ({ ...f, responsible_ids: ids }))} />
+              <p className="text-[10px] text-muted-foreground">Por padrão o template é só seu. Marque quem mais deve ver e poder usar esse template.</p>
             </div>
 
             {(form.channel === 'email' || form.channel === 'ambos') && (
