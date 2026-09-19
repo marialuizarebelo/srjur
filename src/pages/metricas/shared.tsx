@@ -1,14 +1,20 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '@/integrations/supabase/client'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { AlertTriangle } from 'lucide-react'
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from '@/components/ui/select'
+import { AlertTriangle, StickyNote, Plus, Trash2 } from 'lucide-react'
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
 } from 'recharts'
 import { Sensitive } from '@/components/Sensitive'
+import { toast } from 'sonner'
 
 export const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 // Paleta mais "estratégica": tons distintos e saturados o bastante pra
@@ -223,6 +229,99 @@ export function AttentionPanel({ items }: { items: Attention[] }) {
       <div className="space-y-1.5">
         {items.map((a, i) => <div key={i} className={`text-xs rounded-lg px-3 py-2 border ${style[a.level]}`}>{a.text}</div>)}
       </div>
+    </Card>
+  )
+}
+
+/* ---------- Comparativo automático (vs período anterior) ---------- */
+// Devolve o intervalo imediatamente anterior, com a mesma duração do intervalo
+// dado — usado pra comparar "este período" com "o mesmo tanto de dias antes dele".
+export function previousPeriodRange(start: string, end: string) {
+  const startD = new Date(start + 'T00:00:00')
+  const endD = new Date(end + 'T00:00:00')
+  const days = Math.round((endD.getTime() - startD.getTime()) / 86400000) + 1
+  const prevEnd = new Date(startD.getTime() - 86400000)
+  const prevStart = new Date(prevEnd.getTime() - (days - 1) * 86400000)
+  return { start: prevStart.toISOString().slice(0, 10), end: prevEnd.toISOString().slice(0, 10) }
+}
+
+export function pctChange(current: number, previous: number): number | null {
+  if (previous === 0) return current === 0 ? 0 : null
+  return ((current - previous) / Math.abs(previous)) * 100
+}
+
+export function trendText(current: number, previous: number, label = 'vs período anterior'): string | undefined {
+  const pct = pctChange(current, previous)
+  if (pct === null) return undefined
+  const arrow = pct >= 0 ? '↑' : '↓'
+  return `${arrow} ${Math.abs(pct).toFixed(0)}% ${label}`
+}
+
+/* ---------- Anotações em gráfico ---------- */
+interface MetricaNota { id: string; area: string; mes: string; texto: string; created_at: string }
+export function NotesPanel({ area, months }: { area: string; months: { start: string; label: string }[] }) {
+  const [notas, setNotas] = useState<MetricaNota[]>([])
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding] = useState(false)
+  const [mes, setMes] = useState(months[months.length - 1]?.start.slice(0, 7) ?? '')
+  const [texto, setTexto] = useState('')
+
+  async function load() {
+    const { data } = await supabase.from('metricas_notas').select('*').eq('area', area).order('mes', { ascending: false })
+    setNotas((data as MetricaNota[]) ?? [])
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [area])
+
+  async function save() {
+    if (!texto.trim() || !mes) return
+    const { error } = await supabase.from('metricas_notas').insert({ area, mes, texto: texto.trim() })
+    if (error) { toast.error('Erro ao salvar anotação'); return }
+    setTexto('')
+    setAdding(false)
+    load()
+  }
+  async function remove(id: string) {
+    await supabase.from('metricas_notas').delete().eq('id', id)
+    load()
+  }
+  function monthLabel(mesKey: string) {
+    const m = months.find(mo => mo.start.slice(0, 7) === mesKey)
+    return m?.label ?? mesKey
+  }
+
+  return (
+    <Card className="p-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm flex items-center gap-2"><StickyNote className="h-4 w-4 text-primary" />Anotações</h3>
+        <Button size="sm" variant="outline" onClick={() => setAdding(a => !a)}><Plus className="h-3.5 w-3.5 mr-1" />Anotar</Button>
+      </div>
+      {adding && (
+        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center bg-muted/30 rounded-lg p-2">
+          <Select value={mes} onValueChange={v => v && setMes(v)}>
+            <SelectTrigger className="h-8 text-xs sm:w-28"><SelectValue>{monthLabel(mes)}</SelectValue></SelectTrigger>
+            <SelectContent>{months.map(m => <SelectItem key={m.start} value={m.start.slice(0, 7)}>{m.label}</SelectItem>)}</SelectContent>
+          </Select>
+          <Input value={texto} onChange={e => setTexto(e.target.value)} placeholder="Ex: campanha de anúncios iniciada" className="h-8 text-xs flex-1" />
+          <Button size="sm" className="h-8 text-xs" onClick={save}>Salvar</Button>
+        </div>
+      )}
+      {loading ? (
+        <p className="text-xs text-muted-foreground py-2">Carregando...</p>
+      ) : notas.length === 0 ? (
+        <p className="text-xs text-muted-foreground py-2">Nenhuma anotação ainda.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {notas.map(n => (
+            <div key={n.id} className="flex items-center justify-between gap-2 text-xs rounded-lg border px-2.5 py-1.5 group">
+              <span><strong>{monthLabel(n.mes)}</strong> — {n.texto}</span>
+              <button onClick={() => remove(n.id)} className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-500" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   )
 }

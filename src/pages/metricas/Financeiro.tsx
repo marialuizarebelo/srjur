@@ -8,7 +8,7 @@ import {
 import { fmtBRL, fmtDate } from '@/lib/format'
 import {
   MONTHS, monthsBack, usePeriod, PeriodPicker, KpiCard, ChartCard, DonutWithLegend,
-  DetailDialog, useDetail, AttentionPanel, type Attention,
+  DetailDialog, useDetail, AttentionPanel, type Attention, previousPeriodRange, trendText, NotesPanel,
 } from './shared'
 
 export interface FinanceRow {
@@ -62,6 +62,11 @@ export default function FinanceiroTab() {
   const despesasPeriodo = useMemo(() => rowsNoPeriodo.filter(r => r.type === 'despesa' && r.impacts_cash !== false).reduce((s, r) => s + Number(r.value), 0), [rowsNoPeriodo])
   const resultadoLiquido = receitasPeriodo - despesasPeriodo
   const margemLiquida = receitasPeriodo > 0 ? (resultadoLiquido / receitasPeriodo) * 100 : 0
+
+  const prevRange = useMemo(() => previousPeriodRange(period.range.start, period.range.end), [period.range])
+  const rowsPeriodoAnterior = useMemo(() => rows.filter(r => r.date >= prevRange.start && r.date <= prevRange.end), [rows, prevRange])
+  const receitasAnterior = useMemo(() => rowsPeriodoAnterior.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0), [rowsPeriodoAnterior])
+  const despesasAnterior = useMemo(() => rowsPeriodoAnterior.filter(r => r.type === 'despesa' && r.impacts_cash !== false).reduce((s, r) => s + Number(r.value), 0), [rowsPeriodoAnterior])
 
   function categoryBreakdown(type: 'receita' | 'despesa') {
     const map = new Map<string, number>()
@@ -124,9 +129,9 @@ export default function FinanceiroTab() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <KpiCard title="Saldo total" value={fmtBRL(saldoTotal)} icon={DollarSign} color="#8B5CF6" sensitive />
-        <KpiCard title="Receitas (período)" value={fmtBRL(receitasPeriodo)} icon={TrendingUp} color="#22c55e" sensitive />
-        <KpiCard title="Despesas (período)" value={fmtBRL(despesasPeriodo)} icon={TrendingUp} color="#ef4444" sensitive />
-        <KpiCard title="Resultado líquido" value={fmtBRL(resultadoLiquido)} icon={DollarSign} color={resultadoLiquido >= 0 ? '#22c55e' : '#ef4444'} sensitive />
+        <KpiCard title="Receitas (período)" value={fmtBRL(receitasPeriodo)} icon={TrendingUp} color="#22c55e" sensitive trend={trendText(receitasPeriodo, receitasAnterior)} />
+        <KpiCard title="Despesas (período)" value={fmtBRL(despesasPeriodo)} icon={TrendingUp} color="#ef4444" sensitive trend={trendText(despesasPeriodo, despesasAnterior)} />
+        <KpiCard title="Resultado líquido" value={fmtBRL(resultadoLiquido)} icon={DollarSign} color={resultadoLiquido >= 0 ? '#22c55e' : '#ef4444'} sensitive trend={trendText(resultadoLiquido, receitasAnterior - despesasAnterior)} />
         <KpiCard title="Margem líquida" value={`${margemLiquida.toFixed(0)}%`} icon={TrendingUp} color="#3B82F6" />
       </div>
 
@@ -143,6 +148,8 @@ export default function FinanceiroTab() {
           </ResponsiveContainer>
         </div>
       </ChartCard>
+
+      <NotesPanel area="financeiro" months={trendMonths} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ChartCard title="Receitas por categoria" icon={DollarSign}>

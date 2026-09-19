@@ -7,7 +7,7 @@ import {
 import { fmtBRL, fmtDate } from '@/lib/format'
 import {
   monthsBack, usePeriod, PeriodPicker, KpiCard, ChartCard,
-  DetailDialog, useDetail, AttentionPanel, type Attention,
+  DetailDialog, useDetail, AttentionPanel, type Attention, previousPeriodRange, trendText, NotesPanel,
 } from './shared'
 
 export interface Lead {
@@ -46,6 +46,12 @@ export default function ComercialTab() {
   const convertidosPeriodo = leadsNoPeriodo.filter(l => l.status === 'convertido' || l.client_id).length
   const taxaConversao = leadsNoPeriodo.length > 0 ? (convertidosPeriodo / leadsNoPeriodo.length) * 100 : 0
   const clientesNoPeriodo = useMemo(() => clients.filter(c => c.created_at >= period.range.start && c.created_at <= period.range.end + 'T23:59:59'), [clients, period.range])
+
+  const prevRange = useMemo(() => previousPeriodRange(period.range.start, period.range.end), [period.range])
+  const leadsPeriodoAnterior = useMemo(() => leads.filter(l => l.created_at >= prevRange.start && l.created_at <= prevRange.end + 'T23:59:59'), [leads, prevRange])
+  const clientesPeriodoAnterior = useMemo(() => clients.filter(c => c.created_at >= prevRange.start && c.created_at <= prevRange.end + 'T23:59:59'), [clients, prevRange])
+  const taxaConversaoAnterior = leadsPeriodoAnterior.length > 0
+    ? (leadsPeriodoAnterior.filter(l => l.status === 'convertido' || l.client_id).length / leadsPeriodoAnterior.length) * 100 : 0
   const ticketMedio = useMemo(() => {
     const comValor = leadsNoPeriodo.filter(l => (l.status === 'convertido' || l.client_id) && l.potential_value)
     if (comValor.length === 0) return 0
@@ -133,9 +139,9 @@ export default function ComercialTab() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <KpiCard title="Leads ativos" value={leadsAtivos} icon={Target} color="#3B82F6" />
-        <KpiCard title="Leads recebidos (período)" value={leadsNoPeriodo.length} icon={Target} color="#3B82F6" />
-        <KpiCard title="Taxa de conversão" value={`${taxaConversao.toFixed(0)}%`} icon={TrendingUp} color="#22c55e" />
-        <KpiCard title="Novos clientes (período)" value={clientesNoPeriodo.length} icon={Users} color="#8B5CF6" />
+        <KpiCard title="Leads recebidos (período)" value={leadsNoPeriodo.length} icon={Target} color="#3B82F6" trend={trendText(leadsNoPeriodo.length, leadsPeriodoAnterior.length)} />
+        <KpiCard title="Taxa de conversão" value={`${taxaConversao.toFixed(0)}%`} icon={TrendingUp} color="#22c55e" trend={trendText(taxaConversao, taxaConversaoAnterior)} />
+        <KpiCard title="Novos clientes (período)" value={clientesNoPeriodo.length} icon={Users} color="#8B5CF6" trend={trendText(clientesNoPeriodo.length, clientesPeriodoAnterior.length)} />
         <KpiCard title="Ticket médio contratado" value={fmtBRL(ticketMedio)} icon={TrendingUp} color="#F59E0B" sensitive />
       </div>
 
@@ -213,6 +219,8 @@ export default function ComercialTab() {
           </div>
         </ChartCard>
       </div>
+
+      <NotesPanel area="comercial" months={trendMonths} />
 
       <DetailDialog open={detail.open} onClose={detail.close} title={detail.title} rows={detail.rows} />
     </div>

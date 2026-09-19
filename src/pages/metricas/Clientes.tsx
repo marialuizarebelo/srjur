@@ -4,6 +4,7 @@ import { Users, AlertTriangle, Wallet } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
 import {
   usePeriod, PeriodPicker, KpiCard, ChartCard, DonutWithLegend, DetailDialog, useDetail,
+  previousPeriodRange, trendText,
 } from './shared'
 
 interface ClientRow { id: string; name: string; area: string | null; status: string; created_at: string }
@@ -30,6 +31,8 @@ export default function ClientesTab() {
   const todayStr = new Date().toISOString().slice(0, 10)
   const clientesAtivos = clients.filter(c => c.status === 'ativo').length
   const novosNoPeriodo = clients.filter(c => c.created_at >= period.range.start && c.created_at <= period.range.end + 'T23:59:59')
+  const prevRange = useMemo(() => previousPeriodRange(period.range.start, period.range.end), [period.range])
+  const novosPeriodoAnterior = clients.filter(c => c.created_at >= prevRange.start && c.created_at <= prevRange.end + 'T23:59:59')
 
   const carteiraPorArea = useMemo(() => {
     const map = new Map<string, number>()
@@ -65,7 +68,7 @@ export default function ClientesTab() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard title="Clientes ativos" value={clientesAtivos} icon={Users} color="#3B82F6" />
-        <KpiCard title="Novos clientes (período)" value={novosNoPeriodo.length} icon={Users} color="#22c55e" />
+        <KpiCard title="Novos clientes (período)" value={novosNoPeriodo.length} icon={Users} color="#22c55e" trend={trendText(novosNoPeriodo.length, novosPeriodoAnterior.length)} />
         <KpiCard title="Clientes inadimplentes" value={clientesInadimplentes} icon={AlertTriangle} color="#ef4444" onClick={openInadimplenciaDetail} />
         <KpiCard title="Valor em atraso" value={fmtBRL(valorInadimplente)} icon={Wallet} color="#ef4444" sensitive onClick={openInadimplenciaDetail} />
       </div>
