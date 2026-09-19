@@ -119,6 +119,17 @@ export default function FinanceiroTab() {
     return items
   }, [saldoTotal, receitasPeriodo, despesasPeriodo, despesaCategoryData, rows])
 
+  function openRowsList(title: string, list: FinanceRow[]) {
+    detail.show(title, list.map((r, i) => ({ id: String(i), label: r.description, sublabel: `${fmtDate(r.date)} · ${r.category ?? 'Outros'}`, value: fmtBRL(Number(r.value)) })))
+  }
+  function openSaldoDetail() {
+    const list = rows.filter(r => r.paid && r.impacts_cash !== false)
+    openRowsList('Lançamentos pagos que compõem o saldo', list)
+  }
+  function openReceitasDetail() { openRowsList('Receitas do período', rowsNoPeriodo.filter(r => r.type === 'receita')) }
+  function openDespesasDetail() { openRowsList('Despesas do período', rowsNoPeriodo.filter(r => r.type === 'despesa' && r.impacts_cash !== false)) }
+  function openResultadoDetail() { openRowsList('Receitas e despesas do período', rowsNoPeriodo.filter(r => r.type === 'receita' || r.impacts_cash !== false)) }
+
   if (loading) return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>
 
   return (
@@ -128,11 +139,11 @@ export default function FinanceiroTab() {
       <AttentionPanel items={attention} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard title="Saldo total" value={fmtBRL(saldoTotal)} icon={DollarSign} color="#8B5CF6" sensitive />
-        <KpiCard title="Receitas (período)" value={fmtBRL(receitasPeriodo)} icon={TrendingUp} color="#22c55e" sensitive trend={trendText(receitasPeriodo, receitasAnterior)} />
-        <KpiCard title="Despesas (período)" value={fmtBRL(despesasPeriodo)} icon={TrendingUp} color="#ef4444" sensitive trend={trendText(despesasPeriodo, despesasAnterior)} />
-        <KpiCard title="Resultado líquido" value={fmtBRL(resultadoLiquido)} icon={DollarSign} color={resultadoLiquido >= 0 ? '#22c55e' : '#ef4444'} sensitive trend={trendText(resultadoLiquido, receitasAnterior - despesasAnterior)} />
-        <KpiCard title="Margem líquida" value={`${margemLiquida.toFixed(0)}%`} icon={TrendingUp} color="#3B82F6" />
+        <KpiCard title="Saldo total" value={fmtBRL(saldoTotal)} icon={DollarSign} color="#8B5CF6" sensitive onClick={openSaldoDetail} />
+        <KpiCard title="Receitas (período)" value={fmtBRL(receitasPeriodo)} icon={TrendingUp} color="#22c55e" sensitive trend={trendText(receitasPeriodo, receitasAnterior)} onClick={openReceitasDetail} />
+        <KpiCard title="Despesas (período)" value={fmtBRL(despesasPeriodo)} icon={TrendingUp} color="#ef4444" sensitive trend={trendText(despesasPeriodo, despesasAnterior)} onClick={openDespesasDetail} />
+        <KpiCard title="Resultado líquido" value={fmtBRL(resultadoLiquido)} icon={DollarSign} color={resultadoLiquido >= 0 ? '#22c55e' : '#ef4444'} sensitive trend={trendText(resultadoLiquido, receitasAnterior - despesasAnterior)} onClick={openResultadoDetail} />
+        <KpiCard title="Margem líquida" value={`${margemLiquida.toFixed(0)}%`} icon={TrendingUp} color="#3B82F6" onClick={openResultadoDetail} />
       </div>
 
       <ChartCard title="Evolução (12 meses)" icon={BarChart3}>

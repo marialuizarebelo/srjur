@@ -15,7 +15,7 @@ import { DollarSign, Target, Plus, Pencil, Trash2, Trophy, NotebookText } from '
 import { fmtBRL, fmtDate } from '@/lib/format'
 import { getAdminProfiles, type ProfileOption } from '@/components/ResponsibleSelect'
 import { toast } from 'sonner'
-import { MONTHS, ChartCard } from './shared'
+import { MONTHS, ChartCard, DetailDialog, useDetail, type DetailRow } from './shared'
 import { useFinanceRows } from './Financeiro'
 
 const CATEGORIES_RECEITA = ['Honorários Iniciais', 'Mensalidade', 'Acordo', 'Consultoria', 'Êxito', 'Outros']
@@ -270,9 +270,9 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles }: {
 }
 
 /* ---------- Card ---------- */
-function MetaCard({ m, tipo, atingido, profiles, onEdit, onDelete, onDetails }: {
+function MetaCard({ m, tipo, atingido, profiles, onEdit, onDelete, onDetails, onShowComposition }: {
   m: Meta; tipo: TipoMeta; atingido: number; profiles: ProfileOption[]
-  onEdit: () => void; onDelete: () => void; onDetails: () => void
+  onEdit: () => void; onDelete: () => void; onDetails: () => void; onShowComposition: () => void
 }) {
   const pct = m.valor_alvo > 0 ? Math.min(100, (atingido / m.valor_alvo) * 100) : 0
   const status = metaStatus(m, tipo, atingido)
@@ -292,10 +292,10 @@ function MetaCard({ m, tipo, atingido, profiles, onEdit, onDelete, onDetails }: 
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-bold" style={{ color: status.color }}>{formatByUnit(atingido, tipo.unit)}</span>
+      <button onClick={onShowComposition} className="flex items-center justify-between gap-2 w-full hover:opacity-70 transition-opacity" title="Ver o que compõe esse valor">
+        <span className="text-sm font-bold underline decoration-dotted underline-offset-2" style={{ color: status.color }}>{formatByUnit(atingido, tipo.unit)}</span>
         <span className="text-xs text-muted-foreground">/ {formatByUnit(m.valor_alvo, tipo.unit)}</span>
-      </div>
+      </button>
       <div className="h-2 rounded-full bg-muted overflow-hidden">
         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: status.color }} />
       </div>
@@ -409,14 +409,15 @@ function MetaDetalhesDialog({ open, onClose, meta }: { open: boolean; onClose: (
 }
 
 /* ---------- Section ---------- */
-function MetasSection({ area, icon, metas, profiles, computeAtingido, onChanged }: {
+function MetasSection({ area, icon, metas, profiles, computeAtingido, computeDetailRows, onChanged }: {
   area: 'financeiro' | 'comercial'; icon: React.ElementType; metas: Meta[]; profiles: ProfileOption[]
-  computeAtingido: (m: Meta) => number; onChanged: () => void
+  computeAtingido: (m: Meta) => number; computeDetailRows: (m: Meta) => DetailRow[]; onChanged: () => void
 }) {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Meta | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [detailsMeta, setDetailsMeta] = useState<Meta | null>(null)
+  const composition = useDetail()
 
   async function remove(id: string) {
     if (!confirm('Excluir esta meta?')) return
@@ -439,20 +440,22 @@ function MetasSection({ area, icon, metas, profiles, computeAtingido, onChanged 
             return (
               <MetaCard key={m.id} m={m} tipo={tipo} atingido={computeAtingido(m)} profiles={profiles}
                 onEdit={() => { setEditing(m); setFormOpen(true) }} onDelete={() => remove(m.id)}
-                onDetails={() => { setDetailsMeta(m); setDetailsOpen(true) }} />
+                onDetails={() => { setDetailsMeta(m); setDetailsOpen(true) }}
+                onShowComposition={() => composition.show(`O que compõe "${m.label}"`, computeDetailRows(m))} />
             )
           })}
         </div>
       )}
       <MetaFormDialog open={formOpen} onClose={() => setFormOpen(false)} area={area} editing={editing} onSaved={onChanged} profiles={profiles} />
       <MetaDetalhesDialog open={detailsOpen} onClose={() => setDetailsOpen(false)} meta={detailsMeta} />
+      <DetailDialog open={composition.open} onClose={composition.close} title={composition.title} rows={composition.rows} />
     </ChartCard>
   )
 }
 
 /* ---------- Main ---------- */
-interface LeadLite { status: string; created_at: string; client_id: string | null; source: string | null }
-interface ClientLite { created_at: string }
+interface LeadLite { name: string; status: string; created_at: string; client_id: string | null; source: string | null }
+interface ClientLite { name: string; created_at: string }
 
 export default function MetasTab() {
   const { rows: financeRows, loading: loadingFinance } = useFinanceRows()
@@ -464,8 +467,8 @@ export default function MetasTab() {
 
   async function load() {
     const [{ data: l }, { data: c }, { data: m }, profs] = await Promise.all([
-      supabase.from('leads').select('status, created_at, client_id, source'),
-      supabase.from('clients').select('created_at'),
+      supabase.from('leads').select('name, status, created_at, client_id, source'),
+      supabase.from('clients').select('name, created_at'),
       supabase.from('metas').select('*').order('created_at', { ascending: false }),
       getAdminProfiles(),
     ])
@@ -502,6 +505,30 @@ export default function MetasTab() {
     return 0
   }
 
+  function detailRowsFinanceiro(m: Meta) {
+    const { start, end } = metaPeriodRange(m)
+    if (m.tipo === 'saldo_minimo') {
+      return financeRows.filter(r => r.paid && r.impacts_cash !== false)
+        .map((r, i) => ({ id: String(i), label: r.description, sublabel: fmtDate(r.date), value: fmtBRL(Number(r.value)) }))
+    }
+    const inRange = financeRows.filter(r => r.date >= start && r.date <= end && (!m.categoria || r.category === m.categoria))
+    const list = m.tipo === 'despesa_maxima'
+      ? inRange.filter(r => r.type === 'despesa' && r.impacts_cash !== false)
+      : inRange.filter(r => r.type === 'receita')
+    return list.map((r, i) => ({ id: String(i), label: r.description, sublabel: fmtDate(r.date), value: fmtBRL(Number(r.value)) }))
+  }
+  function detailRowsComercial(m: Meta) {
+    const { start, end } = metaPeriodRange(m)
+    if (m.tipo === 'novos_clientes') {
+      return clients.filter(c => c.created_at >= start && c.created_at <= end + 'T23:59:59')
+        .map((c, i) => ({ id: String(i), label: c.name, sublabel: fmtDate(c.created_at) }))
+    }
+    const inRange = leads.filter(l => l.created_at >= start && l.created_at <= end + 'T23:59:59' && (!m.origem || (l.source ?? '') === m.origem))
+    return inRange.map((l, i) => ({
+      id: String(i), label: l.name, sublabel: `${fmtDate(l.created_at)} · ${l.status === 'convertido' || l.client_id ? 'Convertido' : 'Em andamento'}`,
+    }))
+  }
+
   const metasFinanceiro = metas.filter(m => m.area === 'financeiro')
   const metasComercial = metas.filter(m => m.area === 'comercial')
 
@@ -529,8 +556,8 @@ export default function MetasTab() {
         </p>
       </Card>
 
-      <MetasSection area="financeiro" icon={DollarSign} metas={metasFinanceiro} profiles={profiles} computeAtingido={computeAtingidoFinanceiro} onChanged={load} />
-      <MetasSection area="comercial" icon={Target} metas={metasComercial} profiles={profiles} computeAtingido={computeAtingidoComercial} onChanged={load} />
+      <MetasSection area="financeiro" icon={DollarSign} metas={metasFinanceiro} profiles={profiles} computeAtingido={computeAtingidoFinanceiro} computeDetailRows={detailRowsFinanceiro} onChanged={load} />
+      <MetasSection area="comercial" icon={Target} metas={metasComercial} profiles={profiles} computeAtingido={computeAtingidoComercial} computeDetailRows={detailRowsComercial} onChanged={load} />
     </div>
   )
 }

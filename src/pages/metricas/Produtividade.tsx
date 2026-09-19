@@ -116,6 +116,13 @@ export default function ProdutividadeTab() {
     return items
   }, [prazosAtrasados, tarefasAtrasadas, cargaPorResponsavel])
 
+  function openTasksDetail(title: string, list: Task[]) {
+    detail.show(title, list.map((t, i) => ({ id: String(i), label: t.title, sublabel: t.due_date ? fmtDate(t.due_date) : undefined })))
+  }
+  function openDeadlinesDetail(title: string, list: Deadline[]) {
+    detail.show(title, list.map((d, i) => ({ id: String(i), label: d.title, sublabel: fmtDate(d.due_date) })))
+  }
+
   if (loading) return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>
 
   return (
@@ -123,10 +130,10 @@ export default function ProdutividadeTab() {
       <AttentionPanel items={attention} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard title="Tarefas pendentes" value={tarefasPendentes} icon={ClipboardList} color="#3B82F6" />
-        <KpiCard title="Tarefas atrasadas" value={tarefasAtrasadas} icon={ClipboardList} color="#ef4444" />
-        <KpiCard title="Prazos pendentes" value={prazosPendentes} icon={Bell} color="#F59E0B" />
-        <KpiCard title="Prazos atrasados" value={prazosAtrasados} icon={Bell} color="#ef4444" />
+        <KpiCard title="Tarefas pendentes" value={tarefasPendentes} icon={ClipboardList} color="#3B82F6" onClick={() => openTasksDetail('Tarefas pendentes', tasks.filter(t => t.status === 'pendente'))} />
+        <KpiCard title="Tarefas atrasadas" value={tarefasAtrasadas} icon={ClipboardList} color="#ef4444" onClick={() => openTasksDetail('Tarefas atrasadas', tasks.filter(t => t.status === 'pendente' && t.due_date && t.due_date < todayStr))} />
+        <KpiCard title="Prazos pendentes" value={prazosPendentes} icon={Bell} color="#F59E0B" onClick={() => openDeadlinesDetail('Prazos pendentes', deadlines.filter(d => d.status === 'pendente'))} />
+        <KpiCard title="Prazos atrasados" value={prazosAtrasados} icon={Bell} color="#ef4444" onClick={() => openDeadlinesDetail('Prazos atrasados', deadlines.filter(d => d.status === 'pendente' && d.due_date < todayStr))} />
       </div>
 
       <ChartCard title="Tarefas concluídas x atrasadas por mês" icon={ClipboardList}>

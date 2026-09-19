@@ -67,7 +67,7 @@ export default function ClientesTab() {
       <PeriodPicker p={period} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard title="Clientes ativos" value={clientesAtivos} icon={Users} color="#3B82F6" />
+        <KpiCard title="Clientes ativos" value={clientesAtivos} icon={Users} color="#3B82F6" onClick={() => detail.show('Clientes ativos', clients.filter(c => c.status === 'ativo').map((c, i) => ({ id: String(i), label: c.name, sublabel: c.area ?? undefined })))} />
         <KpiCard title="Novos clientes (período)" value={novosNoPeriodo.length} icon={Users} color="#22c55e" trend={trendText(novosNoPeriodo.length, novosPeriodoAnterior.length)} />
         <KpiCard title="Clientes inadimplentes" value={clientesInadimplentes} icon={AlertTriangle} color="#ef4444" onClick={openInadimplenciaDetail} />
         <KpiCard title="Valor em atraso" value={fmtBRL(valorInadimplente)} icon={Wallet} color="#ef4444" sensitive onClick={openInadimplenciaDetail} />

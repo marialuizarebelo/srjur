@@ -10,7 +10,7 @@ import {
 } from 'recharts'
 
 interface ProcessRow { id: string; title: string; status: string; area: string | null; created_at: string; closed_date: string | null; client_id: string | null }
-interface ClientRow { id: string; area: string | null; status: string }
+interface ClientRow { id: string; name: string; area: string | null; status: string }
 interface DeadlineRow { title: string; status: string; due_date: string }
 interface TaskRow { title: string; type: string; status: string; due_date: string | null }
 interface FinanceLite { category: string | null; type: string; value: number; date: string; paid: boolean; process_id: string | null; client_id: string | null; description: string }
@@ -28,7 +28,7 @@ export default function JuridicoTab() {
   useEffect(() => {
     Promise.all([
       supabase.from('processes').select('id, title, status, area, created_at, closed_date, client_id'),
-      supabase.from('clients').select('id, area, status'),
+      supabase.from('clients').select('id, name, area, status'),
       supabase.from('deadlines').select('title, status, due_date'),
       supabase.from('tasks').select('title, type, status, due_date'),
       supabase.from('finance').select('category, type, value, date, paid, process_id, client_id, description'),
@@ -83,6 +83,30 @@ export default function JuridicoTab() {
     detail.show(`Receita — ${area}`, list.map((f, i) => ({ id: String(i), label: f.description, sublabel: fmtDate(f.date), value: fmtBRL(Number(f.value)) })))
   }
 
+  const processosAtivosList = processes.filter(p => p.status === 'em_andamento')
+  const novosProcessosList = processes.filter(p => p.created_at >= period.range.start && p.created_at <= period.range.end + 'T23:59:59')
+  const processosEncerradosList = processes.filter(p => p.closed_date && p.closed_date >= period.range.start && p.closed_date <= period.range.end)
+  const prazosAtrasadosList = deadlines.filter(d => d.status === 'pendente' && d.due_date < todayStr)
+  const audienciasRealizadasList = tasks.filter(t => t.type === 'audiencia' && t.status === 'concluida' && t.due_date && t.due_date >= period.range.start && t.due_date <= period.range.end)
+  const honorariosExitoList = finance.filter(f => f.category === 'Êxito' && f.type === 'receita' && !f.paid)
+  const clientesAtivosList = clients.filter(c => c.status === 'ativo')
+
+  function openClientsDetail() {
+    detail.show('Clientes ativos', clientesAtivosList.map((c, i) => ({ id: String(i), label: c.name })))
+  }
+  function openProcessesDetail(title: string, list: ProcessRow[]) {
+    detail.show(title, list.map((p, i) => ({ id: String(i), label: p.title, sublabel: p.area ?? undefined })))
+  }
+  function openDeadlinesDetail(title: string, list: DeadlineRow[]) {
+    detail.show(title, list.map((d, i) => ({ id: String(i), label: d.title, sublabel: fmtDate(d.due_date) })))
+  }
+  function openTasksDetail(title: string, list: TaskRow[]) {
+    detail.show(title, list.map((t, i) => ({ id: String(i), label: t.title, sublabel: t.due_date ? fmtDate(t.due_date) : undefined })))
+  }
+  function openFinanceDetail(title: string, list: FinanceLite[]) {
+    detail.show(title, list.map((f, i) => ({ id: String(i), label: f.description, sublabel: fmtDate(f.date), value: fmtBRL(Number(f.value)) })))
+  }
+
   if (loading) return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>
 
   return (
@@ -90,16 +114,16 @@ export default function JuridicoTab() {
       <PeriodPicker p={period} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        <KpiCard title="Clientes ativos" value={clientesAtivos} icon={Users} color="#3B82F6" />
-        <KpiCard title="Processos ativos" value={processosAtivos} icon={Scale} color="#6366F1" />
-        <KpiCard title="Novos processos (período)" value={novosProcessos} icon={Scale} color="#22c55e" />
-        <KpiCard title="Processos encerrados (período)" value={processosEncerrados} icon={Scale} color="#94a3b8" />
-        <KpiCard title="Prazos no período" value={prazosNoPeriodo.length} icon={Bell} color="#F59E0B" />
-        <KpiCard title="Prazos concluídos (período)" value={prazosConcluidos} icon={Bell} color="#22c55e" />
-        <KpiCard title="Prazos atrasados" value={prazosAtrasados} icon={Bell} color="#ef4444" />
-        <KpiCard title="Audiências realizadas (período)" value={audienciasRealizadas} icon={Gavel} color="#8B5CF6" />
-        <KpiCard title="Acordos fechados (período)" value={acordosNoPeriodo.length} icon={Handshake} color="#14B8A6" trend={fmtBRL(valorAcordos)} />
-        <KpiCard title="Honorários de êxito previstos" value={fmtBRL(honorariosExitoPrevistos)} icon={Trophy} color="#F59E0B" sensitive />
+        <KpiCard title="Clientes ativos" value={clientesAtivos} icon={Users} color="#3B82F6" onClick={openClientsDetail} />
+        <KpiCard title="Processos ativos" value={processosAtivos} icon={Scale} color="#6366F1" onClick={() => openProcessesDetail('Processos ativos', processosAtivosList)} />
+        <KpiCard title="Novos processos (período)" value={novosProcessos} icon={Scale} color="#22c55e" onClick={() => openProcessesDetail('Novos processos no período', novosProcessosList)} />
+        <KpiCard title="Processos encerrados (período)" value={processosEncerrados} icon={Scale} color="#94a3b8" onClick={() => openProcessesDetail('Processos encerrados no período', processosEncerradosList)} />
+        <KpiCard title="Prazos no período" value={prazosNoPeriodo.length} icon={Bell} color="#F59E0B" onClick={() => openDeadlinesDetail('Prazos no período', prazosNoPeriodo)} />
+        <KpiCard title="Prazos concluídos (período)" value={prazosConcluidos} icon={Bell} color="#22c55e" onClick={() => openDeadlinesDetail('Prazos concluídos no período', prazosNoPeriodo.filter(d => d.status === 'cumprido'))} />
+        <KpiCard title="Prazos atrasados" value={prazosAtrasados} icon={Bell} color="#ef4444" onClick={() => openDeadlinesDetail('Prazos atrasados', prazosAtrasadosList)} />
+        <KpiCard title="Audiências realizadas (período)" value={audienciasRealizadas} icon={Gavel} color="#8B5CF6" onClick={() => openTasksDetail('Audiências realizadas no período', audienciasRealizadasList)} />
+        <KpiCard title="Acordos fechados (período)" value={acordosNoPeriodo.length} icon={Handshake} color="#14B8A6" trend={fmtBRL(valorAcordos)} onClick={() => openFinanceDetail('Acordos fechados no período', acordosNoPeriodo)} />
+        <KpiCard title="Honorários de êxito previstos" value={fmtBRL(honorariosExitoPrevistos)} icon={Trophy} color="#F59E0B" sensitive onClick={() => openFinanceDetail('Honorários de êxito previstos', honorariosExitoList)} />
       </div>
 
       <ChartCard title="Receita por área jurídica (período)" icon={Scale}>

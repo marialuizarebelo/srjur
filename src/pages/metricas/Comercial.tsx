@@ -129,6 +129,22 @@ export default function ComercialTab() {
     return items
   }, [leads, hoje, leadsPerdidosPeriodo, leadsNoPeriodo])
 
+  function openLeadsList(title: string, list: Lead[]) {
+    detail.show(title, list.map((l, i) => ({
+      id: String(i), label: l.name, sublabel: `${fmtDate(l.created_at)} · ${l.status === 'convertido' || l.client_id ? 'Convertido' : l.status === 'perdido' ? 'Perdido' : 'Em andamento'}`,
+      value: l.potential_value ? fmtBRL(Number(l.potential_value)) : undefined,
+    })))
+  }
+  function openLeadsAtivosDetail() { openLeadsList('Leads ativos', leads.filter(l => l.status !== 'perdido' && l.status !== 'convertido' && !l.client_id)) }
+  function openLeadsRecebidosDetail() { openLeadsList('Leads recebidos no período', leadsNoPeriodo) }
+  function openConversaoDetail() { openLeadsList('Leads convertidos no período', leadsNoPeriodo.filter(l => l.status === 'convertido' || l.client_id)) }
+  function openNovosClientesDetail() {
+    detail.show('Novos clientes no período', clientesNoPeriodo.map((c, i) => ({ id: String(i), label: c.name, sublabel: fmtDate(c.created_at) })))
+  }
+  function openTicketMedioDetail() {
+    openLeadsList('Contratos considerados no ticket médio', leadsNoPeriodo.filter(l => (l.status === 'convertido' || l.client_id) && l.potential_value))
+  }
+
   if (loading) return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>
 
   return (
@@ -138,11 +154,11 @@ export default function ComercialTab() {
       <AttentionPanel items={attention} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard title="Leads ativos" value={leadsAtivos} icon={Target} color="#3B82F6" />
-        <KpiCard title="Leads recebidos (período)" value={leadsNoPeriodo.length} icon={Target} color="#3B82F6" trend={trendText(leadsNoPeriodo.length, leadsPeriodoAnterior.length)} />
-        <KpiCard title="Taxa de conversão" value={`${taxaConversao.toFixed(0)}%`} icon={TrendingUp} color="#22c55e" trend={trendText(taxaConversao, taxaConversaoAnterior)} />
-        <KpiCard title="Novos clientes (período)" value={clientesNoPeriodo.length} icon={Users} color="#8B5CF6" trend={trendText(clientesNoPeriodo.length, clientesPeriodoAnterior.length)} />
-        <KpiCard title="Ticket médio contratado" value={fmtBRL(ticketMedio)} icon={TrendingUp} color="#F59E0B" sensitive />
+        <KpiCard title="Leads ativos" value={leadsAtivos} icon={Target} color="#3B82F6" onClick={openLeadsAtivosDetail} />
+        <KpiCard title="Leads recebidos (período)" value={leadsNoPeriodo.length} icon={Target} color="#3B82F6" trend={trendText(leadsNoPeriodo.length, leadsPeriodoAnterior.length)} onClick={openLeadsRecebidosDetail} />
+        <KpiCard title="Taxa de conversão" value={`${taxaConversao.toFixed(0)}%`} icon={TrendingUp} color="#22c55e" trend={trendText(taxaConversao, taxaConversaoAnterior)} onClick={openConversaoDetail} />
+        <KpiCard title="Novos clientes (período)" value={clientesNoPeriodo.length} icon={Users} color="#8B5CF6" trend={trendText(clientesNoPeriodo.length, clientesPeriodoAnterior.length)} onClick={openNovosClientesDetail} />
+        <KpiCard title="Ticket médio contratado" value={fmtBRL(ticketMedio)} icon={TrendingUp} color="#F59E0B" sensitive onClick={openTicketMedioDetail} />
       </div>
 
       <ChartCard title="Funil de leads (acumulado)" icon={Target}>
