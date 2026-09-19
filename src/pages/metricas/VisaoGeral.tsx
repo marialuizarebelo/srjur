@@ -4,7 +4,7 @@ import { DollarSign, TrendingUp, Users, Target, Scale, ClipboardList } from 'luc
 import { fmtBRL, fmtDate } from '@/lib/format'
 import { KpiCard, trendText, DetailDialog, useDetail } from './shared'
 
-interface FinanceLite { type: string; value: number; paid: boolean; impacts_cash: boolean; date: string; description: string; category: string | null }
+interface FinanceLite { type: string; value: number; paid: boolean; impacts_cash: boolean; date: string; description: string; category: string | null; business_unit: string | null; refletir_metricas: boolean }
 interface ClientLite { name: string; status: string }
 interface LeadLite { name: string; status: string; client_id: string | null; created_at: string }
 interface ProcessLite { title: string; status: string }
@@ -37,19 +37,20 @@ export default function VisaoGeralTab() {
         { data: fa }, { data: fm }, { data: fmPrev },
         { data: cl }, { data: ld }, { data: pr }, { data: ta }, { data: da },
       ] = await Promise.all([
-        supabase.from('finance').select('type, value, paid, impacts_cash, date, description, category'),
-        supabase.from('finance').select('type, value, impacts_cash, date, description, category').gte('date', monthStart).lte('date', monthEnd),
-        supabase.from('finance').select('type, value, impacts_cash').gte('date', prevMonthStart).lte('date', prevMonthEnd),
-        supabase.from('clients').select('name, status').eq('status', 'ativo'),
+        supabase.from('finance').select('type, value, paid, impacts_cash, date, description, category, business_unit, refletir_metricas'),
+        supabase.from('finance').select('type, value, impacts_cash, date, description, category, business_unit, refletir_metricas').gte('date', monthStart).lte('date', monthEnd),
+        supabase.from('finance').select('type, value, impacts_cash, business_unit, refletir_metricas').gte('date', prevMonthStart).lte('date', prevMonthEnd),
+        supabase.from('clients').select('name, status').eq('status', 'ativo').eq('is_cortesia', false).neq('is_juridico', false),
         supabase.from('leads').select('name, status, client_id, created_at').not('status', 'in', '(perdido,convertido)').is('client_id', null),
         supabase.from('processes').select('title, status').eq('status', 'em_andamento'),
         supabase.from('tasks').select('title, status, due_date').eq('status', 'pendente').lt('due_date', today),
         supabase.from('deadlines').select('title, status, due_date').eq('status', 'pendente').lt('due_date', today),
       ])
 
-      setFinAll((fa as FinanceLite[]) ?? [])
-      setFinMonth((fm as FinanceLite[]) ?? [])
-      const finPrev = (fmPrev as FinanceLite[]) ?? []
+      const advocaciaOnly = (rows: FinanceLite[]) => rows.filter(r => r.business_unit !== 'saas' && r.refletir_metricas !== false)
+      setFinAll(advocaciaOnly((fa as FinanceLite[]) ?? []))
+      setFinMonth(advocaciaOnly((fm as FinanceLite[]) ?? []))
+      const finPrev = advocaciaOnly((fmPrev as FinanceLite[]) ?? [])
       setReceitasMesAnterior(finPrev.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0))
       setDespesasMesAnterior(finPrev.filter(r => r.type === 'despesa' && r.impacts_cash !== false).reduce((s, r) => s + Number(r.value), 0))
       setClients((cl as ClientLite[]) ?? [])

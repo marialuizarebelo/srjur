@@ -130,6 +130,7 @@ export interface ClientFormData {
   status: string; portal_visible: boolean; birth_date: string
   signed_at: string; first_contact_at: string
   rep_name: string; rep_cpf: string; rep_role: string; rep_document_type: string; rep_address: string
+  is_juridico: boolean; is_saas: boolean; is_cortesia: boolean
 }
 
 export const emptyClientForm: ClientFormData = {
@@ -143,6 +144,7 @@ export const emptyClientForm: ClientFormData = {
   status: 'ativo', portal_visible: false, birth_date: '',
   signed_at: '', first_contact_at: '',
   rep_name: '', rep_cpf: '', rep_role: '', rep_document_type: 'Contrato Social', rep_address: '',
+  is_juridico: true, is_saas: false, is_cortesia: false,
 }
 
 export const GENDERS = ['Masculino', 'Feminino', 'Outro', 'Não informado']
@@ -494,6 +496,23 @@ export function ClientFormDialog({
 
           {/* ── Jurídico / Comercial ── */}
           <Section title="Jurídico / Comercial">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label className="flex items-center gap-2 py-2 px-3 rounded-lg border cursor-pointer">
+                <Switch checked={form.is_juridico} onCheckedChange={v => setForm(f => ({ ...f, is_juridico: v }))} />
+                <span className="text-sm">Jurídico</span>
+              </label>
+              <label className="flex items-center gap-2 py-2 px-3 rounded-lg border cursor-pointer">
+                <Switch checked={form.is_saas} onCheckedChange={v => setForm(f => ({ ...f, is_saas: v }))} />
+                <span className="text-sm">Sistema (SaaS)</span>
+              </label>
+              <label className="flex items-center gap-2 py-2 px-3 rounded-lg border cursor-pointer">
+                <Switch checked={form.is_cortesia} onCheckedChange={v => setForm(f => ({ ...f, is_cortesia: v }))} />
+                <span className="text-sm">Caso gratuito / cortesia</span>
+              </label>
+            </div>
+            <p className="text-[11px] text-muted-foreground -mt-2">
+              Um cliente pode ser Jurídico e Sistema ao mesmo tempo. "Caso gratuito" tira esse cadastro das métricas comerciais (novos clientes, conversão, carteira).
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1.5 sm:col-span-1">
                 <Label>Responsável</Label>

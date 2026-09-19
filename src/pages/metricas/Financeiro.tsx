@@ -25,18 +25,24 @@ export interface FinanceRow {
   client_id: string | null
   recurrence: string | null
   responsible: string | null
+  business_unit: string | null
+  refletir_metricas: boolean
 }
 
+// Só as linhas de Advocacia que devem contar nas métricas/metas do escritório
+// -- exclui receita/despesa do SaaS (unidade separada) e qualquer lançamento
+// de caso gratuito/cortesia que a usuária tenha marcado pra não refletir.
 export function useFinanceRows() {
-  const [rows, setRows] = useState<FinanceRow[]>([])
+  const [allRows, setAllRows] = useState<FinanceRow[]>([])
   const [loading, setLoading] = useState(true)
   useEffect(() => {
-    supabase.from('finance').select('type, category, description, value, date, due_date, paid, impacts_cash, process_id, client_id, recurrence, responsible').then(({ data }) => {
-      setRows((data as FinanceRow[]) ?? [])
+    supabase.from('finance').select('type, category, description, value, date, due_date, paid, impacts_cash, process_id, client_id, recurrence, responsible, business_unit, refletir_metricas').then(({ data }) => {
+      setAllRows((data as FinanceRow[]) ?? [])
       setLoading(false)
     })
   }, [])
-  return { rows, loading }
+  const rows = useMemo(() => allRows.filter(r => r.business_unit !== 'saas' && r.refletir_metricas !== false), [allRows])
+  return { rows, allRows, loading }
 }
 
 // Vínculo do responsável no financeiro é texto livre (nome digitado à mão,

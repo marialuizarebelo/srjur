@@ -14,7 +14,7 @@ interface ProcessRow { id: string; title: string; status: string; area: string |
 interface ClientRow { id: string; name: string; area: string | null; status: string; responsible_ids: string[] | null }
 interface DeadlineRow { title: string; status: string; due_date: string; responsible_ids: string[] | null }
 interface TaskRow { title: string; type: string; status: string; due_date: string | null; responsible_ids: string[] | null }
-interface FinanceLite { category: string | null; type: string; value: number; date: string; paid: boolean; process_id: string | null; client_id: string | null; description: string }
+interface FinanceLite { category: string | null; type: string; value: number; date: string; paid: boolean; process_id: string | null; client_id: string | null; description: string; business_unit: string | null }
 
 export default function JuridicoTab() {
   const period = usePeriod()
@@ -33,7 +33,7 @@ export default function JuridicoTab() {
       supabase.from('clients').select('id, name, area, status, responsible_ids'),
       supabase.from('deadlines').select('title, status, due_date, responsible_ids'),
       supabase.from('tasks').select('title, type, status, due_date, responsible_ids'),
-      supabase.from('finance').select('category, type, value, date, paid, process_id, client_id, description'),
+      supabase.from('finance').select('category, type, value, date, paid, process_id, client_id, description, business_unit'),
     ]).then(([p, c, d, t, f]) => {
       setProcessesRaw((p.data as ProcessRow[]) ?? [])
       setClientsRaw((c.data as ClientRow[]) ?? [])
@@ -49,10 +49,11 @@ export default function JuridicoTab() {
   const deadlines = useMemo(() => deadlinesRaw.filter(d => respFilter.matches(d.responsible_ids)), [deadlinesRaw, respFilter.responsavelId])
   const tasks = useMemo(() => tasksRaw.filter(t => respFilter.matches(t.responsible_ids)), [tasksRaw, respFilter.responsavelId])
   const finance = useMemo(() => {
-    if (!respFilter.responsavelId) return financeAll
+    const advocacia = financeAll.filter(f => f.business_unit !== 'saas')
+    if (!respFilter.responsavelId) return advocacia
     const processIds = new Set(processes.map(p => p.id))
     const clientIds = new Set(clients.map(c => c.id))
-    return financeAll.filter(f => (f.process_id && processIds.has(f.process_id)) || (f.client_id && clientIds.has(f.client_id)))
+    return advocacia.filter(f => (f.process_id && processIds.has(f.process_id)) || (f.client_id && clientIds.has(f.client_id)))
   }, [financeAll, processes, clients, respFilter.responsavelId])
 
   const todayStr = new Date().toISOString().slice(0, 10)

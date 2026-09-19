@@ -1286,6 +1286,7 @@ export default function Clientes() {
       birth_date: c.birth_date ?? '', signed_at: c.signed_at ?? '', first_contact_at: c.first_contact_at ?? '',
       rep_name: c.rep_name ?? '', rep_cpf: c.rep_cpf ?? '', rep_role: c.rep_role ?? '',
       rep_document_type: c.rep_document_type ?? 'Contrato Social', rep_address: c.rep_address ?? '',
+      is_juridico: c.is_juridico ?? true, is_saas: c.is_saas ?? false, is_cortesia: c.is_cortesia ?? false,
     })
     setEditingClient(c)
     setDialogOpen(true)
@@ -1319,6 +1320,7 @@ export default function Clientes() {
       drive_url: cf.drive_url || null, drive_folder_id: cf.drive_folder_id || null, tags: cf.tags || null,
       rep_name: cf.rep_name || null, rep_cpf: cf.rep_cpf || null, rep_role: cf.rep_role || null,
       rep_document_type: cf.rep_document_type || null, rep_address: cf.rep_address || null,
+      is_juridico: cf.is_juridico, is_saas: cf.is_saas, is_cortesia: cf.is_cortesia,
     }
     if (editingClient) {
       const { error } = await supabase.from('clients').update(payload).eq('id', editingClient.id)

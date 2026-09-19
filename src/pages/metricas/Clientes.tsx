@@ -7,8 +7,8 @@ import {
   previousPeriodRange, trendText, useResponsavelFilter, ResponsavelFilter,
 } from './shared'
 
-interface ClientRow { id: string; name: string; area: string | null; status: string; created_at: string; responsible_ids: string[] | null }
-interface FinanceLite { client_id: string | null; description: string; value: number; due_date: string | null; paid: boolean; type: string }
+interface ClientRow { id: string; name: string; area: string | null; status: string; created_at: string; responsible_ids: string[] | null; is_cortesia: boolean; is_juridico: boolean }
+interface FinanceLite { client_id: string | null; description: string; value: number; due_date: string | null; paid: boolean; type: string; business_unit: string | null; refletir_metricas: boolean }
 
 export default function ClientesTab() {
   const period = usePeriod()
@@ -16,20 +16,22 @@ export default function ClientesTab() {
   const respFilter = useResponsavelFilter()
   const [loading, setLoading] = useState(true)
   const [clientsRaw, setClientsRaw] = useState<ClientRow[]>([])
-  const [finance, setFinance] = useState<FinanceLite[]>([])
+  const [financeAll, setFinanceAll] = useState<FinanceLite[]>([])
 
   useEffect(() => {
     Promise.all([
-      supabase.from('clients').select('id, name, area, status, created_at, responsible_ids'),
-      supabase.from('finance').select('client_id, description, value, due_date, paid, type'),
+      supabase.from('clients').select('id, name, area, status, created_at, responsible_ids, is_cortesia, is_juridico'),
+      supabase.from('finance').select('client_id, description, value, due_date, paid, type, business_unit, refletir_metricas'),
     ]).then(([c, f]) => {
       setClientsRaw((c.data as ClientRow[]) ?? [])
-      setFinance((f.data as FinanceLite[]) ?? [])
+      setFinanceAll((f.data as FinanceLite[]) ?? [])
       setLoading(false)
     })
   }, [])
 
-  const clients = useMemo(() => clientsRaw.filter(c => respFilter.matches(c.responsible_ids)), [clientsRaw, respFilter.responsavelId])
+  // Fora da carteira/comercial jurídica: casos gratuitos e clientes puramente SaaS.
+  const clients = useMemo(() => clientsRaw.filter(c => respFilter.matches(c.responsible_ids) && !c.is_cortesia && c.is_juridico !== false), [clientsRaw, respFilter.responsavelId])
+  const finance = useMemo(() => financeAll.filter(f => f.business_unit !== 'saas' && f.refletir_metricas !== false), [financeAll])
 
   const todayStr = new Date().toISOString().slice(0, 10)
   const clientesAtivos = clients.filter(c => c.status === 'ativo').length

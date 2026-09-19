@@ -65,9 +65,11 @@ interface FinanceRow {
   payment_link: string | null
   card_fee_percent: number | null
   series_id: string | null
+  business_unit: string | null
+  refletir_metricas: boolean
 }
 
-interface ClientOption { id: string; name: string }
+interface ClientOption { id: string; name: string; is_cortesia?: boolean; is_saas?: boolean; is_juridico?: boolean }
 
 interface FinancePayment {
   id: string
@@ -652,6 +654,8 @@ export default function Financeiro() {
     recurrence: 'Única',
     payment_link: '',
     card_fee_percent: '',
+    business_unit: 'advocacia' as 'advocacia' | 'saas',
+    refletir_metricas: true,
   })
 
   const resetForm = () => {
@@ -662,6 +666,7 @@ export default function Financeiro() {
       impacts_cash: true, nature: 'real', responsible: '', notes: '',
       portal_visible: false, payment_method: '', installments: '1',
       recurrence: 'Única', payment_link: '', card_fee_percent: '',
+      business_unit: 'advocacia', refletir_metricas: true,
     })
     setEditingId(null)
     setEditingCurrentInstallment(null)
@@ -730,7 +735,7 @@ export default function Financeiro() {
     setLoading(true)
     const { data } = await supabase.from('finance').select('*').order('date', { ascending: false })
     setRows((data as FinanceRow[]) ?? [])
-    const { data: cl } = await supabase.from('clients').select('id, name').eq('status', 'ativo').order('name')
+    const { data: cl } = await supabase.from('clients').select('id, name, is_cortesia, is_saas, is_juridico').eq('status', 'ativo').order('name')
     setClients((cl as ClientOption[]) ?? [])
     const { data: pays } = await supabase.from('finance_payments').select('*').order('payment_date', { ascending: true })
     const map: Record<string, FinancePayment[]> = {}
@@ -890,6 +895,8 @@ export default function Financeiro() {
       installments: numInstallments > 1 ? numInstallments : null,
       current_installment: editingId ? editingCurrentInstallment : ((!isCardLumpSum && numInstallments > 1) ? 1 : null),
       card_fee_percent: isCardLumpSum && feePercent > 0 ? feePercent : null,
+      business_unit: form.business_unit,
+      refletir_metricas: form.refletir_metricas,
     }
 
     setSaving(true)
@@ -1052,6 +1059,8 @@ export default function Financeiro() {
       recurrence: row.recurrence ?? 'Única',
       payment_link: row.payment_link ?? '',
       card_fee_percent: row.card_fee_percent != null ? String(row.card_fee_percent) : '',
+      business_unit: (row.business_unit as 'advocacia' | 'saas') ?? 'advocacia',
+      refletir_metricas: row.refletir_metricas ?? true,
     })
     setEditingId(row.id)
     setEditingCurrentInstallment(row.current_installment)
@@ -1563,9 +1572,37 @@ export default function Financeiro() {
                   </div>
                   <div className="space-y-2">
                     <Label>Cliente</Label>
-                    <ClientCombobox clients={clients} value={form.client_id} onChange={id => setForm(f => ({ ...f, client_id: id }))} />
+                    <ClientCombobox clients={clients} value={form.client_id} onChange={id => {
+                      const c = clients.find(cl => cl.id === id)
+                      setForm(f => ({
+                        ...f, client_id: id,
+                        // Sugere a unidade certa sozinho quando o cliente só é uma das duas coisas.
+                        business_unit: c && c.is_saas && !c.is_juridico ? 'saas' : c && c.is_juridico && !c.is_saas ? 'advocacia' : f.business_unit,
+                        refletir_metricas: c?.is_cortesia ? false : true,
+                      }))
+                    }} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Unidade</Label>
+                    <Select value={form.business_unit} onValueChange={v => setForm(f => ({ ...f, business_unit: v as 'advocacia' | 'saas' }))}>
+                      <SelectTrigger className="h-10"><SelectValue>{form.business_unit === 'saas' ? 'Sistema (SaaS)' : 'Advocacia'}</SelectValue></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="advocacia">Advocacia</SelectItem>
+                        <SelectItem value="saas">Sistema (SaaS)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
+
+                {clients.find(c => c.id === form.client_id)?.is_cortesia && (
+                  <label className="flex items-center gap-2 py-2.5 px-3 rounded-lg border bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 cursor-pointer">
+                    <Switch checked={form.refletir_metricas} onCheckedChange={v => setForm(f => ({ ...f, refletir_metricas: v }))} />
+                    <div>
+                      <p className="text-sm font-medium">Refletir nas métricas</p>
+                      <p className="text-xs text-muted-foreground">Esse cliente é um caso gratuito/cortesia — por padrão esse lançamento não entra nos indicadores financeiros</p>
+                    </div>
+                  </label>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">

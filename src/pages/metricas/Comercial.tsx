@@ -16,7 +16,7 @@ export interface Lead {
   signed_at: string | null; client_id: string | null; next_followup: string | null; source: string | null
   responsible_ids: string[] | null
 }
-interface ClientRow { name: string; status: string; created_at: string; responsible_ids: string[] | null }
+interface ClientRow { id: string; name: string; status: string; created_at: string; responsible_ids: string[] | null; is_cortesia: boolean; is_juridico: boolean }
 interface Stage { label: string; value: string; position: number }
 
 export default function ComercialTab() {
@@ -31,7 +31,7 @@ export default function ComercialTab() {
   useEffect(() => {
     Promise.all([
       supabase.from('leads').select('name, status, potential_value, created_at, signed_at, client_id, next_followup, source, responsible_ids'),
-      supabase.from('clients').select('name, status, created_at, responsible_ids'),
+      supabase.from('clients').select('id, name, status, created_at, responsible_ids, is_cortesia, is_juridico'),
       supabase.from('pipeline_stages').select('label, value, position').order('position'),
     ]).then(([l, c, s]) => {
       setLeadsRaw((l.data as Lead[]) ?? [])
@@ -41,8 +41,12 @@ export default function ComercialTab() {
     })
   }, [])
 
-  const leads = useMemo(() => leadsRaw.filter(l => respFilter.matches(l.responsible_ids)), [leadsRaw, respFilter.responsavelId])
-  const clients = useMemo(() => clientsRaw.filter(c => respFilter.matches(c.responsible_ids)), [clientsRaw, respFilter.responsavelId])
+  // Clientes puramente SaaS (sem questão jurídica) e casos gratuitos/cortesia
+  // não entram no funil comercial jurídico -- são contados em Produto/SaaS
+  // ou simplesmente não contam em métrica nenhuma, respectivamente.
+  const clients = useMemo(() => clientsRaw.filter(c => respFilter.matches(c.responsible_ids) && !c.is_cortesia && c.is_juridico !== false), [clientsRaw, respFilter.responsavelId])
+  const clientesExcluidosIds = useMemo(() => new Set(clientsRaw.filter(c => c.is_cortesia || c.is_juridico === false).map(c => c.id)), [clientsRaw])
+  const leads = useMemo(() => leadsRaw.filter(l => respFilter.matches(l.responsible_ids) && !(l.client_id && clientesExcluidosIds.has(l.client_id))), [leadsRaw, respFilter.responsavelId, clientesExcluidosIds])
 
   const trendMonths = useMemo(() => monthsBack(12), [])
   const stagePos = useMemo(() => new Map(stages.map(s => [s.value, s.position])), [stages])
