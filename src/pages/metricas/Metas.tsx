@@ -25,7 +25,7 @@ interface Meta {
   id: string; area: 'financeiro' | 'comercial'; tipo: string; label: string; valor_alvo: number
   periodo: 'mensal' | 'semestral' | 'anual'; ano: number; mes: number | null; semestre: number | null
   categoria: string | null; origem: string | null; prioridade: 'baixa' | 'media' | 'alta'
-  observacoes: string | null; responsavel_id: string | null
+  observacoes: string | null; responsavel_id: string | null; meta_pai_id: string | null
 }
 type TipoMeta = { value: string; label: string; unit: 'BRL' | 'number' | 'percent'; direction: 'min' | 'max'; extraField?: 'categoria' | 'origem' }
 const TIPO_OPTIONS: Record<'financeiro' | 'comercial', TipoMeta[]> = {
@@ -88,18 +88,22 @@ function daysRemaining(m: Meta): number | null {
 }
 
 /* ---------- Form ---------- */
-function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles }: {
+function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles, allMetas }: {
   open: boolean; onClose: () => void; area: 'financeiro' | 'comercial'; editing: Meta | null; onSaved: () => void
-  profiles: ProfileOption[]
+  profiles: ProfileOption[]; allMetas: Meta[]
 }) {
   const opts = TIPO_OPTIONS[area]
   const empty = {
     label: '', tipo: opts[0].value, valor_alvo: '', periodo: 'mensal' as Meta['periodo'],
     ano: new Date().getFullYear(), mes: new Date().getMonth() + 1, semestre: 1,
-    categoria: '', origem: '', prioridade: 'media' as Meta['prioridade'], observacoes: '', responsavel_id: '',
+    categoria: '', origem: '', prioridade: 'media' as Meta['prioridade'], observacoes: '', responsavel_id: '', metaPaiId: '',
   }
   const [form, setForm] = useState(empty)
   const [saving, setSaving] = useState(false)
+
+  // Só metas de topo (sem pai) podem virar pai — mantém a hierarquia em 2
+  // níveis, simples de acompanhar — e nunca ela mesma.
+  const paiOptions = allMetas.filter(m => !m.meta_pai_id && m.id !== editing?.id)
 
   useEffect(() => {
     if (editing) {
@@ -107,7 +111,7 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles }: {
         label: editing.label, tipo: editing.tipo, valor_alvo: String(editing.valor_alvo),
         periodo: editing.periodo, ano: editing.ano, mes: editing.mes ?? new Date().getMonth() + 1, semestre: editing.semestre ?? 1,
         categoria: editing.categoria ?? '', origem: editing.origem ?? '', prioridade: editing.prioridade ?? 'media',
-        observacoes: editing.observacoes ?? '', responsavel_id: editing.responsavel_id ?? '',
+        observacoes: editing.observacoes ?? '', responsavel_id: editing.responsavel_id ?? '', metaPaiId: editing.meta_pai_id ?? '',
       })
     } else {
       setForm({ ...empty, tipo: opts[0].value })
@@ -130,6 +134,7 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles }: {
       prioridade: form.prioridade,
       observacoes: form.observacoes.trim() || null,
       responsavel_id: form.responsavel_id || null,
+      meta_pai_id: form.metaPaiId || null,
     }
     if (editing) {
       const { error } = await supabase.from('metas').update(payload).eq('id', editing.id)
@@ -254,6 +259,19 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles }: {
             </div>
           </div>
 
+          {paiOptions.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Meta pai (opcional — vira submeta dela)</Label>
+              <Select value={form.metaPaiId || '__nenhuma__'} onValueChange={v => setForm(f => ({ ...f, metaPaiId: v === '__nenhuma__' ? '' : (v ?? '') }))}>
+                <SelectTrigger className="h-10"><SelectValue>{paiOptions.find(m => m.id === form.metaPaiId)?.label ?? 'Nenhuma — meta independente'}</SelectValue></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__nenhuma__">Nenhuma — meta independente</SelectItem>
+                  {paiOptions.map(m => <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label>Observações (opcional)</Label>
             <Textarea value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} rows={2}
@@ -270,9 +288,10 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles }: {
 }
 
 /* ---------- Card ---------- */
-function MetaCard({ m, tipo, atingido, profiles, onEdit, onDelete, onDetails, onShowComposition }: {
+function MetaCard({ m, tipo, atingido, profiles, onEdit, onDelete, onDetails, onShowComposition, rollup }: {
   m: Meta; tipo: TipoMeta; atingido: number; profiles: ProfileOption[]
   onEdit: () => void; onDelete: () => void; onDetails: () => void; onShowComposition: () => void
+  rollup?: { atingido: number; alvo: number }
 }) {
   const pct = m.valor_alvo > 0 ? Math.min(100, (atingido / m.valor_alvo) * 100) : 0
   const status = metaStatus(m, tipo, atingido)
@@ -311,6 +330,11 @@ function MetaCard({ m, tipo, atingido, profiles, onEdit, onDelete, onDetails, on
       </div>
       {responsavel && <p className="text-[11px] text-muted-foreground">Responsável: {responsavel.display_name}</p>}
       {m.observacoes && <p className="text-[11px] text-muted-foreground italic">"{m.observacoes}"</p>}
+      {rollup && (
+        <p className="text-[11px] text-muted-foreground border-t pt-2">
+          Soma das submetas: <strong className="text-foreground">{formatByUnit(rollup.atingido, tipo.unit)} / {formatByUnit(rollup.alvo, tipo.unit)}</strong>
+        </p>
+      )}
     </Card>
   )
 }
@@ -420,9 +444,22 @@ function MetasSection({ area, icon, metas, profiles, computeAtingido, computeDet
   const composition = useDetail()
 
   async function remove(id: string) {
-    if (!confirm('Excluir esta meta?')) return
+    if (!confirm('Excluir esta meta? Se ela tiver submetas, elas ficam soltas (viram metas independentes).')) return
     await supabase.from('metas').delete().eq('id', id)
     onChanged()
+  }
+
+  const topLevel = metas.filter(m => !m.meta_pai_id)
+  const childrenOf = (id: string) => metas.filter(m => m.meta_pai_id === id)
+
+  function renderCard(m: Meta, rollup?: { atingido: number; alvo: number }) {
+    const tipo = TIPO_OPTIONS[area].find(o => o.value === m.tipo)!
+    return (
+      <MetaCard key={m.id} m={m} tipo={tipo} atingido={computeAtingido(m)} profiles={profiles} rollup={rollup}
+        onEdit={() => { setEditing(m); setFormOpen(true) }} onDelete={() => remove(m.id)}
+        onDetails={() => { setDetailsMeta(m); setDetailsOpen(true) }}
+        onShowComposition={() => composition.show(`O que compõe "${m.label}"`, computeDetailRows(m))} />
+    )
   }
 
   return (
@@ -434,19 +471,32 @@ function MetasSection({ area, icon, metas, profiles, computeAtingido, computeDet
       {metas.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">Nenhuma meta {area === 'financeiro' ? 'financeira' : 'comercial'} cadastrada ainda</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {metas.map(m => {
+        <div className="space-y-4">
+          {topLevel.map(m => {
+            const children = childrenOf(m.id)
             const tipo = TIPO_OPTIONS[area].find(o => o.value === m.tipo)!
+            const rollup = children.length > 0
+              ? { atingido: children.reduce((s, c) => s + computeAtingido(c), 0), alvo: children.reduce((s, c) => s + c.valor_alvo, 0) }
+              : undefined
             return (
-              <MetaCard key={m.id} m={m} tipo={tipo} atingido={computeAtingido(m)} profiles={profiles}
-                onEdit={() => { setEditing(m); setFormOpen(true) }} onDelete={() => remove(m.id)}
-                onDetails={() => { setDetailsMeta(m); setDetailsOpen(true) }}
-                onShowComposition={() => composition.show(`O que compõe "${m.label}"`, computeDetailRows(m))} />
+              <div key={m.id} className={children.length > 0 ? 'space-y-2' : ''}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {renderCard(m, rollup)}
+                </div>
+                {children.length > 0 && (
+                  <div className="ml-3 sm:ml-6 pl-3 sm:pl-4 border-l-2 border-muted">
+                    <p className="text-[11px] text-muted-foreground mb-2">Submetas de "{m.label}" ({formatByUnit(rollup!.atingido, tipo.unit)} / {formatByUnit(rollup!.alvo, tipo.unit)} somadas)</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {children.map(c => renderCard(c))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>
       )}
-      <MetaFormDialog open={formOpen} onClose={() => setFormOpen(false)} area={area} editing={editing} onSaved={onChanged} profiles={profiles} />
+      <MetaFormDialog open={formOpen} onClose={() => setFormOpen(false)} area={area} editing={editing} onSaved={onChanged} profiles={profiles} allMetas={metas} />
       <MetaDetalhesDialog open={detailsOpen} onClose={() => setDetailsOpen(false)} meta={detailsMeta} />
       <DetailDialog open={composition.open} onClose={composition.close} title={composition.title} rows={composition.rows} />
     </ChartCard>
