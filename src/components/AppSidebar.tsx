@@ -48,7 +48,7 @@ const sections = [
   {
     label: 'Gestão',
     items: [
-      { title: 'Métricas', url: '/metricas', icon: BarChart3 },
+      { title: 'Métricas e Metas', url: '/metricas', icon: BarChart3 },
       { title: 'Financeiro', url: '/financeiro', icon: DollarSign },
       { title: 'Calculadora', url: '/calculadora', icon: Calculator },
       { title: 'Marketing', url: '/marketing', icon: Megaphone },

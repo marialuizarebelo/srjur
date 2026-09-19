@@ -1,0 +1,125 @@
+import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '@/integrations/supabase/client'
+import { Scale, Users, Bell, Gavel, Handshake, Trophy } from 'lucide-react'
+import { fmtBRL, fmtDate } from '@/lib/format'
+import {
+  usePeriod, PeriodPicker, KpiCard, ChartCard, DetailDialog, useDetail,
+} from './shared'
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
+} from 'recharts'
+
+interface ProcessRow { id: string; title: string; status: string; area: string | null; created_at: string; closed_date: string | null; client_id: string | null }
+interface ClientRow { id: string; area: string | null; status: string }
+interface DeadlineRow { title: string; status: string; due_date: string }
+interface TaskRow { title: string; type: string; status: string; due_date: string | null }
+interface FinanceLite { category: string | null; type: string; value: number; date: string; paid: boolean; process_id: string | null; client_id: string | null; description: string }
+
+export default function JuridicoTab() {
+  const period = usePeriod()
+  const detail = useDetail()
+  const [loading, setLoading] = useState(true)
+  const [processes, setProcesses] = useState<ProcessRow[]>([])
+  const [clients, setClients] = useState<ClientRow[]>([])
+  const [deadlines, setDeadlines] = useState<DeadlineRow[]>([])
+  const [tasks, setTasks] = useState<TaskRow[]>([])
+  const [finance, setFinance] = useState<FinanceLite[]>([])
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('processes').select('id, title, status, area, created_at, closed_date, client_id'),
+      supabase.from('clients').select('id, area, status'),
+      supabase.from('deadlines').select('title, status, due_date'),
+      supabase.from('tasks').select('title, type, status, due_date'),
+      supabase.from('finance').select('category, type, value, date, paid, process_id, client_id, description'),
+    ]).then(([p, c, d, t, f]) => {
+      setProcesses((p.data as ProcessRow[]) ?? [])
+      setClients((c.data as ClientRow[]) ?? [])
+      setDeadlines((d.data as DeadlineRow[]) ?? [])
+      setTasks((t.data as TaskRow[]) ?? [])
+      setFinance((f.data as FinanceLite[]) ?? [])
+      setLoading(false)
+    })
+  }, [])
+
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const clientesAtivos = clients.filter(c => c.status === 'ativo').length
+  const processosAtivos = processes.filter(p => p.status === 'em_andamento').length
+  const novosProcessos = processes.filter(p => p.created_at >= period.range.start && p.created_at <= period.range.end + 'T23:59:59').length
+  const processosEncerrados = processes.filter(p => p.closed_date && p.closed_date >= period.range.start && p.closed_date <= period.range.end).length
+
+  const prazosNoPeriodo = deadlines.filter(d => d.due_date >= period.range.start && d.due_date <= period.range.end)
+  const prazosConcluidos = prazosNoPeriodo.filter(d => d.status === 'cumprido').length
+  const prazosAtrasados = deadlines.filter(d => d.status === 'pendente' && d.due_date < todayStr).length
+
+  const audienciasRealizadas = tasks.filter(t => t.type === 'audiencia' && t.status === 'concluida' && t.due_date && t.due_date >= period.range.start && t.due_date <= period.range.end).length
+
+  const acordosNoPeriodo = useMemo(() => finance.filter(f => f.category === 'Acordo' && f.type === 'receita' && f.date >= period.range.start && f.date <= period.range.end), [finance, period.range])
+  const valorAcordos = acordosNoPeriodo.reduce((s, f) => s + Number(f.value), 0)
+
+  const honorariosExitoPrevistos = useMemo(() =>
+    finance.filter(f => f.category === 'Êxito' && f.type === 'receita' && !f.paid).reduce((s, f) => s + Number(f.value), 0)
+  , [finance])
+
+  const processMap = useMemo(() => new Map(processes.map(p => [p.id, p])), [processes])
+  const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients])
+
+  const receitaPorArea = useMemo(() => {
+    const map = new Map<string, number>()
+    const inPeriodo = finance.filter(f => f.type === 'receita' && f.date >= period.range.start && f.date <= period.range.end)
+    for (const f of inPeriodo) {
+      const area = (f.process_id && processMap.get(f.process_id)?.area) || (f.client_id && clientMap.get(f.client_id)?.area) || 'Não classificado'
+      map.set(area, (map.get(area) ?? 0) + Number(f.value))
+    }
+    return Array.from(map.entries()).map(([area, total]) => ({ area, total })).sort((a, b) => b.total - a.total)
+  }, [finance, period.range, processMap, clientMap])
+
+  function openAreaDetail(area: string) {
+    const inPeriodo = finance.filter(f => f.type === 'receita' && f.date >= period.range.start && f.date <= period.range.end)
+    const list = inPeriodo.filter(f => {
+      const a = (f.process_id && processMap.get(f.process_id)?.area) || (f.client_id && clientMap.get(f.client_id)?.area) || 'Não classificado'
+      return a === area
+    })
+    detail.show(`Receita — ${area}`, list.map((f, i) => ({ id: String(i), label: f.description, sublabel: fmtDate(f.date), value: fmtBRL(Number(f.value)) })))
+  }
+
+  if (loading) return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>
+
+  return (
+    <div className="space-y-4">
+      <PeriodPicker p={period} />
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <KpiCard title="Clientes ativos" value={clientesAtivos} icon={Users} color="#3B82F6" />
+        <KpiCard title="Processos ativos" value={processosAtivos} icon={Scale} color="#6366F1" />
+        <KpiCard title="Novos processos (período)" value={novosProcessos} icon={Scale} color="#22c55e" />
+        <KpiCard title="Processos encerrados (período)" value={processosEncerrados} icon={Scale} color="#94a3b8" />
+        <KpiCard title="Prazos no período" value={prazosNoPeriodo.length} icon={Bell} color="#F59E0B" />
+        <KpiCard title="Prazos concluídos (período)" value={prazosConcluidos} icon={Bell} color="#22c55e" />
+        <KpiCard title="Prazos atrasados" value={prazosAtrasados} icon={Bell} color="#ef4444" />
+        <KpiCard title="Audiências realizadas (período)" value={audienciasRealizadas} icon={Gavel} color="#8B5CF6" />
+        <KpiCard title="Acordos fechados (período)" value={acordosNoPeriodo.length} icon={Handshake} color="#14B8A6" trend={fmtBRL(valorAcordos)} />
+        <KpiCard title="Honorários de êxito previstos" value={fmtBRL(honorariosExitoPrevistos)} icon={Trophy} color="#F59E0B" sensitive />
+      </div>
+
+      <ChartCard title="Receita por área jurídica (período)" icon={Scale}>
+        <div className="h-64">
+          {receitaPorArea.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-20">Sem receita classificada por área neste período</p>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={receitaPorArea} layout="vertical" margin={{ left: 24 }}>
+                <XAxis type="number" tick={{ fontSize: 10 }} />
+                <YAxis type="category" dataKey="area" tick={{ fontSize: 10 }} width={130} />
+                <RTooltip formatter={(v) => fmtBRL(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Bar dataKey="total" name="Receita" fill="#6366F1" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(d: any) => openAreaDetail(d.area)} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </ChartCard>
+
+      <DetailDialog open={detail.open} onClose={detail.close} title={detail.title} rows={detail.rows} />
+    </div>
+  )
+}

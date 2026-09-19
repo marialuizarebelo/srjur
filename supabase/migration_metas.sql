@@ -12,6 +12,11 @@ create table if not exists public.metas (
   ano integer not null,
   mes integer,               -- 1-12, só quando periodo = 'mensal'
   semestre integer,          -- 1 ou 2, só quando periodo = 'semestral'
+  categoria text,            -- filtro opcional (categoria financeira), só em receita_minima/despesa_maxima
+  origem text,                -- filtro opcional (origem do lead), só em novos_leads
+  prioridade text default 'media', -- 'baixa' | 'media' | 'alta'
+  observacoes text,
+  responsavel_id uuid,        -- profiles.id (opcional)
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

@@ -68,7 +68,7 @@ const MODULES = [
   { key: 'tarefas', label: 'Compromissos & Tarefas' },
   { key: 'prazos', label: 'Prazos' },
   { key: 'calendario', label: 'Calendário' },
-  { key: 'metricas', label: 'Métricas' },
+  { key: 'metricas', label: 'Métricas e Metas' },
   { key: 'financeiro', label: 'Financeiro' },
   { key: 'calculadora', label: 'Calculadora' },
   { key: 'marketing', label: 'Marketing' },
