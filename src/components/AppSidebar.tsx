@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client'
 import {
   LayoutDashboard, Users, Scale, ClipboardList, Calendar,
   DollarSign, Megaphone, MessageSquare, Calculator, KeyRound,
-  Inbox, Settings, LogOut, Bell, MonitorSmartphone,
+  Inbox, Settings, LogOut, Bell, MonitorSmartphone, BarChart3,
 } from 'lucide-react'
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -48,6 +48,7 @@ const sections = [
   {
     label: 'Gestão',
     items: [
+      { title: 'Métricas', url: '/metricas', icon: BarChart3 },
       { title: 'Financeiro', url: '/financeiro', icon: DollarSign },
       { title: 'Calculadora', url: '/calculadora', icon: Calculator },
       { title: 'Marketing', url: '/marketing', icon: Megaphone },

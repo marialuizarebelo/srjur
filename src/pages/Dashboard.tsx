@@ -1109,7 +1109,7 @@ export default function Dashboard() {
 
           {/* Chart + Next tasks */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="p-5 cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/financeiro')}>
+            <Card className="p-5 cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/metricas')}>
               <div className="flex items-center gap-2 mb-4">
                 <DollarSign className="h-4 w-4 text-primary" />
                 <h3 className="font-semibold text-sm">Receitas vs Despesas (6 meses)</h3>

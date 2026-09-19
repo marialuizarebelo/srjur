@@ -24,13 +24,9 @@ import {
   Plus, FileDown, Pencil, Trash2, Download, Calendar, Upload,
   CreditCard, Wallet, ChevronLeft, ChevronRight, Eye,
   ArrowUpCircle, ArrowDownCircle, Clock, Ban, Link2,
-  Repeat, BarChart3, PieChart as PieIcon, X, RefreshCw,
+  Repeat, X, RefreshCw,
   ArrowUp, ArrowDown, ArrowUpDown, CheckCircle2, ChevronDown, ChevronUp,
 } from 'lucide-react'
-import {
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
-  Tooltip as RTooltip, ResponsiveContainer, LineChart, Line, Area, AreaChart,
-} from 'recharts'
 import { fmtBRL, fmtDate, getDaysDiff } from '@/lib/format'
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { useCollapsibleSection } from '@/hooks/useCollapsibleSection'
@@ -106,7 +102,6 @@ function addDaysToDate(dateStr: string, days: number): string {
 }
 
 const RECURRENCE_OPTIONS = ['Única', 'Semanal', 'Quinzenal', 'Mensal', 'Trimestral', 'Semestral', 'Anual']
-const PIE_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366F1', '#14B8A6']
 
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
@@ -633,9 +628,6 @@ export default function Financeiro() {
       setSortDir('asc')
     }
   }
-  const [projectionMonths, setProjectionMonths] = useState(3)
-  const projecaoSection = useCollapsibleSection('financeiro_projecao')
-  const chartsSection = useCollapsibleSection('financeiro_graficos')
   const vencimentosSection = useCollapsibleSection('financeiro_vencimentos')
 
   // Form
@@ -849,74 +841,6 @@ export default function Financeiro() {
     .filter(r => !r.paid && r.due_date && r.due_date >= today)
     .sort((a, b) => (a.due_date! > b.due_date! ? 1 : -1))
     .slice(0, 5)
-
-  // ── Projection ──
-  // "saldo" de cada mês é ACUMULADO (posição de caixa atual + o que já entrou/saiu
-  // nos meses anteriores da projeção + o que ainda falta entrar/sair naquele mês),
-  // porque o objetivo é dar uma ideia de como vai estar a saúde do caixa lá na
-  // frente — não só o delta isolado daquele mês, que sozinho não diz muita coisa.
-  const projection = useMemo(() => {
-    const result: { month: string; aReceber: number; aPagar: number; saldo: number }[] = []
-    let saldoAcumulado = saldoTotal
-    if (projectionMonths === 0) {
-      // "até final deste mês" — lançamentos pendentes do mês atual ainda não vencidos/pagos
-      const today = new Date()
-      const start = today.toISOString().slice(0, 10)
-      const end = new Date(viewYear, viewMonth + 1, 0).toISOString().slice(0, 10)
-      const monthRows = rows.filter(r => r.due_date && r.due_date >= start && r.due_date <= end && !r.paid && r.impacts_cash !== false)
-      const rec = monthRows.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0)
-      const desp = monthRows.filter(r => r.type === 'despesa').reduce((s, r) => s + Number(r.value), 0)
-      saldoAcumulado += rec - desp
-      result.push({ month: `${MONTHS[viewMonth]}/${viewYear % 100} (restante)`, aReceber: rec, aPagar: desp, saldo: saldoAcumulado })
-    } else {
-      for (let i = 1; i <= projectionMonths; i++) {
-        const d = new Date(viewYear, viewMonth + i, 1)
-        const start = d.toISOString().slice(0, 10)
-        const end = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10)
-        const monthRows = rows.filter(r => r.due_date && r.due_date >= start && r.due_date <= end && !r.paid && r.impacts_cash !== false)
-        const rec = monthRows.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0)
-        const desp = monthRows.filter(r => r.type === 'despesa').reduce((s, r) => s + Number(r.value), 0)
-        saldoAcumulado += rec - desp
-        result.push({ month: `${MONTHS[d.getMonth()]}/${d.getFullYear() % 100}`, aReceber: rec, aPagar: desp, saldo: saldoAcumulado })
-      }
-    }
-    return result
-  }, [rows, projectionMonths, viewMonth, viewYear, saldoTotal])
-
-  // ── Charts ──
-  const monthlyEvolution = useMemo(() => {
-    const months: { month: string; receitas: number; despesas: number }[] = []
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(viewYear, viewMonth - i, 1)
-      const start = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
-      const end = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10)
-      const mRows = rows.filter(r => r.date >= start && r.date <= end)
-      months.push({
-        month: MONTHS[d.getMonth()],
-        receitas: mRows.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0),
-        despesas: mRows.filter(r => r.type === 'despesa' && r.impacts_cash !== false).reduce((s, r) => s + Number(r.value), 0),
-      })
-    }
-    return months
-  }, [rows, viewMonth, viewYear])
-
-  const categoryData = useMemo(() => {
-    const map = new Map<string, number>()
-    receitas.forEach(r => {
-      const cat = r.category ?? 'Outros'
-      map.set(cat, (map.get(cat) ?? 0) + Number(r.value))
-    })
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
-  }, [receitas])
-
-  const despesaCategoryData = useMemo(() => {
-    const map = new Map<string, number>()
-    despesasCaixa.forEach(r => {
-      const cat = r.category ?? 'Outros'
-      map.set(cat, (map.get(cat) ?? 0) + Number(r.value))
-    })
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
-  }, [despesasCaixa])
 
   // ── Handlers ──
   const handleSave = async () => {
@@ -1805,122 +1729,6 @@ export default function Financeiro() {
           rightActive={activeCard === 'saldo-total'} onClickRight={() => setActiveCard(activeCard === 'saldo-total' ? null : 'saldo-total')}
         />
       </div>
-
-      {/* ── Projection (minimizável, com fixar visualização) ── */}
-      <Card className="p-5">
-        <div className="flex items-center justify-between mb-4 gap-2">
-          <button className="flex items-center gap-2 min-w-0" onClick={projecaoSection.toggle}>
-            <h3 className="font-semibold text-sm flex items-center gap-2 shrink-0">
-              <Calendar className="h-4 w-4 text-primary" />Projeção Futura
-            </h3>
-            {projecaoSection.collapsed ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
-          </button>
-          <div className="flex items-center gap-1 flex-wrap">
-            {!projecaoSection.collapsed && (
-              <>
-                <Button variant={projectionMonths === 0 ? 'default' : 'outline'} size="sm" className="h-7 text-xs" onClick={() => setProjectionMonths(0)}>
-                  Este mês
-                </Button>
-                {[3, 6, 12].map(n => (
-                  <Button key={n} variant={projectionMonths === n ? 'default' : 'outline'} size="sm" className="h-7 text-xs" onClick={() => setProjectionMonths(n)}>
-                    {n} meses
-                  </Button>
-                ))}
-              </>
-            )}
-            <PinViewButton isPinned={projecaoSection.isPinned} currentValue="" onPin={() => projecaoSection.pinCurrent()} onUnpin={projecaoSection.unpin} />
-          </div>
-        </div>
-        {!projecaoSection.collapsed && (projection.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={projection}>
-                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <RTooltip formatter={(v) => fmtBRL(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                  <Bar dataKey="aReceber" name="A Receber" fill="#86efac" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="aPagar" name="A Pagar" fill="#fca5a5" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="space-y-2">
-              {projection.map(p => (
-                <div key={p.month} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                  <span className="text-sm font-medium">{p.month}</span>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="text-green-600">+{fmtBRL(p.aReceber)}</span>
-                    <span className="text-red-500">-{fmtBRL(p.aPagar)}</span>
-                    <span className={`font-semibold ${p.saldo >= 0 ? 'text-primary' : 'text-red-500'}`} title="Saldo acumulado até este mês">{fmtBRL(p.saldo)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground text-center py-8">Sem dados de projeção</p>
-        ))}
-      </Card>
-
-      {/* ── Charts Row (minimizável) ── */}
-      <Card className="p-5">
-        <div className="flex items-center justify-between">
-          <button className="flex items-center gap-2" onClick={chartsSection.toggle}>
-            <h3 className="font-semibold text-sm flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-primary" />Gráficos
-            </h3>
-            {chartsSection.collapsed ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
-          </button>
-          <PinViewButton isPinned={chartsSection.isPinned} currentValue="" onPin={() => chartsSection.pinCurrent()} onUnpin={chartsSection.unpin} />
-        </div>
-        {!chartsSection.collapsed && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
-            {/* Evolution */}
-            <div className="lg:col-span-2">
-              <h4 className="font-medium text-xs mb-3 text-muted-foreground">Evolução (12 meses)</h4>
-              <div className="h-52">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={monthlyEvolution}>
-                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <RTooltip formatter={(v) => fmtBRL(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                    <Area type="monotone" dataKey="receitas" stroke="#22c55e" fill="#22c55e20" strokeWidth={2} />
-                    <Area type="monotone" dataKey="despesas" stroke="#ef4444" fill="#ef444420" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Category pie */}
-            <div>
-              <h4 className="font-medium text-xs mb-3 text-muted-foreground">
-                {typeFilter === 'despesa' ? 'Despesas' : 'Receitas'} por Categoria
-              </h4>
-              <div className="h-52">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={typeFilter === 'despesa' ? despesaCategoryData : categoryData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={75}
-                      dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      labelLine={false}
-                    >
-                      {(typeFilter === 'despesa' ? despesaCategoryData : categoryData).map((_, i) => (
-                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <RTooltip formatter={(v) => fmtBRL(Number(v))} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        )}
-      </Card>
 
       {/* ── Próximos vencimentos (minimizável) ── */}
       {proximosVencimentos.length > 0 && (
