@@ -12,9 +12,12 @@ import {
 import { AlertTriangle, StickyNote, Plus, Trash2 } from 'lucide-react'
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
+  AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis,
 } from 'recharts'
 import { Sensitive } from '@/components/Sensitive'
 import { toast } from 'sonner'
+import { getAdminProfiles, type ProfileOption } from '@/components/ResponsibleSelect'
+import { Filter as FilterIcon } from 'lucide-react'
 
 export const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 // Paleta mais "estratégica": tons distintos e saturados o bastante pra
@@ -323,5 +326,125 @@ export function NotesPanel({ area, months }: { area: string; months: { start: st
         </div>
       )}
     </Card>
+  )
+}
+
+/* ---------- Filtro por responsável (mesmo controle em todas as abas) ---------- */
+export function useResponsavelFilter() {
+  const [profiles, setProfiles] = useState<ProfileOption[]>([])
+  const [responsavelId, setResponsavelId] = useState('')
+  useEffect(() => { getAdminProfiles().then(setProfiles) }, [])
+  // true se o registro não deve ser filtrado (sem filtro ativo) ou se o(s)
+  // responsável(is) do registro incluem quem está selecionado.
+  function matches(responsibleIds: string[] | null | undefined) {
+    if (!responsavelId) return true
+    return (responsibleIds ?? []).includes(responsavelId)
+  }
+  return { profiles, responsavelId, setResponsavelId, matches }
+}
+
+export function ResponsavelFilter({ f }: { f: ReturnType<typeof useResponsavelFilter> }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <FilterIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      <Select value={f.responsavelId || '__todos__'} onValueChange={v => f.setResponsavelId(v === '__todos__' ? '' : (v ?? ''))}>
+        <SelectTrigger className="h-7 text-xs w-44">
+          <SelectValue>{f.profiles.find(p => p.id === f.responsavelId)?.display_name ?? 'Todos os responsáveis'}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__todos__">Todos os responsáveis</SelectItem>
+          {f.profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.display_name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
+/* ---------- Gráfico de tendência com tipo/transformação trocáveis ---------- */
+type ChartMode = 'area' | 'bar' | 'line'
+type ChartTransform = 'valor' | 'acumulado' | 'percentual'
+
+export function TrendChart({ data, series, formatValue, height = 'h-56', onPointClick }: {
+  data: Record<string, any>[]; series: { key: string; name: string; color: string }[]
+  formatValue?: (v: number) => string; height?: string; onPointClick?: (index: number) => void
+}) {
+  const [mode, setMode] = useState<ChartMode>('area')
+  const [transform, setTransform] = useState<ChartTransform>('valor')
+
+  const transformed = useMemo(() => {
+    if (transform === 'acumulado') {
+      const acc: Record<string, number> = {}
+      return data.map(row => {
+        const out: Record<string, any> = { month: row.month }
+        for (const s of series) { acc[s.key] = (acc[s.key] ?? 0) + Number(row[s.key] ?? 0); out[s.key] = acc[s.key] }
+        return out
+      })
+    }
+    if (transform === 'percentual') {
+      return data.map(row => {
+        const total = series.reduce((s, sr) => s + Number(row[sr.key] ?? 0), 0)
+        const out: Record<string, any> = { month: row.month }
+        for (const s of series) out[s.key] = total > 0 ? (Number(row[s.key] ?? 0) / total) * 100 : 0
+        return out
+      })
+    }
+    return data
+  }, [data, series, transform])
+
+  const fmt = transform === 'percentual' ? (v: number) => `${v.toFixed(0)}%` : (formatValue ?? ((v: number) => String(v)))
+
+  const MODE_LABELS: Record<ChartMode, string> = { area: 'Área', bar: 'Barra', line: 'Linha' }
+  const TRANSFORM_LABELS: Record<ChartTransform, string> = { valor: 'Valor', acumulado: 'Acumulado', percentual: '% do total' }
+
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+        <div className="flex items-center gap-0.5 bg-muted/40 rounded-lg p-0.5">
+          {(['area', 'bar', 'line'] as ChartMode[]).map(m => (
+            <button key={m} onClick={() => setMode(m)}
+              className={`h-6 px-2 rounded-md text-[10px] font-medium transition-colors ${mode === m ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'}`}>
+              {MODE_LABELS[m]}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-0.5 bg-muted/40 rounded-lg p-0.5">
+          {(['valor', 'acumulado', 'percentual'] as ChartTransform[]).map(t => (
+            <button key={t} onClick={() => setTransform(t)}
+              className={`h-6 px-2 rounded-md text-[10px] font-medium transition-colors ${transform === t ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'}`}>
+              {TRANSFORM_LABELS[t]}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className={height}>
+        <ResponsiveContainer width="100%" height="100%">
+          {mode === 'area' ? (
+            <AreaChart data={transformed} onClick={onPointClick ? (e: any) => e?.activeTooltipIndex != null && onPointClick(e.activeTooltipIndex) : undefined}>
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <RTooltip formatter={(v: any) => fmt(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+              {series.map(s => <Area key={s.key} type="monotone" dataKey={s.key} name={s.name} stroke={s.color} fill={s.color + '20'} strokeWidth={2}
+                style={onPointClick ? { cursor: 'pointer' } : undefined} />)}
+            </AreaChart>
+          ) : mode === 'bar' ? (
+            <BarChart data={transformed}>
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <RTooltip formatter={(v: any) => fmt(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+              {series.map(s => <Bar key={s.key} dataKey={s.key} name={s.name} fill={s.color} radius={[4, 4, 0, 0]}
+                cursor={onPointClick ? 'pointer' : undefined} onClick={onPointClick ? (_: any, i: number) => onPointClick(i) : undefined} />)}
+            </BarChart>
+          ) : (
+            <LineChart data={transformed} onClick={onPointClick ? (e: any) => e?.activeTooltipIndex != null && onPointClick(e.activeTooltipIndex) : undefined}>
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <RTooltip formatter={(v: any) => fmt(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+              {series.map(s => <Line key={s.key} type="monotone" dataKey={s.key} name={s.name} stroke={s.color} strokeWidth={2} dot={false}
+                style={onPointClick ? { cursor: 'pointer' } : undefined} />)}
+            </LineChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+    </div>
   )
 }

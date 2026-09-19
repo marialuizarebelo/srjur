@@ -4,43 +4,56 @@ import { Scale, Users, Bell, Gavel, Handshake, Trophy } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
 import {
   usePeriod, PeriodPicker, KpiCard, ChartCard, DetailDialog, useDetail,
+  useResponsavelFilter, ResponsavelFilter,
 } from './shared'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
 } from 'recharts'
 
-interface ProcessRow { id: string; title: string; status: string; area: string | null; created_at: string; closed_date: string | null; client_id: string | null }
-interface ClientRow { id: string; name: string; area: string | null; status: string }
-interface DeadlineRow { title: string; status: string; due_date: string }
-interface TaskRow { title: string; type: string; status: string; due_date: string | null }
+interface ProcessRow { id: string; title: string; status: string; area: string | null; created_at: string; closed_date: string | null; client_id: string | null; responsible_ids: string[] | null }
+interface ClientRow { id: string; name: string; area: string | null; status: string; responsible_ids: string[] | null }
+interface DeadlineRow { title: string; status: string; due_date: string; responsible_ids: string[] | null }
+interface TaskRow { title: string; type: string; status: string; due_date: string | null; responsible_ids: string[] | null }
 interface FinanceLite { category: string | null; type: string; value: number; date: string; paid: boolean; process_id: string | null; client_id: string | null; description: string }
 
 export default function JuridicoTab() {
   const period = usePeriod()
   const detail = useDetail()
+  const respFilter = useResponsavelFilter()
   const [loading, setLoading] = useState(true)
-  const [processes, setProcesses] = useState<ProcessRow[]>([])
-  const [clients, setClients] = useState<ClientRow[]>([])
-  const [deadlines, setDeadlines] = useState<DeadlineRow[]>([])
-  const [tasks, setTasks] = useState<TaskRow[]>([])
-  const [finance, setFinance] = useState<FinanceLite[]>([])
+  const [processesRaw, setProcessesRaw] = useState<ProcessRow[]>([])
+  const [clientsRaw, setClientsRaw] = useState<ClientRow[]>([])
+  const [deadlinesRaw, setDeadlinesRaw] = useState<DeadlineRow[]>([])
+  const [tasksRaw, setTasksRaw] = useState<TaskRow[]>([])
+  const [financeAll, setFinanceAll] = useState<FinanceLite[]>([])
 
   useEffect(() => {
     Promise.all([
-      supabase.from('processes').select('id, title, status, area, created_at, closed_date, client_id'),
-      supabase.from('clients').select('id, name, area, status'),
-      supabase.from('deadlines').select('title, status, due_date'),
-      supabase.from('tasks').select('title, type, status, due_date'),
+      supabase.from('processes').select('id, title, status, area, created_at, closed_date, client_id, responsible_ids'),
+      supabase.from('clients').select('id, name, area, status, responsible_ids'),
+      supabase.from('deadlines').select('title, status, due_date, responsible_ids'),
+      supabase.from('tasks').select('title, type, status, due_date, responsible_ids'),
       supabase.from('finance').select('category, type, value, date, paid, process_id, client_id, description'),
     ]).then(([p, c, d, t, f]) => {
-      setProcesses((p.data as ProcessRow[]) ?? [])
-      setClients((c.data as ClientRow[]) ?? [])
-      setDeadlines((d.data as DeadlineRow[]) ?? [])
-      setTasks((t.data as TaskRow[]) ?? [])
-      setFinance((f.data as FinanceLite[]) ?? [])
+      setProcessesRaw((p.data as ProcessRow[]) ?? [])
+      setClientsRaw((c.data as ClientRow[]) ?? [])
+      setDeadlinesRaw((d.data as DeadlineRow[]) ?? [])
+      setTasksRaw((t.data as TaskRow[]) ?? [])
+      setFinanceAll((f.data as FinanceLite[]) ?? [])
       setLoading(false)
     })
   }, [])
+
+  const processes = useMemo(() => processesRaw.filter(p => respFilter.matches(p.responsible_ids)), [processesRaw, respFilter.responsavelId])
+  const clients = useMemo(() => clientsRaw.filter(c => respFilter.matches(c.responsible_ids)), [clientsRaw, respFilter.responsavelId])
+  const deadlines = useMemo(() => deadlinesRaw.filter(d => respFilter.matches(d.responsible_ids)), [deadlinesRaw, respFilter.responsavelId])
+  const tasks = useMemo(() => tasksRaw.filter(t => respFilter.matches(t.responsible_ids)), [tasksRaw, respFilter.responsavelId])
+  const finance = useMemo(() => {
+    if (!respFilter.responsavelId) return financeAll
+    const processIds = new Set(processes.map(p => p.id))
+    const clientIds = new Set(clients.map(c => c.id))
+    return financeAll.filter(f => (f.process_id && processIds.has(f.process_id)) || (f.client_id && clientIds.has(f.client_id)))
+  }, [financeAll, processes, clients, respFilter.responsavelId])
 
   const todayStr = new Date().toISOString().slice(0, 10)
   const clientesAtivos = clients.filter(c => c.status === 'ativo').length
@@ -111,7 +124,10 @@ export default function JuridicoTab() {
 
   return (
     <div className="space-y-4">
-      <PeriodPicker p={period} />
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <PeriodPicker p={period} />
+        <ResponsavelFilter f={respFilter} />
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         <KpiCard title="Clientes ativos" value={clientesAtivos} icon={Users} color="#3B82F6" onClick={openClientsDetail} />

@@ -3,12 +3,13 @@ import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { DollarSign, TrendingUp, Calendar, BarChart3 } from 'lucide-react'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, Area, AreaChart,
+  BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
 } from 'recharts'
 import { fmtBRL, fmtDate } from '@/lib/format'
 import {
   MONTHS, monthsBack, usePeriod, PeriodPicker, KpiCard, ChartCard, DonutWithLegend,
   DetailDialog, useDetail, AttentionPanel, type Attention, previousPeriodRange, trendText, NotesPanel,
+  useResponsavelFilter, ResponsavelFilter, TrendChart,
 } from './shared'
 
 export interface FinanceRow {
@@ -23,13 +24,14 @@ export interface FinanceRow {
   process_id: string | null
   client_id: string | null
   recurrence: string | null
+  responsible: string | null
 }
 
 export function useFinanceRows() {
   const [rows, setRows] = useState<FinanceRow[]>([])
   const [loading, setLoading] = useState(true)
   useEffect(() => {
-    supabase.from('finance').select('type, category, description, value, date, due_date, paid, impacts_cash, process_id, client_id, recurrence').then(({ data }) => {
+    supabase.from('finance').select('type, category, description, value, date, due_date, paid, impacts_cash, process_id, client_id, recurrence, responsible').then(({ data }) => {
       setRows((data as FinanceRow[]) ?? [])
       setLoading(false)
     })
@@ -37,11 +39,25 @@ export function useFinanceRows() {
   return { rows, loading }
 }
 
+// Vínculo do responsável no financeiro é texto livre (nome digitado à mão,
+// não um perfil de verdade) — casa por aproximação com o nome/apelido da
+// usuária em vez de um id exato, já que não dá pra comparar com precisão.
+function matchesResponsibleText(responsibleText: string | null, profileName: string | null | undefined) {
+  if (!profileName) return true
+  if (!responsibleText) return false
+  const a = responsibleText.toLowerCase()
+  const b = profileName.toLowerCase()
+  return a.includes(b) || b.includes(a)
+}
+
 export default function FinanceiroTab() {
-  const { rows, loading } = useFinanceRows()
+  const { rows: rowsAll, loading } = useFinanceRows()
   const [projectionMonths, setProjectionMonths] = useState(3)
   const period = usePeriod()
   const detail = useDetail()
+  const respFilter = useResponsavelFilter()
+  const selectedProfileName = respFilter.profiles.find(p => p.id === respFilter.responsavelId)?.display_name
+  const rows = useMemo(() => rowsAll.filter(r => matchesResponsibleText(r.responsible, selectedProfileName)), [rowsAll, selectedProfileName])
 
   const trendMonths = useMemo(() => monthsBack(12), [])
   const evolution = useMemo(() => trendMonths.map(m => {
@@ -148,7 +164,10 @@ export default function FinanceiroTab() {
 
   return (
     <div className="space-y-4">
-      <PeriodPicker p={period} />
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <PeriodPicker p={period} />
+        <ResponsavelFilter f={respFilter} />
+      </div>
 
       <AttentionPanel items={attention} />
 
@@ -161,17 +180,10 @@ export default function FinanceiroTab() {
       </div>
 
       <ChartCard title="Evolução (12 meses)" icon={BarChart3}>
-        <div className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={evolution}>
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <RTooltip formatter={(v) => fmtBRL(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-              <Area type="monotone" dataKey="receitas" name="Receitas" stroke="#22c55e" fill="#22c55e20" strokeWidth={2} />
-              <Area type="monotone" dataKey="despesas" name="Despesas" stroke="#ef4444" fill="#ef444420" strokeWidth={2} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        <TrendChart data={evolution} formatValue={fmtBRL} series={[
+          { key: 'receitas', name: 'Receitas', color: '#22c55e' },
+          { key: 'despesas', name: 'Despesas', color: '#ef4444' },
+        ]} />
       </ChartCard>
 
       <NotesPanel area="financeiro" months={trendMonths} />

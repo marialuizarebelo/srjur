@@ -4,29 +4,32 @@ import { Users, AlertTriangle, Wallet } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
 import {
   usePeriod, PeriodPicker, KpiCard, ChartCard, DonutWithLegend, DetailDialog, useDetail,
-  previousPeriodRange, trendText,
+  previousPeriodRange, trendText, useResponsavelFilter, ResponsavelFilter,
 } from './shared'
 
-interface ClientRow { id: string; name: string; area: string | null; status: string; created_at: string }
+interface ClientRow { id: string; name: string; area: string | null; status: string; created_at: string; responsible_ids: string[] | null }
 interface FinanceLite { client_id: string | null; description: string; value: number; due_date: string | null; paid: boolean; type: string }
 
 export default function ClientesTab() {
   const period = usePeriod()
   const detail = useDetail()
+  const respFilter = useResponsavelFilter()
   const [loading, setLoading] = useState(true)
-  const [clients, setClients] = useState<ClientRow[]>([])
+  const [clientsRaw, setClientsRaw] = useState<ClientRow[]>([])
   const [finance, setFinance] = useState<FinanceLite[]>([])
 
   useEffect(() => {
     Promise.all([
-      supabase.from('clients').select('id, name, area, status, created_at'),
+      supabase.from('clients').select('id, name, area, status, created_at, responsible_ids'),
       supabase.from('finance').select('client_id, description, value, due_date, paid, type'),
     ]).then(([c, f]) => {
-      setClients((c.data as ClientRow[]) ?? [])
+      setClientsRaw((c.data as ClientRow[]) ?? [])
       setFinance((f.data as FinanceLite[]) ?? [])
       setLoading(false)
     })
   }, [])
+
+  const clients = useMemo(() => clientsRaw.filter(c => respFilter.matches(c.responsible_ids)), [clientsRaw, respFilter.responsavelId])
 
   const todayStr = new Date().toISOString().slice(0, 10)
   const clientesAtivos = clients.filter(c => c.status === 'ativo').length
@@ -64,11 +67,15 @@ export default function ClientesTab() {
 
   return (
     <div className="space-y-4">
-      <PeriodPicker p={period} />
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <PeriodPicker p={period} />
+        <ResponsavelFilter f={respFilter} />
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard title="Clientes ativos" value={clientesAtivos} icon={Users} color="#3B82F6" onClick={() => detail.show('Clientes ativos', clients.filter(c => c.status === 'ativo').map((c, i) => ({ id: String(i), label: c.name, sublabel: c.area ?? undefined })))} />
-        <KpiCard title="Novos clientes (período)" value={novosNoPeriodo.length} icon={Users} color="#22c55e" trend={trendText(novosNoPeriodo.length, novosPeriodoAnterior.length)} />
+        <KpiCard title="Novos clientes (período)" value={novosNoPeriodo.length} icon={Users} color="#22c55e" trend={trendText(novosNoPeriodo.length, novosPeriodoAnterior.length)}
+          onClick={() => detail.show('Novos clientes no período', novosNoPeriodo.map((c, i) => ({ id: String(i), label: c.name, sublabel: fmtDate(c.created_at) })))} />
         <KpiCard title="Clientes inadimplentes" value={clientesInadimplentes} icon={AlertTriangle} color="#ef4444" onClick={openInadimplenciaDetail} />
         <KpiCard title="Valor em atraso" value={fmtBRL(valorInadimplente)} icon={Wallet} color="#ef4444" sensitive onClick={openInadimplenciaDetail} />
       </div>

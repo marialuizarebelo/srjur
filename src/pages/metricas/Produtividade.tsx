@@ -5,42 +5,45 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
 } from 'recharts'
 import { fmtDate } from '@/lib/format'
-import { getAdminProfiles, type ProfileOption } from '@/components/ResponsibleSelect'
 import {
   monthsBack, KpiCard, ChartCard, DonutWithLegend,
   DetailDialog, useDetail, AttentionPanel, type Attention, type DetailRow,
+  useResponsavelFilter, ResponsavelFilter, TrendChart,
 } from './shared'
 
 interface Task { title: string; status: string; due_date: string | null; responsible_ids: string[] | null }
 interface Deadline { title: string; status: string; due_date: string; responsible_ids: string[] | null }
-interface ProcessRow { title: string; status: string }
+interface ProcessRow { title: string; status: string; responsible_ids: string[] | null }
 
 const PROCESS_STATUS_LABELS: Record<string, string> = {
   em_andamento: 'Em andamento', concluido: 'Concluído', arquivado: 'Arquivado', suspenso: 'Suspenso',
 }
 
 export default function ProdutividadeTab() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [deadlines, setDeadlines] = useState<Deadline[]>([])
-  const [processes, setProcesses] = useState<ProcessRow[]>([])
-  const [profiles, setProfiles] = useState<ProfileOption[]>([])
+  const [tasksRaw, setTasksRaw] = useState<Task[]>([])
+  const [deadlinesRaw, setDeadlinesRaw] = useState<Deadline[]>([])
+  const [processesRaw, setProcessesRaw] = useState<ProcessRow[]>([])
   const [loading, setLoading] = useState(true)
   const detail = useDetail()
+  const respFilter = useResponsavelFilter()
+  const profiles = respFilter.profiles
 
   useEffect(() => {
     Promise.all([
       supabase.from('tasks').select('title, status, due_date, responsible_ids'),
       supabase.from('deadlines').select('title, status, due_date, responsible_ids'),
-      supabase.from('processes').select('title, status'),
-      getAdminProfiles(),
-    ]).then(([t, d, p, profs]) => {
-      setTasks((t.data as Task[]) ?? [])
-      setDeadlines((d.data as Deadline[]) ?? [])
-      setProcesses((p.data as ProcessRow[]) ?? [])
-      setProfiles(profs)
+      supabase.from('processes').select('title, status, responsible_ids'),
+    ]).then(([t, d, p]) => {
+      setTasksRaw((t.data as Task[]) ?? [])
+      setDeadlinesRaw((d.data as Deadline[]) ?? [])
+      setProcessesRaw((p.data as ProcessRow[]) ?? [])
       setLoading(false)
     })
   }, [])
+
+  const tasks = useMemo(() => tasksRaw.filter(t => respFilter.matches(t.responsible_ids)), [tasksRaw, respFilter.responsavelId])
+  const deadlines = useMemo(() => deadlinesRaw.filter(d => respFilter.matches(d.responsible_ids)), [deadlinesRaw, respFilter.responsavelId])
+  const processes = useMemo(() => processesRaw.filter(p => respFilter.matches(p.responsible_ids)), [processesRaw, respFilter.responsavelId])
 
   const todayStr = new Date().toISOString().slice(0, 10)
   const tarefasPendentes = tasks.filter(t => t.status === 'pendente').length
@@ -127,6 +130,10 @@ export default function ProdutividadeTab() {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <ResponsavelFilter f={respFilter} />
+      </div>
+
       <AttentionPanel items={attention} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -137,17 +144,10 @@ export default function ProdutividadeTab() {
       </div>
 
       <ChartCard title="Tarefas concluídas x atrasadas por mês" icon={ClipboardList}>
-        <div className="h-52">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={tarefasPorMes}>
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-              <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-              <Bar dataKey="concluidas" name="Concluídas" fill="#22c55e" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="atrasadas" name="Atrasadas" fill="#ef4444" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <TrendChart data={tarefasPorMes} series={[
+          { key: 'concluidas', name: 'Concluídas', color: '#22c55e' },
+          { key: 'atrasadas', name: 'Atrasadas', color: '#ef4444' },
+        ]} />
       </ChartCard>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
