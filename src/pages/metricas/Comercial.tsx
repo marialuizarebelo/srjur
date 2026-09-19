@@ -42,6 +42,17 @@ export default function ComercialTab() {
   const stagePos = useMemo(() => new Map(stages.map(s => [s.value, s.position])), [stages])
 
   const leadsAtivos = leads.filter(l => l.status !== 'perdido' && l.status !== 'convertido' && !l.client_id).length
+
+  // Pipeline comercial: quanto já está "garantido" (contratos assinados) vs
+  // provável (negociação avançada) vs todo o funil aberto — não é filtrado
+  // por período, é uma fotografia do agora (igual "quanto tenho em jogo hoje").
+  const propostaPos = stagePos.get('proposta_enviada') ?? Infinity
+  const leadsContratados = useMemo(() => leads.filter(l => l.status === 'convertido' || l.client_id), [leads])
+  const leadsAvancados = useMemo(() => leads.filter(l => l.status !== 'perdido' && l.status !== 'convertido' && !l.client_id && (stagePos.get(l.status) ?? -1) >= propostaPos), [leads, stagePos, propostaPos])
+  const leadsPipelineAberto = useMemo(() => leads.filter(l => l.status !== 'perdido' && l.status !== 'convertido' && !l.client_id), [leads])
+  const receitaContratada = leadsContratados.reduce((s, l) => s + Number(l.potential_value ?? 0), 0)
+  const receitaProvavel = leadsAvancados.reduce((s, l) => s + Number(l.potential_value ?? 0), 0)
+  const receitaPipeline = leadsPipelineAberto.reduce((s, l) => s + Number(l.potential_value ?? 0), 0)
   const leadsNoPeriodo = useMemo(() => leads.filter(l => l.created_at >= period.range.start && l.created_at <= period.range.end + 'T23:59:59'), [leads, period.range])
   const convertidosPeriodo = leadsNoPeriodo.filter(l => l.status === 'convertido' || l.client_id).length
   const taxaConversao = leadsNoPeriodo.length > 0 ? (convertidosPeriodo / leadsNoPeriodo.length) * 100 : 0
@@ -160,6 +171,26 @@ export default function ComercialTab() {
         <KpiCard title="Novos clientes (período)" value={clientesNoPeriodo.length} icon={Users} color="#8B5CF6" trend={trendText(clientesNoPeriodo.length, clientesPeriodoAnterior.length)} onClick={openNovosClientesDetail} />
         <KpiCard title="Ticket médio contratado" value={fmtBRL(ticketMedio)} icon={TrendingUp} color="#F59E0B" sensitive onClick={openTicketMedioDetail} />
       </div>
+
+      <ChartCard title="Pipeline comercial (visão atual)" icon={TrendingUp}>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button onClick={() => openLeadsList('Receita já contratada', leadsContratados)}
+            className="text-left rounded-xl border p-3 hover:bg-muted/50 transition-colors">
+            <p className="text-[11px] text-muted-foreground">Contratada</p>
+            <p className="text-lg font-bold text-green-600">{fmtBRL(receitaContratada)}</p>
+          </button>
+          <button onClick={() => openLeadsList('Leads em negociação avançada', leadsAvancados)}
+            className="text-left rounded-xl border p-3 hover:bg-muted/50 transition-colors">
+            <p className="text-[11px] text-muted-foreground">Provável (negociação avançada)</p>
+            <p className="text-lg font-bold text-amber-500">{fmtBRL(receitaProvavel)}</p>
+          </button>
+          <button onClick={() => openLeadsList('Todo o pipeline em aberto', leadsPipelineAberto)}
+            className="text-left rounded-xl border p-3 hover:bg-muted/50 transition-colors">
+            <p className="text-[11px] text-muted-foreground">Pipeline total em aberto</p>
+            <p className="text-lg font-bold text-blue-500">{fmtBRL(receitaPipeline)}</p>
+          </button>
+        </div>
+      </ChartCard>
 
       <ChartCard title="Funil de leads (acumulado)" icon={Target}>
         <div className="h-64">

@@ -22,13 +22,14 @@ export interface FinanceRow {
   impacts_cash: boolean
   process_id: string | null
   client_id: string | null
+  recurrence: string | null
 }
 
 export function useFinanceRows() {
   const [rows, setRows] = useState<FinanceRow[]>([])
   const [loading, setLoading] = useState(true)
   useEffect(() => {
-    supabase.from('finance').select('type, category, description, value, date, due_date, paid, impacts_cash, process_id, client_id').then(({ data }) => {
+    supabase.from('finance').select('type, category, description, value, date, due_date, paid, impacts_cash, process_id, client_id, recurrence').then(({ data }) => {
       setRows((data as FinanceRow[]) ?? [])
       setLoading(false)
     })
@@ -83,6 +84,19 @@ export default function FinanceiroTab() {
     const list = rowsNoPeriodo.filter(r => r.type === type && (r.category ?? 'Outros') === category)
     detail.show(`${category} — ${type === 'receita' ? 'Receitas' : 'Despesas'}`,
       list.map((r, i) => ({ id: String(i), label: r.description, sublabel: fmtDate(r.date), value: fmtBRL(Number(r.value)) })))
+  }
+
+  const isRecorrente = (r: FinanceRow) => !!r.recurrence && r.recurrence !== 'Única'
+  const recorrenciaData = useMemo(() => {
+    const receitasPeriodoRows = rowsNoPeriodo.filter(r => r.type === 'receita')
+    return [
+      { name: 'Recorrente', value: receitasPeriodoRows.filter(isRecorrente).reduce((s, r) => s + Number(r.value), 0) },
+      { name: 'Avulsa', value: receitasPeriodoRows.filter(r => !isRecorrente(r)).reduce((s, r) => s + Number(r.value), 0) },
+    ].filter(d => d.value > 0)
+  }, [rowsNoPeriodo])
+  function openRecorrenciaDetail(name: string) {
+    const list = rowsNoPeriodo.filter(r => r.type === 'receita' && (name === 'Recorrente' ? isRecorrente(r) : !isRecorrente(r)))
+    openRowsList(`Receita ${name.toLowerCase()} do período`, list)
   }
 
   const projection = useMemo(() => {
@@ -168,6 +182,9 @@ export default function FinanceiroTab() {
         </ChartCard>
         <ChartCard title="Despesas por categoria" icon={DollarSign}>
           <DonutWithLegend data={despesaCategoryData} formatValue={fmtBRL} onSelect={name => openCategoryDetail('despesa', name)} />
+        </ChartCard>
+        <ChartCard title="Receita recorrente x avulsa" icon={DollarSign} className="md:col-span-2">
+          <DonutWithLegend data={recorrenciaData} formatValue={fmtBRL} onSelect={openRecorrenciaDetail} />
         </ChartCard>
       </div>
 
