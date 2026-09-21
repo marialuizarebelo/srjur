@@ -13,6 +13,9 @@ export interface DjenItem {
   numeroprocessocommascara: string
   link: string | null
   tipoDocumento: string
+  nomeClasse?: string
+  codigoClasse?: string
+  destinatarios?: { nome: string; comunicacao_id?: number; polo: string }[]
   destinatarioadvogados: {
     advogado: { nome: string; numero_oab: string; uf_oab: string }
   }[]

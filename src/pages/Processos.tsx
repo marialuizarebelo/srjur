@@ -55,6 +55,7 @@ interface Process {
   responsible: string | null
   responsible_ids: string[] | null
   court: string | null
+  procedural_class: string | null
   electronic_system: string | null
   notes: string | null
   portal_visible: boolean
@@ -278,7 +279,7 @@ export default function Processos() {
   const [pf, setPf] = useState({
     title: '', number: '', client_id: '', type: 'consultivo',
     area: '', status: 'em_andamento', phase: 'inicial', responsible_ids: [] as string[],
-    court: '', electronic_system: '', notes: '', portal_visible: true,
+    court: '', procedural_class: '', electronic_system: '', notes: '', portal_visible: true,
     access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
     client_role: 'autor',
     opposing_parties: [{ name: '', cpf: '', role: 'reu' }] as { name: string; cpf: string; role: string }[], filing_date: '', citation_date: '',
@@ -301,7 +302,7 @@ export default function Processos() {
   const resetPf = () => {
     setPf({ title: '', number: '', client_id: '', type: 'consultivo',
       area: '', status: 'em_andamento', phase: 'inicial', responsible_ids: [],
-      court: '', electronic_system: '', notes: '', portal_visible: true,
+      court: '', procedural_class: '', electronic_system: '', notes: '', portal_visible: true,
       access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
       client_role: 'autor',
       opposing_parties: [{ name: '', cpf: '', role: 'reu' }], filing_date: '', citation_date: '',
@@ -424,6 +425,7 @@ export default function Processos() {
       title: p.title, number: p.number ?? '', client_id: p.client_id ?? '',
       type: p.type, area: p.area ?? '', status: p.status, phase: p.phase,
       responsible_ids: p.responsible_ids ?? [], court: p.court ?? '',
+      procedural_class: p.procedural_class ?? '',
       electronic_system: p.electronic_system ?? '', notes: p.notes ?? '',
       portal_visible: p.portal_visible,
       access_key: p.access_key ?? '', cause_value: p.cause_value ? String(p.cause_value) : '',
@@ -463,6 +465,7 @@ export default function Processos() {
         ? pf.responsible_ids.map(id => profilesMap[id]?.display_name).filter(Boolean).join(' e ')
         : (profilesMap[pf.responsible_ids[0]]?.display_name ?? null),
       court: pf.court || null,
+      procedural_class: pf.procedural_class || null,
       electronic_system: pf.electronic_system || null, notes: pf.notes || null,
       portal_visible: pf.portal_visible, updated_at: new Date().toISOString(),
       access_key: pf.access_key || null,
@@ -504,7 +507,7 @@ export default function Processos() {
       loadData()
 
       if (processId && pf.number) {
-        syncProcessIntimacoes(processId, pf.number)
+        syncProcessIntimacoes(processId, pf.number, !pf.procedural_class.trim())
       }
     } catch (err: any) {
       toast.error('Erro ao salvar processo: ' + (err?.message ?? String(err)))
@@ -515,7 +518,7 @@ export default function Processos() {
 
   // Busca no DJEN (nacional) por movimentações desse número de processo e
   // salva as que ainda não existem no inbox de Sistemas Eletrônicos
-  const syncProcessIntimacoes = async (processId: string, numero: string) => {
+  const syncProcessIntimacoes = async (processId: string, numero: string, fillClasse = false) => {
     const clean = numero.replace(/\D/g, '')
     if (!clean) return
     try {
@@ -523,6 +526,13 @@ export default function Processos() {
       if (items.length === 0) {
         toast('Nenhuma movimentação encontrada ainda no DJEN para este número.', { duration: 5000 })
         return
+      }
+      if (fillClasse) {
+        const comClasse = items.find(i => i.nomeClasse?.trim())
+        if (comClasse?.nomeClasse) {
+          await supabase.from('processes').update({ procedural_class: comClasse.nomeClasse }).eq('id', processId)
+          loadData()
+        }
       }
       let novas = 0
       for (const item of items) {
@@ -657,6 +667,9 @@ export default function Processos() {
                 )}
                 {detailProcess.court && (
                   <div className="text-muted-foreground">Vara: <span className="text-foreground">{detailProcess.court}</span></div>
+                )}
+                {detailProcess.procedural_class && (
+                  <div className="text-muted-foreground">Classe: <span className="text-foreground">{detailProcess.procedural_class}</span></div>
                 )}
                 {detailProcess.electronic_system && (
                   <div className="text-muted-foreground">Sistema: <span className="text-foreground">{detailProcess.electronic_system}</span></div>
@@ -1243,6 +1256,11 @@ export default function Processos() {
             <div className="space-y-2">
               <Label>Vara</Label>
               <Input value={pf.court} onChange={e => setPf(f => ({ ...f, court: e.target.value }))} placeholder="Ex: 8ª Vara de Família do Foro Central de Porto Alegre" className="h-10" />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Classe processual</Label>
+              <Input value={pf.procedural_class} onChange={e => setPf(f => ({ ...f, procedural_class: e.target.value }))} placeholder="Preenchido automaticamente ao salvar, se houver intimação no DJEN" className="h-10" />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
