@@ -533,12 +533,13 @@ export default function Processos() {
         return
       }
       const comClasse = items.find(i => i.nomeClasse?.trim())
-      const clienteAtual = clients.find(c => c.id === pf.client_id)
+      const comOrgao = items.find(i => i.nomeOrgao?.trim())
 
+      // Junta os destinatários únicos (nome + polo) de todas as intimações
+      // encontradas. O DJEN só lista aqui quem recebeu a intimação (em geral
+      // o lado que a busca representa) -- a parte oposta nem sempre aparece.
       const nomesVistos = new Set<string>()
-      const partesEncontradas: { name: string; cpf: string; role: string }[] = []
-      let clienteIdentificado: string | null = null
-
+      const destinatariosUnicos: { nome: string; polo: string }[] = []
       for (const item of items) {
         for (const d of item.destinatarios ?? []) {
           const nome = d.nome?.trim()
@@ -546,27 +547,51 @@ export default function Processos() {
           const chave = normalizaNome(nome)
           if (nomesVistos.has(chave)) continue
           nomesVistos.add(chave)
-
-          if (clienteAtual && normalizaNome(clienteAtual.name) === chave) continue
-
-          const clienteEncontrado = clients.find(c => normalizaNome(c.name) === chave)
-          if (clienteEncontrado && !clienteAtual && !clienteIdentificado) {
-            clienteIdentificado = clienteEncontrado.id
-            continue
-          }
-          if (clienteEncontrado) continue
-
-          partesEncontradas.push({ name: nome, cpf: '', role: 'reu' })
+          destinatariosUnicos.push({ nome, polo: (d.polo ?? '').trim().toUpperCase() })
         }
+      }
+
+      let clienteAtual = clients.find(c => c.id === pf.client_id)
+      let clientRoleAtual = pf.client_role
+      let clienteIdentificadoId: string | null = null
+
+      // Se ainda não tem cliente selecionado, tenta achar um destinatário
+      // que já seja cliente cadastrado, e usa o polo dele pra inferir o papel.
+      if (!clienteAtual) {
+        for (const d of destinatariosUnicos) {
+          const chave = normalizaNome(d.nome)
+          const encontrado = clients.find(c => normalizaNome(c.name) === chave)
+          if (encontrado) {
+            clienteIdentificadoId = encontrado.id
+            clienteAtual = encontrado
+            clientRoleAtual = d.polo.startsWith('P') ? 'reu' : 'autor'
+            break
+          }
+        }
+      }
+
+      const poloDoCliente = clientRoleAtual === 'reu' ? 'P' : 'A'
+      const partesOpostas: { name: string; cpf: string; role: string }[] = []
+      let coPartesIgnoradas = 0
+      for (const d of destinatariosUnicos) {
+        if (clienteAtual && normalizaNome(d.nome) === normalizaNome(clienteAtual.name)) continue
+        if (d.polo && d.polo === poloDoCliente) { coPartesIgnoradas++; continue }
+        partesOpostas.push({ name: d.nome, cpf: '', role: clientRoleAtual === 'autor' ? 'reu' : 'autor' })
       }
 
       setPf(f => ({
         ...f,
         procedural_class: comClasse?.nomeClasse?.trim() || f.procedural_class,
-        client_id: clienteIdentificado ?? f.client_id,
-        opposing_parties: partesEncontradas.length > 0 ? partesEncontradas : f.opposing_parties,
+        court: f.court.trim() ? f.court : (comOrgao?.nomeOrgao?.trim() || f.court),
+        client_id: clienteIdentificadoId ?? f.client_id,
+        client_role: clienteIdentificadoId ? clientRoleAtual : f.client_role,
+        opposing_parties: partesOpostas.length > 0 ? partesOpostas : f.opposing_parties,
       }))
-      toast.success('Dados encontrados no DJEN preenchidos — confira e ajuste antes de salvar.')
+
+      const avisos: string[] = []
+      if (partesOpostas.length === 0) avisos.push('a parte oposta não veio no DJEN (só aparece quem recebeu a intimação) — adicione manualmente.')
+      if (coPartesIgnoradas > 0) avisos.push(`${coPartesIgnoradas} parte(s) do mesmo lado do cliente foram ignoradas (litisconsórcio, não é parte oposta).`)
+      toast.success(`Dados do DJEN preenchidos.${avisos.length ? ' ' + avisos.join(' ') : ''} Confira antes de salvar.`, { duration: 8000 })
     } catch (err: any) {
       toast.error('Erro ao buscar no DJEN: ' + (err?.message ?? String(err)))
     } finally {
