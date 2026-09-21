@@ -21,7 +21,7 @@ import {
   Plus, Search, Scale, LayoutGrid, List, Pencil, Trash2,
   FileText, ChevronDown, ChevronUp, ExternalLink, Send,
   Clock, User, Calendar, Copy, ClipboardList, CircleDollarSign,
-  Mail, Phone, IdCard, FolderOpen, ArrowRight,
+  Mail, Phone, IdCard, FolderOpen, ArrowRight, Loader2, Sparkles,
 } from 'lucide-react'
 import { getAreaColor } from '@/lib/areaColors'
 import { getTagColor } from '@/lib/deadlineTypes'
@@ -513,6 +513,64 @@ export default function Processos() {
       toast.error('Erro ao salvar processo: ' + (err?.message ?? String(err)))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const [djenSearching, setDjenSearching] = useState(false)
+
+  // Busca no DJEN direto na tela de edição (antes de salvar), pra já trazer
+  // classe processual e partes -- a pessoa confere e ajusta antes de salvar.
+  const normalizaNome = (s: string) => s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+
+  const buscarDadosDjen = async () => {
+    const clean = pf.number.replace(/\D/g, '')
+    if (!clean) { toast.error('Digite o número do processo primeiro'); return }
+    setDjenSearching(true)
+    try {
+      const items = await searchDjen({ numeroProcesso: clean, itensPorPagina: 50 })
+      if (items.length === 0) {
+        toast('Nenhuma publicação encontrada ainda no DJEN para este número — pode ser processo muito recente ou em segredo de justiça.', { duration: 6000 })
+        return
+      }
+      const comClasse = items.find(i => i.nomeClasse?.trim())
+      const clienteAtual = clients.find(c => c.id === pf.client_id)
+
+      const nomesVistos = new Set<string>()
+      const partesEncontradas: { name: string; cpf: string; role: string }[] = []
+      let clienteIdentificado: string | null = null
+
+      for (const item of items) {
+        for (const d of item.destinatarios ?? []) {
+          const nome = d.nome?.trim()
+          if (!nome) continue
+          const chave = normalizaNome(nome)
+          if (nomesVistos.has(chave)) continue
+          nomesVistos.add(chave)
+
+          if (clienteAtual && normalizaNome(clienteAtual.name) === chave) continue
+
+          const clienteEncontrado = clients.find(c => normalizaNome(c.name) === chave)
+          if (clienteEncontrado && !clienteAtual && !clienteIdentificado) {
+            clienteIdentificado = clienteEncontrado.id
+            continue
+          }
+          if (clienteEncontrado) continue
+
+          partesEncontradas.push({ name: nome, cpf: '', role: 'reu' })
+        }
+      }
+
+      setPf(f => ({
+        ...f,
+        procedural_class: comClasse?.nomeClasse?.trim() || f.procedural_class,
+        client_id: clienteIdentificado ?? f.client_id,
+        opposing_parties: partesEncontradas.length > 0 ? partesEncontradas : f.opposing_parties,
+      }))
+      toast.success('Dados encontrados no DJEN preenchidos — confira e ajuste antes de salvar.')
+    } catch (err: any) {
+      toast.error('Erro ao buscar no DJEN: ' + (err?.message ?? String(err)))
+    } finally {
+      setDjenSearching(false)
     }
   }
 
@@ -1201,7 +1259,14 @@ export default function Processos() {
 
             <div className="space-y-2">
               <Label>Número do processo</Label>
-              <Input value={pf.number} onChange={e => setPf(f => ({ ...f, number: e.target.value }))} placeholder="0000000-00.0000.0.00.0000" className="h-10" />
+              <div className="flex gap-2">
+                <Input value={pf.number} onChange={e => setPf(f => ({ ...f, number: e.target.value }))} placeholder="0000000-00.0000.0.00.0000" className="h-10" />
+                <Button type="button" variant="outline" className="h-10 shrink-0" disabled={djenSearching || !pf.number.trim()} onClick={buscarDadosDjen}>
+                  {djenSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  <span className="hidden sm:inline ml-1.5">Buscar no DJEN</span>
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Busca classe processual e partes a partir das publicações já feitas no DJEN. Confira e ajuste se necessário.</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
