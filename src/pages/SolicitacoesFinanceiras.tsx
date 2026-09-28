@@ -134,6 +134,10 @@ export default function SolicitacoesFinanceiras() {
       payment_method: r.payment_method, notes: [r.notes, splitNote].filter(Boolean).join('\n\n'),
       responsible: `Solicitado por ${requesterName}`,
       tenant_id: profile?.tenant_id ?? null,
+      // Cliente precisa ver o serviço como valor único (a divisão é interna entre as
+      // partes) — então, quando há cliente vinculado, esta fatia entra visível no
+      // portal dele, junto com a fatia da outra parte, somando o valor total pago.
+      portal_visible: !!r.client_id,
     }).select('id').single()
     if (financeError) { toast.error('Erro ao lançar no financeiro: ' + financeError.message); return }
     const { error: updateError } = await supabase.from('finance_requests').update({
