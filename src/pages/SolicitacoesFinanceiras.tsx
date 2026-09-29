@@ -232,8 +232,9 @@ export default function SolicitacoesFinanceiras() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label>Valor (R$) *</Label>
+            <Label>Valor total do serviço — o que o cliente paga (R$) *</Label>
             <Input value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} placeholder="0,00" className="h-10" />
+            <p className="text-[11px] text-muted-foreground">Não é a sua parte — é o valor cheio. A divisão % abaixo calcula a fatia de cada uma automaticamente.</p>
           </div>
           <div className="space-y-2">
             <Label>Categoria</Label>
