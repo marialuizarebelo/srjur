@@ -234,7 +234,7 @@ export default function SolicitacoesFinanceiras() {
           <div className="space-y-2">
             <Label>Valor total do serviço — o que o cliente paga (R$) *</Label>
             <Input value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} placeholder="0,00" className="h-10" />
-            <p className="text-[11px] text-muted-foreground">Não é a sua parte — é o valor cheio. A divisão % abaixo calcula a fatia de cada uma automaticamente.</p>
+            <p className="text-[11px] text-muted-foreground">Informe o valor integral contratado com o cliente, não a sua parte. A divisão percentual abaixo calcula automaticamente a fatia de cada uma.</p>
           </div>
           <div className="space-y-2">
             <Label>Categoria</Label>
