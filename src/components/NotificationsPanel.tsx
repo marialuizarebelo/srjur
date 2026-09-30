@@ -50,7 +50,7 @@ async function loadNotifs(): Promise<Notif[]> {
   const t = today(), tom = addDays(1), depois = addDays(2)
 
   const [deadlines, tasks] = await Promise.all([
-    supabase.from('deadlines').select('id, title, date, type').lte('date', depois).order('date'),
+    supabase.from('deadlines').select('id, title, due_date, tipo').eq('status', 'pendente').lte('due_date', depois).order('due_date'),
     supabase.from('tasks').select('id, title, due_date, type').eq('status', 'pendente').lte('due_date', t).order('due_date'),
   ])
 
@@ -58,13 +58,13 @@ async function loadNotifs(): Promise<Notif[]> {
 
   deadlines.data?.forEach(d => {
     let type: Notif['type']
-    if (d.date < t) type = 'prazo_atrasado'
-    else if (d.date === t) type = 'prazo_hoje'
-    else if (d.date === tom) type = 'prazo_amanha'
+    if (d.due_date < t) type = 'prazo_atrasado'
+    else if (d.due_date === t) type = 'prazo_hoje'
+    else if (d.due_date === tom) type = 'prazo_amanha'
     else return
     const id = `d-${d.id}`
     if (!isDismissed(id))
-      notifs.push({ id, type, title: d.title, subtitle: d.type ?? undefined, date: d.date, href: '/prazos' })
+      notifs.push({ id, type, title: d.title, subtitle: d.tipo ?? undefined, date: d.due_date, href: '/prazos' })
   })
 
   tasks.data?.forEach(tk => {

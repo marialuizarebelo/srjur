@@ -41,7 +41,7 @@ async function runSearch(q: string): Promise<SearchResult[]> {
     supabase.from('clients').select('id, name, cpf_cnpj, email').or(`name.ilike.${term},cpf_cnpj.ilike.${term},email.ilike.${term}`).limit(5),
     supabase.from('processes').select('id, title, number, area').or(`title.ilike.${term},number.ilike.${term}`).limit(5),
     supabase.from('tasks').select('id, title, type, status').ilike('title', term).limit(5),
-    supabase.from('deadlines').select('id, title, type').ilike('title', term).limit(5),
+    supabase.from('deadlines').select('id, title, tipo').ilike('title', term).limit(5),
     supabase.from('finance').select('id, description, type, value').ilike('description', term).limit(5),
     supabase.from('marketing_content').select('id, title, platform, status').ilike('title', term).limit(5),
   ])
@@ -73,7 +73,7 @@ async function runSearch(q: string): Promise<SearchResult[]> {
   deadlines.data?.forEach(d => results.push({
     id: d.id, category: 'prazo',
     title: d.title,
-    subtitle: d.type ?? undefined,
+    subtitle: d.tipo ?? undefined,
     icon: CATEGORY_META.prazo.icon, color: CATEGORY_META.prazo.color,
     href: '/prazos',
   }))
