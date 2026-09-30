@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -21,13 +22,13 @@ import {
 import {
   Plus, Search, Users, TrendingUp, UserCheck, UserX, Pencil, Trash2,
   Phone, Mail, GripVertical, LayoutGrid, List, Eye, Settings2,
-  ChevronUp, ChevronDown, X, ExternalLink, Scale, ClipboardList, FileText,
+  ChevronUp, ChevronDown, ChevronLeft, ChevronRight, X, ExternalLink, Scale, ClipboardList, FileText,
   ArrowUp, ArrowDown, ArrowUpDown, Copy,
 } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
-import { ClientFormDialog, emptyClientForm, type ClientFormData } from '@/components/ClientForm'
+import { ClientFormDialog, emptyClientForm, type ClientFormData, GENDERS, MARITAL_STATUSES, REP_ROLES, REP_DOCUMENT_TYPES, STATES } from '@/components/ClientForm'
 import { findDocsByName, isZapSignConfigured, type ZapSignDoc } from '@/lib/zapsign'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { DriveFileList } from '@/components/DriveFileList'
@@ -60,6 +61,7 @@ interface Client {
   address: string | null
   portal_visible: boolean
   created_at: string
+  created_by: string | null
   // extra
   referred_by: string | null
   referral_fee_pct: number | null
@@ -109,7 +111,31 @@ interface Lead {
   referred_by: string | null
   referral_fee_pct: number | null
   first_contact_at: string | null
+  signed_at: string | null
   created_at: string
+  // dados p/ qualificação (opcionais — dá pra gerar já em fase de lead)
+  type: string | null
+  gender: string | null
+  nationality: string | null
+  marital_status: string | null
+  profession: string | null
+  rg_number: string | null
+  rg_issuer: string | null
+  cep: string | null
+  street: string | null
+  address_number: string | null
+  complement: string | null
+  neighborhood: string | null
+  city: string | null
+  state: string | null
+  rep_name: string | null
+  rep_cpf: string | null
+  rep_role: string | null
+  rep_document_type: string | null
+  rep_address: string | null
+  tags: string | null
+  birth_date: string | null
+  created_by: string | null
 }
 
 // ── Types ──
@@ -124,6 +150,7 @@ interface PipelineStage {
 
 // ── Constants ──
 const AREAS = ['Família', 'Cível', 'Trabalhista', 'Empresarial', 'Consumidor', 'Sucessões', 'Criminal', 'Outro']
+const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 const LEAD_SOURCES = ['Indicação', 'Google', 'Instagram', 'WhatsApp', 'Site', 'Evento', 'Outro']
 
 
@@ -153,9 +180,9 @@ function SortableHead({ label, active, dir, onClick }: {
 }
 
 // ── Lead Card (Kanban) ──
-function LeadCard({ lead, onClick, onStatusChange, stages }: {
+function LeadCard({ lead, onClick, onStatusChange, stages, displaySignedAt }: {
   lead: Lead; onClick: () => void; onStatusChange: (id: string, status: string) => void
-  stages: PipelineStage[]
+  stages: PipelineStage[]; displaySignedAt?: string | null
 }) {
   const kanbanStages = stages.filter(s => s.show_in_kanban)
   const currentIdx = kanbanStages.findIndex(s => s.value === lead.status)
@@ -192,6 +219,11 @@ function LeadCard({ lead, onClick, onStatusChange, stages }: {
       {lead.first_contact_at && (
         <p className="text-[10px] text-muted-foreground mt-1">
           1º contato: {new Date(lead.first_contact_at + 'T00:00').toLocaleDateString('pt-BR')}
+        </p>
+      )}
+      {(displaySignedAt ?? lead.signed_at) && (
+        <p className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 mt-1">
+          ✓ Fechado em: {new Date((displaySignedAt ?? lead.signed_at) + 'T00:00').toLocaleDateString('pt-BR')}
         </p>
       )}
       {lead.next_followup && (
@@ -311,7 +343,32 @@ function formatAddress(parts: {
 // campo Gênero (do próprio cliente, ou do representante legal no caso de PJ)
 // — quando não informado, assume masculino (convenção mais comum nos modelos
 // usados).
-function generateQualification(c: Client): string | null {
+interface QualificationSource {
+  name: string
+  type: string | null
+  gender: string | null
+  nationality: string | null
+  marital_status: string | null
+  profession: string | null
+  cpf_cnpj: string | null
+  email: string | null
+  street: string | null
+  address_number: string | null
+  complement: string | null
+  neighborhood: string | null
+  city: string | null
+  state: string | null
+  cep: string | null
+  rg_number: string | null
+  rg_issuer: string | null
+  rep_name: string | null
+  rep_cpf: string | null
+  rep_role: string | null
+  rep_document_type: string | null
+  rep_address: string | null
+}
+
+function generateQualification(c: QualificationSource): string | null {
   if (c.type === 'pessoa_fisica') {
     const feminino = c.gender === 'Feminino'
     const [nationality, marital, profession] = personQualificationBits({
@@ -776,7 +833,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
           </div>
 
           <div className="pt-2 border-t min-w-0">
-            <ActivityTimeline entityType="client" entityId={client.id} createdAt={client.created_at} externalEntries={activityExtras} />
+            <ActivityTimeline entityType="client" entityId={client.id} createdAt={client.created_at} createdBy={client.created_by} externalEntries={activityExtras} />
           </div>
         </div>
       </DialogContent>
@@ -825,6 +882,8 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
   stages: PipelineStage[]
 }) {
   const profilesMap = useProfilesMap()
+  const [qualification, setQualification] = useState<string | null>(null)
+  useEffect(() => { setQualification(null) }, [lead?.id])
   if (!lead) return null
   const stageInfo = stages.find(s => s.value === lead.status)
   const kanbanStages = stages.filter(s => s.show_in_kanban)
@@ -875,6 +934,38 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
             )}
           </div>
 
+          <div className="rounded-lg border px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide truncate">Qualificação</p>
+              <Button
+                variant="outline" size="sm" className="h-7 text-xs"
+                onClick={() => {
+                  const q = generateQualification(lead)
+                  if (!q) {
+                    toast.error(lead.type === 'pessoa_juridica'
+                      ? 'Preencha o CNPJ e os dados do representante legal para gerar a qualificação.'
+                      : 'Preencha CPF, nacionalidade, estado civil ou endereço para gerar a qualificação.')
+                    return
+                  }
+                  setQualification(q)
+                }}
+              >
+                Gerar qualificação
+              </Button>
+            </div>
+            {qualification && (
+              <div className="flex items-start gap-2">
+                <p className="text-sm flex-1 whitespace-pre-wrap">{qualification}</p>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(qualification); toast.success('Qualificação copiada!') }}
+                  className="p-1 hover:bg-muted rounded shrink-0" title="Copiar qualificação"
+                >
+                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </div>
+            )}
+          </div>
+
           {lead.notes && (
             <div>
               <p className="text-[11px] text-muted-foreground mb-1">Observações</p>
@@ -906,6 +997,7 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
 
 export default function Clientes() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const profilesMap = useProfilesMap()
   const [clients, setClients] = useState<Client[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
@@ -914,7 +1006,7 @@ export default function Clientes() {
   const [tab, setTab] = useState<'crm' | 'ativos' | 'encerrados'>('ativos')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
-  const [tableSortColumn, setTableSortColumn] = useState<'name' | 'type' | 'area' | 'phone' | 'email' | 'responsible' | 'status' | null>(null)
+  const [tableSortColumn, setTableSortColumn] = useState<'name' | 'type' | 'area' | 'phone' | 'email' | 'responsible' | 'status' | 'signed_at' | null>(null)
   const [tableSortDir, setTableSortDir] = useState<'asc' | 'desc'>('asc')
   const toggleTableSort = (col: typeof tableSortColumn) => {
     if (tableSortColumn === col) setTableSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
@@ -955,12 +1047,19 @@ export default function Clientes() {
   })
 
   // Lead form
-  const [lf, setLf] = useState({
+  const emptyLf = {
     name: '', email: '', phone: '', cpf_cnpj: '', source: '',
     status: 'novo', potential_value: '', notes: '', responsible: '', responsible_ids: [] as string[],
     next_followup: '', drive_folder_id: '', drive_url: '',
-    referred_by: '', referral_fee_pct: '', first_contact_at: '',
-  })
+    referred_by: '', referral_fee_pct: '', first_contact_at: '', signed_at: '',
+    type: 'pessoa_fisica', gender: 'Não informado', nationality: 'brasileira', marital_status: 'Não informado',
+    profession: '', rg_number: '', rg_issuer: '', cep: '', street: '', address_number: '',
+    complement: '', neighborhood: '', city: '', state: '',
+    rep_name: '', rep_cpf: '', rep_role: '', rep_document_type: 'Contrato Social', rep_address: '',
+    tags: '', birth_date: '',
+  }
+  const [lf, setLf] = useState(emptyLf)
+  const [lfQualOpen, setLfQualOpen] = useState(true)
 
   const resetCf = () => {
     setCf({ ...emptyClientForm })
@@ -968,9 +1067,7 @@ export default function Clientes() {
   }
 
   const resetLf = () => {
-    setLf({ name: '', email: '', phone: '', cpf_cnpj: '', source: '',
-      status: 'novo', potential_value: '', notes: '', responsible: '', responsible_ids: [], next_followup: '',
-      drive_folder_id: '', drive_url: '', referred_by: '', referral_fee_pct: '', first_contact_at: '' })
+    setLf({ ...emptyLf, responsible_ids: defaultLeadResponsibleId ? [defaultLeadResponsibleId] : [] })
     setEditingLead(null)
   }
 
@@ -994,11 +1091,13 @@ export default function Clientes() {
   }
 
   const [driveRootFolderId, setDriveRootFolderId] = useState<string | null>(null)
+  const [defaultLeadResponsibleId, setDefaultLeadResponsibleId] = useState<string | null>(null)
 
   useEffect(() => { loadData() }, [])
   useEffect(() => {
-    supabase.from('office_settings').select('drive_root_folder_id').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
+    supabase.from('office_settings').select('drive_root_folder_id, default_lead_responsible_id').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
       setDriveRootFolderId(data?.drive_root_folder_id ?? null)
+      setDefaultLeadResponsibleId(data?.default_lead_responsible_id ?? null)
     })
   }, [])
 
@@ -1046,13 +1145,21 @@ export default function Clientes() {
     if (!isZapSignConfigured() || leads.length === 0) return
 
     const checkZapSign = async () => {
-      const contractLeads = leads.filter(l => l.status === 'contrato_enviado')
+      // !l.client_id evita recriar o cliente (e as tarefas de onboarding) toda
+      // vez que o efeito roda de novo pra um lead cujo status ainda não foi
+      // atualizado — sem essa guarda, um lead "preso" gera um cliente duplicado
+      // a cada recarregamento da tela.
+      const contractLeads = leads.filter(l => l.status === 'contrato_enviado' && !l.client_id)
       if (contractLeads.length === 0) return
 
       for (const lead of contractLeads) {
         const docs = await findDocsByName(lead.name)
         const signedDoc = docs.find(d => d.status === 'signed')
         if (signedDoc) {
+          // Sem isso o lead virava cliente ativo com tarefas de onboarding
+          // criadas, mas o card ficava "preso" em Contrato Enviado no kanban
+          // pra sempre, em vez de avançar pra Contrato Assinado.
+          await supabase.from('leads').update({ status: 'contrato_assinado' }).eq('id', lead.id)
           await autoConvertLead(lead)
           loadData()
         }
@@ -1080,6 +1187,7 @@ export default function Clientes() {
           case 'email': return (a.email ?? '').localeCompare(b.email ?? '') * dir
           case 'responsible': return (a.responsible ?? '').localeCompare(b.responsible ?? '') * dir
           case 'status': return (a.status ?? '').localeCompare(b.status ?? '') * dir
+          case 'signed_at': return (a.signed_at ?? '').localeCompare(b.signed_at ?? '') * dir
           default: return 0
         }
       })
@@ -1087,11 +1195,51 @@ export default function Clientes() {
     return list
   }, [clients, tab, search, tableSortColumn, tableSortDir])
 
+  // Período do CRM: filtra o funil (kanban + resumo "no período"). Lead com
+  // contrato já assinado usa a data de FECHAMENTO (signed_at) — assim o card
+  // aparece no mês em que o negócio foi efetivamente fechado, não no mês em
+  // que o lead entrou no funil. Os demais (ainda em aberto) usam created_at.
+  // "perdido" fica visível de propósito (senão o lead simplesmente sumia da
+  // tela sem deixar rastro de que existiu).
+  const now = new Date()
+  const [crmPeriodMode, setCrmPeriodMode] = useState<'mes' | 'ano' | 'tudo'>('mes')
+  const [crmMonth, setCrmMonth] = useState(now.getMonth())
+  const [crmYear, setCrmYear] = useState(now.getFullYear())
+
+  const goPrevMonth = () => {
+    if (crmMonth === 0) { setCrmMonth(11); setCrmYear(y => y - 1) }
+    else setCrmMonth(m => m - 1)
+  }
+  const goNextMonth = () => {
+    if (crmMonth === 11) { setCrmMonth(0); setCrmYear(y => y + 1) }
+    else setCrmMonth(m => m + 1)
+  }
+
+  const inCrmPeriod = (createdAt: string) => {
+    if (crmPeriodMode === 'tudo') return true
+    const d = new Date(createdAt)
+    if (crmPeriodMode === 'ano') return d.getFullYear() === crmYear
+    return d.getFullYear() === crmYear && d.getMonth() === crmMonth
+  }
+  // Lead já convertido em cliente: a data de assinatura "oficial" é editada
+  // na ficha do cliente (tela mais completa), não na do lead — então usamos
+  // ela aqui como fonte da verdade, com o campo do próprio lead como reserva
+  // (ex.: alguém preencheu só no lead, ou o cliente ainda não tem essa data).
+  const clientSignedAtById = useMemo(() => {
+    const map = new Map<string, string | null>()
+    clients.forEach(c => map.set(c.id, c.signed_at ?? null))
+    return map
+  }, [clients])
+  const effectiveSignedAt = (lead: Lead) =>
+    (lead.client_id ? clientSignedAtById.get(lead.client_id) : null) ?? lead.signed_at
+  const inCrmPeriodLead = (lead: Lead) => inCrmPeriod(effectiveSignedAt(lead) ?? lead.created_at)
+
   const filteredLeads = useMemo(() => {
     return leads
-      .filter(l => l.status !== 'convertido' && l.status !== 'perdido')
+      .filter(l => l.status !== 'convertido')
+      .filter(inCrmPeriodLead)
       .filter(l => !search || l.name.toLowerCase().includes(search.toLowerCase()))
-  }, [leads, search])
+  }, [leads, search, crmPeriodMode, crmMonth, crmYear])
 
   const leadsByStage = useMemo(() => {
     const map = new Map<string, Lead[]>()
@@ -1106,10 +1254,18 @@ export default function Clientes() {
 
   // ── Stats ──
   const totalAtivos = clients.filter(c => c.status === 'ativo').length
-  const totalLeads = leads.filter(l => l.status !== 'perdido' && l.status !== 'convertido' && !l.client_id).length
-  const pipelineValue = leads
+  // "Geral" = sempre todos os leads, independente do filtro de período do CRM.
+  const totalLeadsGeral = leads.filter(l => l.status !== 'perdido' && l.status !== 'convertido' && !l.client_id).length
+  const pipelineValueGeral = leads
     .filter(l => l.status !== 'perdido' && !l.client_id)
     .reduce((s, l) => s + (l.potential_value ?? 0), 0)
+  // "No período" = respeita o filtro Mês/Ano/Tudo selecionado no CRM.
+  const leadsNoPeriodo = leads.filter(l => inCrmPeriod(l.created_at))
+  const totalLeadsPeriodo = leadsNoPeriodo.filter(l => l.status !== 'perdido' && l.status !== 'convertido' && !l.client_id).length
+  const pipelineValuePeriodo = leadsNoPeriodo
+    .filter(l => l.status !== 'perdido' && !l.client_id)
+    .reduce((s, l) => s + (l.potential_value ?? 0), 0)
+  const totalLeads = totalLeadsGeral
 
   // ── Client CRUD ──
   const openEditClient = (c: any) => {
@@ -1171,7 +1327,7 @@ export default function Clientes() {
         logActivity('client', editingClient.id, `Status alterado para "${cf.status}"`)
       }
     } else {
-      const { data: newClient, error } = await supabase.from('clients').insert(payload).select('id').single()
+      const { data: newClient, error } = await supabase.from('clients').insert({ ...payload, created_by: profile?.id ?? null }).select('id').single()
       if (error) { toast.error('Erro ao criar cliente: ' + error.message); return }
       // If new client, create task to complete registration
       if (newClient) {
@@ -1206,7 +1362,15 @@ export default function Clientes() {
       source: l.source ?? '', status: l.status, potential_value: l.potential_value ? String(l.potential_value) : '',
       notes: l.notes ?? '', responsible: l.responsible ?? '', responsible_ids: l.responsible_ids ?? [], next_followup: l.next_followup ?? '',
       drive_folder_id: l.drive_folder_id ?? '', drive_url: l.drive_url ?? '',
-      referred_by: l.referred_by ?? '', referral_fee_pct: l.referral_fee_pct ? String(l.referral_fee_pct) : '', first_contact_at: l.first_contact_at ?? '',
+      referred_by: l.referred_by ?? '', referral_fee_pct: l.referral_fee_pct ? String(l.referral_fee_pct) : '', first_contact_at: l.first_contact_at ?? '', signed_at: l.signed_at ?? '',
+      type: l.type ?? 'pessoa_fisica', gender: l.gender ?? 'Não informado', nationality: l.nationality ?? 'brasileira',
+      marital_status: l.marital_status ?? 'Não informado', profession: l.profession ?? '',
+      rg_number: l.rg_number ?? '', rg_issuer: l.rg_issuer ?? '', cep: l.cep ?? '', street: l.street ?? '',
+      address_number: l.address_number ?? '', complement: l.complement ?? '', neighborhood: l.neighborhood ?? '',
+      city: l.city ?? '', state: l.state ?? '',
+      rep_name: l.rep_name ?? '', rep_cpf: l.rep_cpf ?? '', rep_role: l.rep_role ?? '',
+      rep_document_type: l.rep_document_type ?? 'Contrato Social', rep_address: l.rep_address ?? '',
+      tags: l.tags ?? '', birth_date: l.birth_date ?? '',
     })
     setEditingLead(l)
     setLeadDialogOpen(true)
@@ -1227,12 +1391,20 @@ export default function Clientes() {
           : (profilesMap[lf.responsible_ids[0]]?.display_name ?? null),
         next_followup: lf.next_followup || null,
         drive_folder_id: lf.drive_folder_id || null, drive_url: lf.drive_url || null,
-        referred_by: lf.referred_by || null, referral_fee_pct: lf.referral_fee_pct ? parseFloat(lf.referral_fee_pct) : null, first_contact_at: lf.first_contact_at || null,
+        referred_by: lf.referred_by || null, referral_fee_pct: lf.referral_fee_pct ? parseFloat(lf.referral_fee_pct) : null, first_contact_at: lf.first_contact_at || null, signed_at: lf.signed_at || null,
+        type: lf.type || null, gender: lf.gender || null, nationality: lf.nationality || null,
+        marital_status: lf.marital_status || null, profession: lf.profession || null,
+        rg_number: lf.rg_number || null, rg_issuer: lf.rg_issuer || null,
+        cep: lf.cep || null, street: lf.street || null, address_number: lf.address_number || null,
+        complement: lf.complement || null, neighborhood: lf.neighborhood || null, city: lf.city || null, state: lf.state || null,
+        rep_name: lf.rep_name || null, rep_cpf: lf.rep_cpf || null, rep_role: lf.rep_role || null,
+        rep_document_type: lf.rep_document_type || null, rep_address: lf.rep_address || null,
+        tags: lf.tags || null, birth_date: lf.birth_date || null,
       }
       if (editingLead) {
         await supabase.from('leads').update(payload).eq('id', editingLead.id)
       } else {
-        await supabase.from('leads').insert(payload)
+        await supabase.from('leads').insert({ ...payload, created_by: profile?.id ?? null })
       }
       setLeadDialogOpen(false)
       resetLf()
@@ -1256,12 +1428,18 @@ export default function Clientes() {
   }
 
   const updateLeadStatus = async (leadId: string, newStatus: string) => {
-    await supabase.from('leads').update({ status: newStatus }).eq('id', leadId)
+    const lead = leads.find(l => l.id === leadId)
+    // Data de fechamento do contrato — registrada automaticamente na primeira
+    // vez que o lead entra em "Contrato Assinado", pra sempre sabermos em que
+    // mês o negócio foi efetivamente fechado (não muda se já tiver sido setada).
+    const signedAt = newStatus === 'contrato_assinado' && !lead?.signed_at
+      ? new Date().toISOString().slice(0, 10)
+      : undefined
+    await supabase.from('leads').update({ status: newStatus, ...(signedAt ? { signed_at: signedAt } : {}) }).eq('id', leadId)
 
     if (newStatus === 'contrato_assinado') {
-      const lead = leads.find(l => l.id === leadId)
       // só converte se ainda não tiver virado cliente (evita duplicar tarefas/pasta)
-      if (lead && !lead.client_id) await autoConvertLead(lead)
+      if (lead && !lead.client_id) await autoConvertLead({ ...lead, signed_at: signedAt ?? lead.signed_at })
     }
 
     loadData()
@@ -1288,6 +1466,15 @@ export default function Clientes() {
       cpf_cnpj: lead.cpf_cnpj, status: 'ativo', responsible: lead.responsible,
       responsible_ids: lead.responsible_ids,
       notes: lead.notes, drive_folder_id: finalFolderId, drive_url: finalDriveUrl,
+      // Dados de qualificação já preenchidos em fase de lead não podem se perder na conversão.
+      type: lead.type || 'pessoa_fisica', gender: lead.gender, nationality: lead.nationality,
+      marital_status: lead.marital_status, profession: lead.profession,
+      rg_number: lead.rg_number, rg_issuer: lead.rg_issuer,
+      cep: lead.cep, street: lead.street, address_number: lead.address_number,
+      complement: lead.complement, neighborhood: lead.neighborhood, city: lead.city, state: lead.state,
+      rep_name: lead.rep_name, rep_cpf: lead.rep_cpf, rep_role: lead.rep_role,
+      rep_document_type: lead.rep_document_type, rep_address: lead.rep_address,
+      tags: lead.tags, birth_date: lead.birth_date, created_by: lead.created_by, signed_at: lead.signed_at,
     }).select('id').single()
 
     // Vincula o lead ao cliente criado, mas mantém o status/etapa do kanban
@@ -1352,7 +1539,7 @@ export default function Clientes() {
           <h1 className="text-2xl font-semibold">Clientes</h1>
           <p className="text-sm text-muted-foreground">
             {totalAtivos} ativos · {totalLeads} leads no pipeline
-            {pipelineValue > 0 && ` · ${fmtBRL(pipelineValue)} potencial`}
+            {pipelineValueGeral > 0 && ` · ${fmtBRL(pipelineValueGeral)} potencial`}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -1530,28 +1717,101 @@ export default function Clientes() {
         </div>
       </div>
 
+      {/* CRM: filtro de período */}
+      {tab === 'crm' && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+            <Button variant={crmPeriodMode === 'mes' ? 'default' : 'ghost'} size="sm" className="h-8" onClick={() => setCrmPeriodMode('mes')}>Mês</Button>
+            <Button variant={crmPeriodMode === 'ano' ? 'default' : 'ghost'} size="sm" className="h-8" onClick={() => setCrmPeriodMode('ano')}>Ano</Button>
+            <Button variant={crmPeriodMode === 'tudo' ? 'default' : 'ghost'} size="sm" className="h-8" onClick={() => setCrmPeriodMode('tudo')}>Tudo</Button>
+          </div>
+          {crmPeriodMode === 'mes' && (
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goPrevMonth}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Select value={String(crmMonth)} onValueChange={v => setCrmMonth(Number(v))}>
+                <SelectTrigger className="h-8 w-[150px]">
+                  <SelectValue>{MONTH_NAMES[crmMonth]}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTH_NAMES.map((m, i) => (
+                    <SelectItem key={i} value={String(i)}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goNextMonth}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          {(crmPeriodMode === 'mes' || crmPeriodMode === 'ano') && (
+            <div className="flex items-center gap-1">
+              {crmPeriodMode === 'ano' && (
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCrmYear(y => y - 1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              )}
+              <Select value={String(crmYear)} onValueChange={v => setCrmYear(Number(v))}>
+                <SelectTrigger className="h-8 w-[90px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 6 }, (_, i) => now.getFullYear() - i).map(y => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {crmPeriodMode === 'ano' && (
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCrmYear(y => y + 1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* CRM Kanban */}
       {tab === 'crm' && (
-        <div className="flex items-center gap-6 p-4 rounded-xl bg-muted/50 mb-4">
-          <div>
-            <p className="text-xs text-muted-foreground">Leads ativos</p>
-            <p className="text-lg font-bold">{totalLeads}</p>
+        <div className="rounded-xl bg-muted/50 mb-4 divide-y divide-border/60">
+          <div className="flex items-center gap-6 p-4 flex-wrap">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground w-full sm:w-auto">Geral (tudo)</span>
+            <div>
+              <p className="text-xs text-muted-foreground">Leads ativos</p>
+              <p className="text-lg font-bold">{totalLeadsGeral}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Potencial total</p>
+              <p className="text-lg font-bold text-green-600">{fmtBRL(pipelineValueGeral)}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Potencial total</p>
-            <p className="text-lg font-bold text-green-600">{fmtBRL(pipelineValue)}</p>
+          <div className="flex items-center gap-6 p-4 flex-wrap">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground w-full sm:w-auto">
+              {crmPeriodMode === 'tudo' ? 'Por etapa' : crmPeriodMode === 'mes' ? 'Neste mês' : 'Neste ano'}
+            </span>
+            {crmPeriodMode !== 'tudo' && (
+              <>
+                <div>
+                  <p className="text-xs text-muted-foreground">Leads ativos</p>
+                  <p className="text-lg font-bold">{totalLeadsPeriodo}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Potencial no período</p>
+                  <p className="text-lg font-bold text-green-600">{fmtBRL(pipelineValuePeriodo)}</p>
+                </div>
+              </>
+            )}
+            {stages.filter(s => s.show_in_kanban).map(stage => {
+              const sLeads = leadsByStage.get(stage.value) ?? []
+              if (sLeads.length === 0) return null
+              const val = sLeads.reduce((s, l) => s + (l.potential_value ?? 0), 0)
+              return (
+                <div key={stage.value} className="hidden lg:block">
+                  <p className="text-[10px] text-muted-foreground truncate max-w-[100px]">{stage.label}</p>
+                  <p className="text-sm font-semibold" style={{ color: stage.color }}>{fmtBRL(val)}</p>
+                </div>
+              )
+            })}
           </div>
-          {stages.filter(s => s.show_in_kanban).map(stage => {
-            const sLeads = leadsByStage.get(stage.value) ?? []
-            if (sLeads.length === 0) return null
-            const val = sLeads.reduce((s, l) => s + (l.potential_value ?? 0), 0)
-            return (
-              <div key={stage.value} className="hidden lg:block">
-                <p className="text-[10px] text-muted-foreground truncate max-w-[100px]">{stage.label}</p>
-                <p className="text-sm font-semibold" style={{ color: stage.color }}>{fmtBRL(val)}</p>
-              </div>
-            )
-          })}
         </div>
       )}
       {tab === 'crm' && (
@@ -1581,7 +1841,7 @@ export default function Clientes() {
                     <DroppableColumn id={stage.value} className="space-y-2 min-h-[60px] p-1 -m-1">
                       {stageLeads.map(lead => (
                         <DraggableCard key={lead.id} id={lead.id}>
-                          <LeadCard lead={lead} onClick={() => setViewLead(lead)} onStatusChange={updateLeadStatus} stages={stages} />
+                          <LeadCard lead={lead} onClick={() => setViewLead(lead)} onStatusChange={updateLeadStatus} stages={stages} displaySignedAt={effectiveSignedAt(lead)} />
                         </DraggableCard>
                       ))}
                       {stageLeads.length === 0 && (
@@ -1627,13 +1887,14 @@ export default function Clientes() {
                 <SortableHead label="E-mail" active={tableSortColumn === 'email'} dir={tableSortDir} onClick={() => toggleTableSort('email')} />
                 <SortableHead label="Responsável" active={tableSortColumn === 'responsible'} dir={tableSortDir} onClick={() => toggleTableSort('responsible')} />
                 <SortableHead label="Status" active={tableSortColumn === 'status'} dir={tableSortDir} onClick={() => toggleTableSort('status')} />
+                <SortableHead label="Fechamento" active={tableSortColumn === 'signed_at'} dir={tableSortDir} onClick={() => toggleTableSort('signed_at')} />
                 <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredClients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     Nenhum cliente encontrado
                   </TableCell>
                 </TableRow>
@@ -1659,6 +1920,7 @@ export default function Clientes() {
                         {c.status.toUpperCase()}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-sm">{c.signed_at ? fmtDateBR(c.signed_at) : '—'}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditClient(c)}>
@@ -1787,6 +2049,14 @@ export default function Clientes() {
               <Input type="date" value={lf.first_contact_at} onChange={e => setLf(f => ({ ...f, first_contact_at: e.target.value }))} className="h-10" />
             </div>
 
+            <div className="space-y-2">
+              <Label>Data de assinatura do contrato</Label>
+              <Input type="date" value={lf.signed_at} onChange={e => setLf(f => ({ ...f, signed_at: e.target.value }))} className="h-10" />
+              <p className="text-[11px] text-muted-foreground">
+                Preenchida automaticamente quando o lead entra em "Contrato Assinado" — ajuste aqui se a data real for outra. É essa data que decide em qual mês o card aparece no CRM.
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Etapa</Label>
@@ -1820,6 +2090,140 @@ export default function Clientes() {
               {lf.drive_folder_id && (
                 <div className="rounded-xl border border-border/60 p-3 mt-2">
                   <DriveFileList folderId={lf.drive_folder_id} />
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-border/60">
+              <button
+                type="button"
+                onClick={() => setLfQualOpen(o => !o)}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium"
+              >
+                <span>Dados para qualificação (opcional)</span>
+                {lfQualOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+              {lfQualOpen && (
+                <div className="px-4 pb-4 space-y-4 border-t pt-4">
+                  <p className="text-xs text-muted-foreground -mt-2">
+                    Preenchendo esses dados já dá pra gerar a qualificação jurídica mesmo antes de converter o lead em cliente. Se converter depois, esses dados vão junto.
+                  </p>
+                  <div className="space-y-2">
+                    <Label>Tipo</Label>
+                    <Select value={lf.type} onValueChange={v => setLf(f => ({ ...f, type: v }))}>
+                      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pessoa_fisica">Pessoa Física</SelectItem>
+                        <SelectItem value="pessoa_juridica">Pessoa Jurídica</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {lf.type === 'pessoa_fisica' ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Gênero</Label>
+                        <Select value={lf.gender} onValueChange={v => setLf(f => ({ ...f, gender: v }))}>
+                          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                          <SelectContent>{GENDERS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Estado Civil</Label>
+                        <Select value={lf.marital_status} onValueChange={v => setLf(f => ({ ...f, marital_status: v }))}>
+                          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                          <SelectContent>{MARITAL_STATUSES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Nacionalidade</Label>
+                        <Input value={lf.nationality} onChange={e => setLf(f => ({ ...f, nationality: e.target.value }))} className="h-10" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Profissão</Label>
+                        <Input value={lf.profession} onChange={e => setLf(f => ({ ...f, profession: e.target.value }))} className="h-10" />
+                      </div>
+                      <div className="space-y-2 col-span-2">
+                        <Label>RG</Label>
+                        <div className="flex gap-2">
+                          <Input value={lf.rg_number} onChange={e => setLf(f => ({ ...f, rg_number: e.target.value }))} placeholder="Número" className="h-10 flex-1" />
+                          <Input value={lf.rg_issuer} onChange={e => setLf(f => ({ ...f, rg_issuer: e.target.value }))} placeholder="Órgão emissor" className="h-10 flex-1" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2 col-span-2">
+                        <Label>Nome do representante legal</Label>
+                        <Input value={lf.rep_name} onChange={e => setLf(f => ({ ...f, rep_name: e.target.value }))} className="h-10" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Cargo do representante</Label>
+                        <Select value={lf.rep_role} onValueChange={v => setLf(f => ({ ...f, rep_role: v }))}>
+                          <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                          <SelectContent>{REP_ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Documento societário</Label>
+                        <Select value={lf.rep_document_type} onValueChange={v => setLf(f => ({ ...f, rep_document_type: v }))}>
+                          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                          <SelectContent>{REP_DOCUMENT_TYPES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>CPF do representante</Label>
+                        <Input value={lf.rep_cpf} onChange={e => setLf(f => ({ ...f, rep_cpf: e.target.value }))} className="h-10" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Nacionalidade (repr.)</Label>
+                        <Input value={lf.nationality} onChange={e => setLf(f => ({ ...f, nationality: e.target.value }))} className="h-10" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Estado Civil (repr.)</Label>
+                        <Select value={lf.marital_status} onValueChange={v => setLf(f => ({ ...f, marital_status: v }))}>
+                          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                          <SelectContent>{MARITAL_STATUSES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Profissão (repr.)</Label>
+                        <Input value={lf.profession} onChange={e => setLf(f => ({ ...f, profession: e.target.value }))} className="h-10" />
+                      </div>
+                      <div className="space-y-2 col-span-2">
+                        <Label>Endereço do representante</Label>
+                        <Input value={lf.rep_address} onChange={e => setLf(f => ({ ...f, rep_address: e.target.value }))} className="h-10" placeholder="Endereço completo em texto livre" />
+                      </div>
+                    </div>
+                  )}
+
+                  {lf.type === 'pessoa_fisica' && (
+                    <div className="space-y-2">
+                      <Label>Data de nascimento</Label>
+                      <Input type="date" value={lf.birth_date} onChange={e => setLf(f => ({ ...f, birth_date: e.target.value }))} className="h-10" />
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label>Tags</Label>
+                    <Input value={lf.tags} onChange={e => setLf(f => ({ ...f, tags: e.target.value }))} className="h-10" placeholder="Separadas por vírgula" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>{lf.type === 'pessoa_juridica' ? 'Endereço da sede' : 'Endereço'}</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input value={lf.cep} onChange={e => setLf(f => ({ ...f, cep: e.target.value }))} placeholder="CEP" className="h-10" />
+                      <Input value={lf.street} onChange={e => setLf(f => ({ ...f, street: e.target.value }))} placeholder="Rua" className="h-10 col-span-2" />
+                      <Input value={lf.address_number} onChange={e => setLf(f => ({ ...f, address_number: e.target.value }))} placeholder="Número" className="h-10" />
+                      <Input value={lf.complement} onChange={e => setLf(f => ({ ...f, complement: e.target.value }))} placeholder="Complemento" className="h-10" />
+                      <Input value={lf.neighborhood} onChange={e => setLf(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" className="h-10" />
+                      <Input value={lf.city} onChange={e => setLf(f => ({ ...f, city: e.target.value }))} placeholder="Cidade" className="h-10 col-span-2" />
+                      <Select value={lf.state} onValueChange={v => setLf(f => ({ ...f, state: v }))}>
+                        <SelectTrigger className="h-10"><SelectValue placeholder="UF" /></SelectTrigger>
+                        <SelectContent>{STATES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

@@ -17,9 +17,10 @@ interface ImageUploadCropProps {
   shape?: 'circle' | 'square'
   size?: number
   label?: string
+  disabled?: boolean
 }
 
-export function ImageUploadCrop({ value, onChange, bucket, shape = 'circle', size = 96, label }: ImageUploadCropProps) {
+export function ImageUploadCrop({ value, onChange, bucket, shape = 'circle', size = 96, label, disabled }: ImageUploadCropProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [rawImage, setRawImage] = useState<string | null>(null)
   const [cropOpen, setCropOpen] = useState(false)
@@ -85,7 +86,7 @@ export function ImageUploadCrop({ value, onChange, bucket, shape = 'circle', siz
           )}
         </div>
         <div>
-          <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => inputRef.current?.click()}>
+          <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => inputRef.current?.click()} disabled={disabled}>
             <Upload className="h-3.5 w-3.5 mr-1.5" />Enviar imagem
           </Button>
           <p className="text-[11px] text-muted-foreground mt-1.5">JPG ou PNG, você poderá ajustar o enquadramento</p>

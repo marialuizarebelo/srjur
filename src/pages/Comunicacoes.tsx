@@ -158,15 +158,20 @@ function applyVars(text: string, vals: Record<string, string>) {
 
 const EXAMPLE_VALS: Record<string, string> = {
   '{{nome}}': 'Maria Santos', '{{primeiro_nome}}': 'Maria',
+  '{{email_cliente}}': 'mariasantos@email.com', '{{telefone_cliente}}': '(51) 9 9999-9999',
+  '{{cpf_cnpj}}': '123.456.789-00',
   '{{escritorio}}': 'Scartezzini & Rebelo Advocacia',
   '{{responsavel}}': 'Maria Luiza', '{{primeiro_nome_responsavel}}': 'Maria Luiza',
   '{{data_hoje}}': new Date().toLocaleDateString('pt-BR'),
   '{{numero_processo}}': '0001234-56.2024.8.21.0001',
   '{{nome_processo}}': 'Ação de Indenização', '{{vara}}': '3ª Vara Cível',
   '{{chave_acesso}}': 'eproc.tjrs.jus.br', '{{sistema}}': 'eProc RS',
+  '{{fase_processo}}': 'Instrução',
   '{{data_agenda}}': '15/07/2026', '{{hora_agenda}}': '14h30',
   '{{local_agenda}}': 'Google Meet', '{{tipo_agenda}}': 'Audiência',
-  '{{valor}}': 'R$ 1.500,00', '{{prazo}}': '20/07/2026',
+  '{{valor}}': 'R$ 1.500,00', '{{descricao_financeiro}}': 'Honorários — parcela',
+  '{{vencimento}}': '20/07/2026', '{{parcela}}': '2/6',
+  '{{prazo}}': '20/07/2026', '{{titulo_prazo}}': 'Contestação', '{{origem_prazo}}': 'Intimação',
   '{{link_portal}}': 'https://portal.sradvocacia.com.br',
   '{{link_pagamento}}': 'https://pay.sradvocacia.com.br/123',
   '{{link}}': 'https://sradvocacia.com.br',
@@ -389,11 +394,11 @@ export default function Comunicacoes() {
     const [{ data: proc }, { data: fin }, { data: task }, { data: deadline }] = await Promise.all([
       supabase.from('clients').select('cpf_cnpj').eq('id', clientId).maybeSingle(),
       supabase.from('finance').select('value, description, due_date, payment_link, current_installment, installments')
-        .eq('client_id', clientId).eq('paid', false).order('due_date').limit(1).maybeSingle(),
+        .eq('client_id', clientId).eq('type', 'receita').eq('paid', false).order('due_date').limit(1).maybeSingle(),
       supabase.from('tasks').select('title, due_date, due_time, type')
         .eq('client_id', clientId).eq('status', 'pendente').order('due_date').limit(1).maybeSingle(),
       supabase.from('deadlines').select('title, due_date')
-        .eq('status', 'pendente').order('due_date').limit(1).maybeSingle(),
+        .eq('client_id', clientId).eq('status', 'pendente').order('due_date').limit(1).maybeSingle(),
     ])
     const { data: process } = await supabase.from('processes')
       .select('number, title, phase, court, electronic_system, access_key')
@@ -775,7 +780,7 @@ export default function Comunicacoes() {
 
             {/* Var inputs grouped */}
             {sendTpl && (() => {
-              const toFill = (sendTpl.variables ?? []).filter(v => !OFFICE_DEFAULTS[v])
+              const toFill = (sendTpl.variables ?? []).filter(v => !officeDefaults[v])
               if (toFill.length === 0) return null
               return (
                 <div className="space-y-3">

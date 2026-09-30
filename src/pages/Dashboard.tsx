@@ -26,8 +26,9 @@ import { ClientFormDialog, emptyClientForm, type ClientFormData } from '@/compon
 import {
   Users, Scale, ClipboardList, AlertTriangle, ChevronRight,
   DollarSign, Bell,
-  Clock, Plus, ArrowRight, Loader2,
+  Clock, Plus, ArrowRight, Loader2, KeyRound,
 } from 'lucide-react'
+import { generateTOTP, secondsRemaining } from '@/lib/totp'
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer } from 'recharts'
 
 /* ---------- QuickView Modal ---------- */
@@ -133,7 +134,7 @@ function StatCard({ title, value, subtitle, icon: Icon, lightColor, darkColor, b
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
       </div>
       <p className="text-4xl font-bold text-foreground"><Sensitive>{value}</Sensitive></p>
-      {subtitle && <p className="text-xs mt-1.5 font-medium" style={{ color: accent }}>{subtitle}</p>}
+      {subtitle && <p className="text-xs mt-1.5 font-medium" style={{ color: accent }}><Sensitive>{subtitle}</Sensitive></p>}
       {onClick && (
         <div className="absolute bottom-2 right-3 opacity-40">
           <ChevronRight className="h-3.5 w-3.5" style={{ color: accent }} />
@@ -335,13 +336,134 @@ function PortalActivityCard() {
   )
 }
 
+/* ---------- BirthdaysWidget ---------- */
+
+interface BirthdayClient { id: string; name: string; birth_date: string }
+
+function BirthdaysWidget() {
+  const [clients, setClients] = useState<BirthdayClient[]>([])
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('clients').select('id, name, birth_date').eq('status', 'ativo').not('birth_date', 'is', null)
+      const today = new Date()
+      const mm = String(today.getMonth() + 1).padStart(2, '0')
+      const dd = String(today.getDate()).padStart(2, '0')
+      const todays = (data ?? []).filter(c => {
+        const [, bMonth, bDay] = (c.birth_date as string).split('-')
+        return bMonth === mm && bDay === dd
+      })
+      setClients(todays as BirthdayClient[])
+    })()
+  }, [])
+
+  if (clients.length === 0) return null
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-base">🎂</span>
+        <span className="font-semibold text-sm">Aniversariantes de hoje</span>
+      </div>
+      <div className="space-y-1.5">
+        {clients.map(c => (
+          <button
+            key={c.id}
+            onClick={() => navigate(`/clientes?id=${c.id}`)}
+            className="w-full text-left rounded-lg px-2.5 py-2 hover:bg-muted/50 transition-colors text-sm font-medium"
+          >
+            {c.name}
+          </button>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+/* ---------- AuthenticatorWidget ---------- */
+
+interface AuthSystem { id: string; name: string; totp_secret: string | null; color: string | null }
+
+function AuthenticatorCode({ secret }: { secret: string }) {
+  const [code, setCode] = useState('------')
+  const [seconds, setSeconds] = useState(30)
+
+  useEffect(() => {
+    let active = true
+    async function tick() {
+      const c = await generateTOTP(secret)
+      if (active) { setCode(c); setSeconds(secondsRemaining()) }
+    }
+    tick()
+    const interval = setInterval(tick, 1000)
+    return () => { active = false; clearInterval(interval) }
+  }, [secret])
+
+  const pct = (seconds / 30) * 100
+
+  function copy() {
+    navigator.clipboard.writeText(code)
+    toast.success('Código copiado!')
+  }
+
+  return (
+    <button onClick={copy} className="w-full flex items-center gap-2.5 group rounded-lg px-1 py-1.5 hover:bg-muted/50 transition-colors" title="Copiar código">
+      <div className="relative h-8 w-8 shrink-0">
+        <svg className="h-8 w-8 -rotate-90" viewBox="0 0 36 36">
+          <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3" className="text-muted/30" />
+          <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3"
+            strokeDasharray={`${(pct / 100) * 97.4} 97.4`}
+            className={seconds <= 5 ? 'text-red-500' : 'text-primary'} strokeLinecap="round" />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold">{seconds}</span>
+      </div>
+      <div className="text-left min-w-0 flex-1">
+        <p className="text-sm font-mono font-bold tracking-widest group-hover:text-primary transition-colors">
+          <Sensitive>{code.slice(0, 3)} {code.slice(3)}</Sensitive>
+        </p>
+      </div>
+    </button>
+  )
+}
+
+function AuthenticatorWidget() {
+  const [systems, setSystems] = useState<AuthSystem[]>([])
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('electronic_systems').select('id, name, totp_secret, color').not('totp_secret', 'is', null).order('name')
+      setSystems((data as AuthSystem[]) ?? [])
+    })()
+  }, [])
+
+  if (systems.length === 0) return null
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <KeyRound className="h-4 w-4 text-primary" />
+        <span className="font-semibold text-sm">Códigos Authenticator</span>
+      </div>
+      <div className="space-y-2">
+        {systems.map(s => (
+          <div key={s.id}>
+            <p className="text-[10px] text-muted-foreground truncate mb-0.5" style={{ color: s.color ?? undefined }}>{s.name}</p>
+            <AuthenticatorCode secret={s.totp_secret!} />
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
 /* ---------- Dashboard ---------- */
 
 export default function Dashboard() {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const [stats, setStats] = useState({ clients: 0, processes: 0, tasks: 0, overdueDeadlines: 0 })
-  const [finance, setFinance] = useState({ receitas: 0, despesas: 0, inadimplencia: 0 })
+  const [finance, setFinance] = useState({ receitas: 0, despesas: 0, inadimplencia: 0, saldoMes: 0 })
   const [recentProcesses, setRecentProcesses] = useState<{ id: string; title: string; responsible?: string; status: string }[]>([])
   const [overdueTasks, setOverdueTasks] = useState<AttentionItem[]>([])
   const [todayTasks, setTodayTasks] = useState<AttentionItem[]>([])
@@ -500,9 +622,12 @@ export default function Dashboard() {
 
       const { data: finData } = await supabase
         .from('finance')
-        .select('type, value, paid, due_date, date')
+        .select('id, type, value, paid, due_date, date, impacts_cash')
 
-      const finDataThisMonth = (finData ?? []).filter(f => f.date.slice(0, 7) === currentMonthStr)
+      // Mesmo filtro do módulo Financeiro: lançamentos "não impacta caixa" (pagos
+      // do bolso pessoal das sócias, repasses etc.) não entram nessas contas —
+      // senão o card do dashboard não bate com o do Financeiro.
+      const finDataThisMonth = (finData ?? []).filter(f => f.date.slice(0, 7) === currentMonthStr && f.impacts_cash !== false)
 
       if (finData) {
         const receitas = finDataThisMonth.filter(f => f.type === 'receita').reduce((s, f) => s + Number(f.value), 0)
@@ -510,7 +635,23 @@ export default function Dashboard() {
         const inadimplencia = finDataThisMonth
           .filter(f => f.type === 'receita' && !f.paid && f.due_date && f.due_date < today)
           .reduce((s, f) => s + Number(f.value), 0)
-        setFinance({ receitas, despesas, inadimplencia })
+
+        // "Saldo do mês" precisa ser calculado igual ao Financeiro (recebido - pago,
+        // olhando pagamento parcial via finance_payments), senão os dois números
+        // nunca batem mesmo mostrando "a mesma coisa" pro olho da usuária.
+        const ids = finDataThisMonth.map(f => f.id)
+        const { data: paysData } = ids.length > 0
+          ? await supabase.from('finance_payments').select('finance_id, amount').in('finance_id', ids)
+          : { data: [] as { finance_id: string; amount: number }[] }
+        const paidMap: Record<string, number> = {}
+        for (const p of paysData ?? []) paidMap[p.finance_id] = (paidMap[p.finance_id] ?? 0) + Number(p.amount)
+        const paidAmountOf = (f: typeof finDataThisMonth[number]) =>
+          paidMap[f.id] !== undefined ? paidMap[f.id] : (f.paid ? Number(f.value) : 0)
+
+        const recebido = finDataThisMonth.filter(f => f.type === 'receita').reduce((s, f) => s + Math.min(paidAmountOf(f), Number(f.value)), 0)
+        const pago = finDataThisMonth.filter(f => f.type === 'despesa').reduce((s, f) => s + Math.min(paidAmountOf(f), Number(f.value)), 0)
+
+        setFinance({ receitas, despesas, inadimplencia, saldoMes: recebido - pago })
       }
 
       const { data: procs } = await supabase
@@ -585,12 +726,12 @@ export default function Dashboard() {
 
         const { data: mData } = await supabase
           .from('finance')
-          .select('type, value')
+          .select('type, value, impacts_cash')
           .gte('date', start)
           .lte('date', end)
 
-        const rec = mData?.filter(f => f.type === 'receita').reduce((s, f) => s + Number(f.value), 0) ?? 0
-        const desp = mData?.filter(f => f.type === 'despesa').reduce((s, f) => s + Number(f.value), 0) ?? 0
+        const rec = mData?.filter(f => f.type === 'receita' && f.impacts_cash !== false).reduce((s, f) => s + Number(f.value), 0) ?? 0
+        const desp = mData?.filter(f => f.type === 'despesa' && f.impacts_cash !== false).reduce((s, f) => s + Number(f.value), 0) ?? 0
         months.push({ month: label, receitas: rec, despesas: desp })
       }
       setChartData(months)
@@ -948,7 +1089,7 @@ export default function Dashboard() {
             {[
               { label: 'Receitas (mês)', value: fmtBRL(finance.receitas), color: 'text-green-600' },
               { label: 'Despesas (mês)', value: fmtBRL(finance.despesas), color: 'text-red-500' },
-              { label: 'Lucro Líquido', value: fmtBRL(finance.receitas - finance.despesas), color: '' },
+              { label: 'Saldo do mês', value: fmtBRL(finance.saldoMes), color: finance.saldoMes >= 0 ? 'text-[#8B5CF6]' : 'text-red-500' },
               { label: 'Inadimplência', value: fmtBRL(finance.inadimplencia), color: 'text-red-500', bell: true },
             ].map(({ label, value, color, bell }) => (
               <Card
@@ -1037,7 +1178,9 @@ export default function Dashboard() {
 
         {/* Right sidebar */}
         <div className="space-y-4 hidden xl:block">
+          <BirthdaysWidget />
           <PortalActivityCard />
+          <AuthenticatorWidget />
 
           <Card className="p-4">
             <div className="flex items-center justify-between gap-2 mb-3">

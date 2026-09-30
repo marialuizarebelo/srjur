@@ -14,11 +14,12 @@ ALTER TABLE portal_messages ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "admin_all" ON portal_messages FOR ALL USING (public.is_admin());
 
 -- Client: read only their own messages
+-- Usa my_client_id() (SECURITY DEFINER, ver migration_fix_client_rls.sql) em vez de
+-- consultar auth.users diretamente aqui: a role "authenticated" não tem GRANT nessa
+-- tabela, e uma policy permissiva que erra na avaliação derruba a query inteira
+-- (inclusive pra admins, que também passam pela policy "admin_all" via OR) — foi
+-- assim que "Comunicar" ficava sempre mostrando "Nenhum comunicado" pra todo mundo.
 CREATE POLICY "client_read_own" ON portal_messages
   FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM clients c
-      WHERE c.id = portal_messages.client_id
-        AND c.email = (SELECT email FROM auth.users WHERE id = auth.uid())
-    )
+    client_id = public.my_client_id()
   );

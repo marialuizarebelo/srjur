@@ -18,6 +18,9 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID')!
 const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET')!
+// Secret compartilhado com o job do pg_cron — autentica a chamada automática
+// sem depender de um login de usuária (não existe usuária logada num cron).
+const CRON_SECRET = Deno.env.get('CRON_SECRET')!
 const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/google-calendar`
 
 const corsHeaders = {
@@ -194,6 +197,20 @@ async function pushItem(conn: any, token: string, sourceTable: 'tasks' | 'deadli
     body: JSON.stringify(eventBody),
   })
   if (!res.ok) {
+    // 404/410 num PATCH = a usuária excluiu o evento direto no Google. Isso
+    // conta como "resolvido" pra ela — tratamos como concluído/cumprido no
+    // sistema também, em vez de deixar pendente (o que faria a próxima
+    // sincronização recriar um evento novo do zero, parecendo que "voltou
+    // sozinho"). Também evita o Google "ressuscitar" o evento antigo só por
+    // causa do PATCH em cima de algo já excluído.
+    if (method === 'PATCH' && (res.status === 404 || res.status === 410)) {
+      await adminClient.from(sourceTable)
+        .update({ status: sourceTable === 'tasks' ? 'concluida' : 'cumprido' })
+        .eq('id', item.id)
+      await adminClient.from('google_event_links').delete()
+        .eq('source_table', sourceTable).eq('source_id', item.id).eq('connection_id', conn.id)
+      return { ok: true, autoCompleted: true }
+    }
     const errBody = await res.text()
     return { ok: false, error: `${res.status} ${errBody.slice(0, 300)}`, title: item.title }
   }
@@ -201,7 +218,7 @@ async function pushItem(conn: any, token: string, sourceTable: 'tasks' | 'deadli
   const created = await res.json()
   await adminClient.from('google_event_links').upsert({
     source_table: sourceTable, source_id: item.id, connection_id: conn.id,
-    google_event_id: created.id, synced_at: new Date().toISOString(),
+    google_event_id: created.id, synced_at: new Date().toISOString(), origin: 'push',
   }, { onConflict: 'source_table,source_id,connection_id' })
   return { ok: true }
 }
@@ -256,20 +273,38 @@ async function syncConnection(conn: any) {
       if (taskId) {
         await adminClient.from('google_event_links').upsert({
           source_table: 'tasks', source_id: taskId, connection_id: conn.id,
-          google_event_id: ev.id, synced_at: new Date().toISOString(),
+          google_event_id: ev.id, synced_at: new Date().toISOString(), origin: 'pull',
         }, { onConflict: 'source_table,source_id,connection_id' })
       }
     }
+  }
+
+  // ── PULL-CLEANUP: tarefa que só existe porque foi puxada de um evento do
+  // Google que a usuária excluiu direto lá (sem passar pelo sistema) — sem
+  // isso ela ficava pra sempre na agenda do sistema, "duplicada" na prática.
+  // Só mexe em vínculos origin='pull' — o que foi criado a partir do próprio
+  // sistema (origin='push') é tratado à parte, no CLEANUP do push abaixo.
+  const seenGoogleIds = new Set((list.items ?? []).filter((ev: any) => ev.status !== 'cancelled').map((ev: any) => ev.id))
+  const { data: pullLinks } = await adminClient.from('google_event_links')
+    .select('*').eq('connection_id', conn.id).eq('source_table', 'tasks').eq('origin', 'pull')
+  for (const link of pullLinks ?? []) {
+    if (seenGoogleIds.has(link.google_event_id)) continue
+    await adminClient.from('tasks').delete().eq('id', link.source_id)
+    await adminClient.from('google_event_links').delete().eq('id', link.id)
   }
 
   // ── PUSH: tasks + deadlines → Google ──
   // Regra: 1 responsável → agenda pessoal dele; 0 ou 2+ → agenda do escritório.
   let pushed = 0
 
+  // Tarefa concluída/cancelada ou prazo cumprido/perdido não entra mais como
+  // candidato a push — assim o CLEANUP logo abaixo detecta que ela "não
+  // pertence mais" à agenda e apaga o evento do Google, em vez de continuar
+  // empurrando atualização (e mantendo o evento "vivo") pra algo já resolvido.
   const [{ data: allTasks }, { data: allDeadlines }] = await Promise.all([
-    adminClient.from('tasks').select('*').neq('status', 'cancelada')
+    adminClient.from('tasks').select('*').not('status', 'in', '(cancelada,concluida)')
       .gte('due_date', dateMinStr).lte('due_date', dateMaxStr),
-    adminClient.from('deadlines').select('*')
+    adminClient.from('deadlines').select('*').eq('status', 'pendente')
       .gte('due_date', dateMinStr).lte('due_date', dateMaxStr),
   ])
 
@@ -310,8 +345,11 @@ async function syncConnection(conn: any) {
     // Confere se o item ainda existe e se a falta de "pertencimento" é real
     // (não apenas porque saiu da janela de datas considerada)
     const { data: rec } = await adminClient.from(link.source_table)
-      .select('responsible_ids').eq('id', link.source_id).maybeSingle()
-    const shouldBeGone = !rec || !belongsToConnection(rec.responsible_ids)
+      .select('responsible_ids, status').eq('id', link.source_id).maybeSingle()
+    const isDone = rec && (link.source_table === 'tasks'
+      ? (rec.status === 'concluida' || rec.status === 'cancelada')
+      : (rec.status === 'cumprido' || rec.status === 'perdido'))
+    const shouldBeGone = !rec || isDone || !belongsToConnection(rec.responsible_ids)
     if (!shouldBeGone) continue
 
     await fetch(
@@ -368,6 +406,31 @@ async function handleSync(req: Request) {
   return json({ results })
 }
 
+// ── Sincronização automática (chamada pelo pg_cron, sem usuária logada) ──
+// Roda pra TODAS as conexões do projeto (todos os tenants, se houver mais de
+// um) — não tem "quem está pedindo" num cron, então não faz sentido filtrar
+// por tenant_id como no /sync manual.
+async function handleCronSync(req: Request) {
+  const secret = req.headers.get('x-cron-secret') ?? ''
+  if (!CRON_SECRET || secret !== CRON_SECRET) return json({ error: 'Não autorizado' }, 401)
+
+  const { data: connections } = await adminClient
+    .from('google_calendar_connections').select('*, profiles(display_name)')
+
+  const results = []
+  for (const conn of connections ?? []) {
+    if (!conn.refresh_token) continue
+    try {
+      const withName = { ...conn, responsibleName: (conn as any).profiles?.display_name }
+      const r = await syncConnection(withName)
+      results.push({ owner_type: conn.owner_type, email: conn.google_email, ...r })
+    } catch (e) {
+      results.push({ owner_type: conn.owner_type, email: conn.google_email, error: String(e) })
+    }
+  }
+  return json({ ranAt: new Date().toISOString(), results })
+}
+
 // ── Router ─────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -379,6 +442,7 @@ Deno.serve(async (req) => {
     if (path === '/auth-url' && req.method === 'POST') return await handleAuthUrl(req)
     if (path === '/disconnect' && req.method === 'POST') return await handleDisconnect(req)
     if (path === '/sync' && req.method === 'POST') return await handleSync(req)
+    if (path === '/cron-sync' && req.method === 'POST') return await handleCronSync(req)
     return json({ error: 'Rota não encontrada: ' + path }, 404)
   } catch (e) {
     return json({ error: String(e) }, 500)

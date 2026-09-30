@@ -29,6 +29,7 @@ interface OfficeSettings {
   logo_url: string | null
   whatsapp_url: string | null
   primary_color: string | null
+  default_lead_responsible_id: string | null
 }
 
 const THEME_COLORS = [
@@ -106,7 +107,7 @@ export default function Configuracoes() {
 
   // Office
   const [office, setOffice] = useState<OfficeSettings | null>(null)
-  const [officeForm, setOfficeForm] = useState({ name: '', logo_url: '', whatsapp_url: '', drive_root_folder_id: '', drive_root_folder_name: '', primary_color: '' })
+  const [officeForm, setOfficeForm] = useState({ name: '', logo_url: '', whatsapp_url: '', drive_root_folder_id: '', drive_root_folder_name: '', primary_color: '', default_lead_responsible_id: '' })
   const [savingOffice, setSavingOffice] = useState(false)
 
   // Users
@@ -150,7 +151,7 @@ export default function Configuracoes() {
       setOfficeForm({
         name: os.name ?? '', logo_url: os.logo_url ?? '', whatsapp_url: os.whatsapp_url ?? '',
         drive_root_folder_id: os.drive_root_folder_id ?? '', drive_root_folder_name: os.drive_root_folder_name ?? '',
-        primary_color: os.primary_color ?? '',
+        primary_color: os.primary_color ?? '', default_lead_responsible_id: os.default_lead_responsible_id ?? '',
       })
     }
     setUsers((us as ProfileRow[]) ?? [])
@@ -198,10 +199,11 @@ export default function Configuracoes() {
 
   async function saveOffice() {
     setSavingOffice(true)
+    const payload = { ...officeForm, default_lead_responsible_id: officeForm.default_lead_responsible_id || null }
     if (office) {
-      await supabase.from('office_settings').update(officeForm).eq('id', office.id)
+      await supabase.from('office_settings').update(payload).eq('id', office.id)
     } else {
-      await supabase.from('office_settings').insert(officeForm)
+      await supabase.from('office_settings').insert(payload)
     }
     toast.success('Dados do escritório salvos!')
     setSavingOffice(false)
@@ -347,6 +349,31 @@ export default function Configuracoes() {
               placeholder="https://web.whatsapp.com/" className="h-10" />
             <p className="text-[11px] text-muted-foreground">
               URL aberta ao clicar em "Abrir chat" nos cards de lead/cliente. Se vazio, usa o WhatsApp do cliente diretamente.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />Responsável por follow-ups de leads</Label>
+            <Select
+              value={officeForm.default_lead_responsible_id || 'none'}
+              onValueChange={v => setOfficeForm(f => ({ ...f, default_lead_responsible_id: v === 'none' ? '' : v }))}
+            >
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Selecione">
+                  {officeForm.default_lead_responsible_id
+                    ? (users.find(u => u.id === officeForm.default_lead_responsible_id)?.nickname
+                        || users.find(u => u.id === officeForm.default_lead_responsible_id)?.display_name
+                        || 'Selecione')
+                    : 'Nenhum'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Nenhum</SelectItem>
+                {users.map(u => <SelectItem key={u.id} value={u.id}>{u.nickname || u.display_name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Todo lead novo já nasce com essa pessoa como responsável, e é pra ela que vão as tarefas automáticas de follow-up (quando bater a data marcada no lead). Trocar aqui muda os dois de uma vez — útil se um dia vocês contratarem um SDR ou closer específico pra isso.
             </p>
           </div>
 
@@ -608,7 +635,19 @@ export default function Configuracoes() {
       <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
         <DialogContent className="max-w-[440px] w-[96vw] max-h-[90vh] overflow-y-auto p-6">
           <DialogHeader><DialogTitle>{editingUser ? 'Editar usuário' : 'Nova usuária'}</DialogTitle></DialogHeader>
+          {(() => {
+            // Perfil "Suporte SRJUR" só pode ser editado por quem está logado
+            // com esse mesmo perfil — pro cliente, o suporte é só protegido
+            // contra exclusão, mas também não editável (nome, foto, acesso etc.).
+            const isLockedProfile = !!editingUser && editingUser.display_name === 'Suporte SRJUR' && profile?.display_name !== 'Suporte SRJUR'
+            return (
           <div className="space-y-4 pt-2">
+            {isLockedProfile && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-3 flex items-center gap-2">
+                <Lock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <p className="text-xs text-amber-700 dark:text-amber-400">Este perfil é protegido — só pode ser editado pelo próprio suporte SRJUR.</p>
+              </div>
+            )}
             {!editingUser && (
               <>
                 <div className="space-y-1.5">
@@ -628,29 +667,30 @@ export default function Configuracoes() {
               shape="circle"
               size={80}
               label="Foto de perfil"
+              disabled={isLockedProfile}
             />
             <div className="space-y-1.5">
               <Label>Nome completo</Label>
-              <Input value={uf.full_name} onChange={e => setUf(f => ({ ...f, full_name: e.target.value }))} placeholder="Ex: Maria Luiza Rebelo" className="h-10" />
+              <Input value={uf.full_name} onChange={e => setUf(f => ({ ...f, full_name: e.target.value }))} placeholder="Ex: Maria Luiza Rebelo" className="h-10" disabled={isLockedProfile} />
             </div>
             <div className="space-y-1.5">
               <Label>Apelido (como gosta de ser chamada)</Label>
-              <Input value={uf.nickname} onChange={e => setUf(f => ({ ...f, nickname: e.target.value }))} placeholder="Ex: Maria, Malu..." className="h-10" />
+              <Input value={uf.nickname} onChange={e => setUf(f => ({ ...f, nickname: e.target.value }))} placeholder="Ex: Maria, Malu..." className="h-10" disabled={isLockedProfile} />
               <p className="text-[11px] text-muted-foreground">Usado no "Olá," do painel</p>
             </div>
             <div className="space-y-1.5">
               <Label>Nome de exibição (sidebar/avatares)</Label>
-              <Input value={uf.display_name} onChange={e => setUf(f => ({ ...f, display_name: e.target.value }))} className="h-10" />
+              <Input value={uf.display_name} onChange={e => setUf(f => ({ ...f, display_name: e.target.value }))} className="h-10" disabled={isLockedProfile} />
             </div>
             <div className="space-y-1.5">
               <Label>Cargo</Label>
               <Input value={uf.role_title} onChange={e => setUf(f => ({ ...f, role_title: e.target.value }))}
-                placeholder="Ex: Advogada, Sócia-fundadora..." className="h-10" />
+                placeholder="Ex: Advogada, Sócia-fundadora..." className="h-10" disabled={isLockedProfile} />
             </div>
             {editingUser && (
               <div className="space-y-1.5">
                 <Label>Perfil de acesso</Label>
-                <Select value={uf.role} onValueChange={v => setUf(f => ({ ...f, role: v as 'admin' | 'client' }))}>
+                <Select value={uf.role} onValueChange={v => setUf(f => ({ ...f, role: v as 'admin' | 'client' }))} disabled={isLockedProfile}>
                   <SelectTrigger className="h-10"><SelectValue>{uf.role === 'admin' ? 'Administradora' : 'Cliente'}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Administradora</SelectItem>
@@ -663,8 +703,8 @@ export default function Configuracoes() {
               <Label>Cor de identificação</Label>
               <div className="flex flex-wrap gap-2">
                 {USER_COLORS.map(c => (
-                  <button key={c} onClick={() => setUf(f => ({ ...f, color: c }))}
-                    className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 ${uf.color === c ? 'border-foreground scale-110' : 'border-transparent'}`}
+                  <button key={c} onClick={() => !isLockedProfile && setUf(f => ({ ...f, color: c }))} disabled={isLockedProfile}
+                    className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed ${uf.color === c ? 'border-foreground scale-110' : 'border-transparent'}`}
                     style={{ backgroundColor: c }} />
                 ))}
               </div>
@@ -672,14 +712,14 @@ export default function Configuracoes() {
 
             <div className="space-y-2 pt-2 border-t border-border/40">
               <div className="flex items-center gap-2">
-                <Switch checked={uf.fullAccess} onCheckedChange={v => setUf(f => ({ ...f, fullAccess: v }))} />
+                <Switch checked={uf.fullAccess} onCheckedChange={v => setUf(f => ({ ...f, fullAccess: v }))} disabled={isLockedProfile} />
                 <Label>Acesso total ao sistema</Label>
               </div>
               {!uf.fullAccess && (
                 <div className="grid grid-cols-2 gap-1.5 pt-1">
                   {MODULES.map(m => (
-                    <button key={m.key} type="button" onClick={() => toggleModule(m.key)}
-                      className={`flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-medium border text-left transition-all ${
+                    <button key={m.key} type="button" onClick={() => toggleModule(m.key)} disabled={isLockedProfile}
+                      className={`flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-medium border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                         uf.allowed_modules.includes(m.key)
                           ? 'bg-primary/10 border-primary text-primary'
                           : 'border-border/60 text-muted-foreground hover:border-border'
@@ -692,10 +732,11 @@ export default function Configuracoes() {
               )}
             </div>
           </div>
+          )})()}
           <DialogFooter className="pt-4">
             <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
             {editingUser ? (
-              <Button onClick={saveUser}>Salvar</Button>
+              <Button onClick={saveUser} disabled={editingUser.display_name === 'Suporte SRJUR' && profile?.display_name !== 'Suporte SRJUR'}>Salvar</Button>
             ) : (
               <Button onClick={createUser} disabled={creatingUser}>{creatingUser ? 'Criando...' : 'Criar usuária'}</Button>
             )}

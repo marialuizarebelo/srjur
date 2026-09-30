@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 
 interface ClientLite { id: string; name: string; email: string | null; status: string }
-interface Process { id: string; title: string; number: string | null; phase: string; status: string }
+interface Process { id: string; title: string; number: string | null; phase: string; status: string; court?: string | null; electronic_system?: string | null; access_key?: string | null }
 interface ProcessUpdate { id: string; process_id: string; text: string; author: string | null; created_at: string; portal_visible: boolean }
 interface Message { id: string; title: string; body: string; sent_by: string | null; created_at: string; read_at: string | null }
 interface Doc { id: string; title: string; drive_url: string; type: string | null; created_at: string }
@@ -30,12 +30,35 @@ interface Finance { id: string; description: string; value: number; paid: boolea
 interface AgendaItem { id: string; title: string; due_date: string | null; kind: 'tarefa' | 'prazo' }
 interface CommTemplate { id: string; name: string; subject: string | null; body: string }
 
-function applyBasicVars(text: string, client: ClientLite) {
+// Preenche as variáveis mais comuns dos templates usando os dados já carregados
+// nesta tela (cliente + processo/lançamento mais recentes) — antes só cobria
+// {{nome}}/{{primeiro_nome}}/{{email_cliente}}, deixando o resto (ex: {{numero_processo}})
+// cru na mensagem enviada ao cliente.
+function applyBasicVars(text: string, client: ClientLite, ctx?: { process?: Process; finance?: Finance }) {
   const firstName = client.name.trim().split(' ')[0] ?? ''
-  return text
+  let r = text
     .replaceAll('{{nome}}', client.name)
     .replaceAll('{{primeiro_nome}}', firstName)
     .replaceAll('{{email_cliente}}', client.email ?? '')
+  const p = ctx?.process
+  if (p) {
+    r = r
+      .replaceAll('{{numero_processo}}', p.number ?? '')
+      .replaceAll('{{nome_processo}}', p.title ?? '')
+      .replaceAll('{{fase_processo}}', p.phase ?? '')
+      .replaceAll('{{vara}}', p.court ?? '')
+      .replaceAll('{{sistema}}', p.electronic_system ?? '')
+      .replaceAll('{{chave_acesso}}', p.access_key ?? '')
+  }
+  const f = ctx?.finance
+  if (f) {
+    r = r
+      .replaceAll('{{valor}}', fmtBRL(Number(f.value)))
+      .replaceAll('{{descricao_financeiro}}', f.description ?? '')
+      .replaceAll('{{link_pagamento}}', f.payment_link ?? '')
+      .replaceAll('{{vencimento}}', f.due_date ? fmtDate(f.due_date) : '')
+  }
+  return r.replaceAll('{{data_hoje}}', new Date().toLocaleDateString('pt-BR'))
 }
 
 const DOC_TYPES = ['Documento', 'Pasta', 'Contrato', 'Petição', 'Procuração', 'Comprovante']
@@ -232,16 +255,17 @@ function ClientDetail({ client, onBack }: { client: ClientLite; onBack: () => vo
     setSelectedTemplateId(templateId)
     const tpl = templates.find(t => t.id === templateId)
     if (!tpl) return
+    const ctx = { process: processes[0], finance: pendingFinance[0] }
     setMsgForm({
-      title: applyBasicVars(tpl.subject || tpl.name, client),
-      body: applyBasicVars(tpl.body, client),
+      title: applyBasicVars(tpl.subject || tpl.name, client, ctx),
+      body: applyBasicVars(tpl.body, client, ctx),
     })
   }
 
   async function loadAll() {
     const cid = client.id
     const [prRes, msgRes, docRes, finRes, taskRes, deadlineRes] = await Promise.all([
-      supabase.from('processes').select('id,title,number,phase,status').eq('client_id', cid).order('updated_at', { ascending: false }),
+      supabase.from('processes').select('id,title,number,phase,status,court,electronic_system,access_key').eq('client_id', cid).order('updated_at', { ascending: false }),
       supabase.from('portal_messages').select('*').eq('client_id', cid).order('created_at', { ascending: false }),
       supabase.from('documents').select('*').eq('client_id', cid).order('created_at', { ascending: false }),
       supabase.from('finance').select('id,description,value,paid,due_date,payment_link').eq('type', 'receita').eq('client_id', cid).order('due_date'),

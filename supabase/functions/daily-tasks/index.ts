@@ -97,6 +97,45 @@ Deno.serve(async () => {
       }
     }
 
+    // 2.5) Follow-up de leads agendado para hoje
+    // O responsável pela tarefa é sempre o "Responsável por follow-ups de leads"
+    // configurado em Configurações — não o responsable_ids do lead em si — assim
+    // dá pra trocar quem cuida disso (ex: contratar um SDR) num lugar só.
+    const { data: officeSettings } = await supabase
+      .from('office_settings')
+      .select('default_lead_responsible_id')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    const followupResponsibleIds = officeSettings?.default_lead_responsible_id
+      ? [officeSettings.default_lead_responsible_id]
+      : adminIds
+
+    const { data: leadsFollowup } = await supabase
+      .from('leads')
+      .select('id, name, next_followup')
+      .eq('next_followup', todayStr)
+      .is('client_id', null)
+
+    for (const l of leadsFollowup ?? []) {
+      const { data: existing } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('title', `Follow-up — ${l.name}`)
+        .eq('due_date', todayStr)
+        .limit(1)
+      if (existing && existing.length > 0) continue
+      const { error } = await supabase.from('tasks').insert({
+        title: `Follow-up — ${l.name}`,
+        type: 'cliente',
+        status: 'pendente',
+        priority: 'media',
+        due_date: todayStr,
+        responsible_ids: followupResponsibleIds,
+      })
+      if (!error) created++
+    }
+
     // 3) Conferência mensal do financeiro (todo dia 30)
     if (today.getDate() === 30) {
       await createTaskIfNotExists({

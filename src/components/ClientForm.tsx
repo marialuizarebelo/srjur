@@ -145,11 +145,11 @@ export const emptyClientForm: ClientFormData = {
   rep_name: '', rep_cpf: '', rep_role: '', rep_document_type: 'Contrato Social', rep_address: '',
 }
 
-const GENDERS = ['Masculino', 'Feminino', 'Outro', 'Não informado']
-const MARITAL_STATUSES = ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável', 'Não informado']
-const REP_ROLES = ['Sócio-Administrador', 'Diretor', 'Procurador']
-const REP_DOCUMENT_TYPES = ['Contrato Social', 'Estatuto Social']
-const STATES = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
+export const GENDERS = ['Masculino', 'Feminino', 'Outro', 'Não informado']
+export const MARITAL_STATUSES = ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável', 'Não informado']
+export const REP_ROLES = ['Sócio-Administrador', 'Diretor', 'Procurador']
+export const REP_DOCUMENT_TYPES = ['Contrato Social', 'Estatuto Social']
+export const STATES = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
 const ORIGINS = ['Indicação', 'Google', 'Instagram', 'WhatsApp', 'Site', 'Evento', 'Outro']
 
 interface ClientFormDialogProps {
@@ -489,101 +489,6 @@ export function ClientFormDialog({
                   <SelectContent>{STATES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-            </div>
-          </Section>
-
-          {/* ── Jurídico / Comercial ── */}
-          <Section title="Jurídico / Comercial">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1.5 sm:col-span-1">
-                <Label>Responsável</Label>
-                <ResponsibleSelect value={form.responsible_ids} onChange={ids => setForm(f => ({ ...f, responsible_ids: ids }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Origem</Label>
-                <Select value={form.origin} onValueChange={v => setForm(f => ({ ...f, origin: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{ORIGINS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Status</Label>
-                <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue>{{ ativo: 'Ativo', inativo: 'Encerrado', prospecto: 'Prospecto' }[form.status] ?? form.status}</SelectValue></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ativo">Ativo</SelectItem>
-                    <SelectItem value="inativo">Encerrado</SelectItem>
-                    <SelectItem value="prospecto">Prospecto</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Campos de indicação — aparecem só quando origem é Indicação */}
-            {form.origin === 'Indicação' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Indicado por</Label>
-                  <Input value={form.referred_by} onChange={e => setForm(f => ({ ...f, referred_by: e.target.value }))} placeholder="Nome de quem indicou" className="h-10" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>% de repasse acordado</Label>
-                  <div className="relative">
-                    <Input value={form.referral_fee_pct} onChange={e => setForm(f => ({ ...f, referral_fee_pct: e.target.value }))} placeholder="Ex: 10" className="h-10 pr-8" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Data de assinatura do contrato</Label>
-                <Input type="date" value={form.signed_at} onChange={e => setForm(f => ({ ...f, signed_at: e.target.value }))} className="h-10" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Data do primeiro contato</Label>
-                <Input type="date" value={form.first_contact_at} onChange={e => setForm(f => ({ ...f, first_contact_at: e.target.value }))} className="h-10" />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Áreas do Direito</Label>
-              <AreasMultiSelect
-                selected={form.areas_selected}
-                onChange={v => setForm(f => ({ ...f, areas_selected: v }))}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Potencial financeiro (R$)</Label>
-                <Input value={form.potential_value} onChange={e => setForm(f => ({ ...f, potential_value: e.target.value }))} placeholder="0,00" className="h-10" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Tags (separadas por vírgula)</Label>
-                <Input value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} placeholder="urgente, família" className="h-10" />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Pasta no Google Drive</Label>
-              <DriveFolderPicker
-                value={{ folder_id: form.drive_folder_id, drive_url: form.drive_url }}
-                onChange={f => setForm(prev => ({ ...prev, drive_folder_id: f.folder_id, drive_url: f.drive_url }))}
-                folderNameSuggestion={form.name}
-                parentFolderId={driveRootFolderId}
-              />
-              {form.drive_folder_id && (
-                <div className="rounded-xl border border-border/60 p-3 mt-2">
-                  <DriveFileList folderId={form.drive_folder_id} />
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Observações estratégicas</Label>
-              <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
             </div>
           </Section>
 
