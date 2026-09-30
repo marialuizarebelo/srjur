@@ -26,13 +26,15 @@ interface Meta {
   periodo: 'mensal' | 'semestral' | 'anual'; ano: number; mes: number | null; semestre: number | null
   categoria: string | null; origem: string | null; prioridade: 'baixa' | 'media' | 'alta'
   observacoes: string | null; responsavel_id: string | null; meta_pai_id: string | null
+  valor_manual: number | null
 }
 type TipoMeta = { value: string; label: string; unit: 'BRL' | 'number' | 'percent'; direction: 'min' | 'max'; extraField?: 'categoria' | 'origem' }
 const TIPO_OPTIONS: Record<'financeiro' | 'comercial', TipoMeta[]> = {
   financeiro: [
     { value: 'receita_minima', label: 'Meta de receita', unit: 'BRL', direction: 'min', extraField: 'categoria' },
     { value: 'despesa_maxima', label: 'Teto de despesa', unit: 'BRL', direction: 'max', extraField: 'categoria' },
-    { value: 'saldo_minimo', label: 'Saldo mínimo', unit: 'BRL', direction: 'min' },
+    { value: 'saldo_minimo', label: 'Saldo mínimo (automático)', unit: 'BRL', direction: 'min' },
+    { value: 'saldo_manual', label: 'Saldo guardado (atualizado manualmente)', unit: 'BRL', direction: 'min' },
   ],
   comercial: [
     { value: 'novos_leads', label: 'Novos leads', unit: 'number', direction: 'min', extraField: 'origem' },
@@ -97,6 +99,7 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles, allMe
     label: '', tipo: opts[0].value, valor_alvo: '', periodo: 'mensal' as Meta['periodo'],
     ano: new Date().getFullYear(), mes: new Date().getMonth() + 1, semestre: 1,
     categoria: '', origem: '', prioridade: 'media' as Meta['prioridade'], observacoes: '', responsavel_id: '', metaPaiId: '',
+    valorManual: '',
   }
   const [form, setForm] = useState(empty)
   const [saving, setSaving] = useState(false)
@@ -112,6 +115,7 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles, allMe
         periodo: editing.periodo, ano: editing.ano, mes: editing.mes ?? new Date().getMonth() + 1, semestre: editing.semestre ?? 1,
         categoria: editing.categoria ?? '', origem: editing.origem ?? '', prioridade: editing.prioridade ?? 'media',
         observacoes: editing.observacoes ?? '', responsavel_id: editing.responsavel_id ?? '', metaPaiId: editing.meta_pai_id ?? '',
+        valorManual: editing.valor_manual != null ? String(editing.valor_manual) : '',
       })
     } else {
       setForm({ ...empty, tipo: opts[0].value })
@@ -135,6 +139,7 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles, allMe
       observacoes: form.observacoes.trim() || null,
       responsavel_id: form.responsavel_id || null,
       meta_pai_id: form.metaPaiId || null,
+      valor_manual: form.tipo === 'saldo_manual' && form.valorManual ? Number(form.valorManual.replace(',', '.')) : null,
     }
     if (editing) {
       const { error } = await supabase.from('metas').update(payload).eq('id', editing.id)
@@ -176,6 +181,14 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles, allMe
                 placeholder={selectedTipo.unit === 'BRL' ? 'Ex: 15000' : 'Ex: 10'} />
             </div>
           </div>
+
+          {selectedTipo.value === 'saldo_manual' && (
+            <div className="space-y-1.5">
+              <Label>Valor atual guardado (R$)</Label>
+              <Input type="number" value={form.valorManual} onChange={e => setForm(f => ({ ...f, valorManual: e.target.value }))} placeholder="Ex: 40000" />
+              <p className="text-[11px] text-muted-foreground">Atualize aqui sempre que guardar valor na caixinha — não é calculado automaticamente pelo sistema.</p>
+            </div>
+          )}
 
           {selectedTipo.extraField === 'categoria' && (
             <div className="space-y-1.5">
@@ -538,6 +551,7 @@ export default function MetasTab() {
   function computeAtingidoFinanceiro(m: Meta): number {
     const { start, end } = metaPeriodRange(m)
     if (m.tipo === 'saldo_minimo') return saldoTotal
+    if (m.tipo === 'saldo_manual') return m.valor_manual ?? 0
     const inRange = financeRows.filter(r => r.date >= start && r.date <= end && (!m.categoria || r.category === m.categoria))
     if (m.tipo === 'receita_minima') return inRange.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0)
     if (m.tipo === 'despesa_maxima') return inRange.filter(r => r.type === 'despesa' && r.impacts_cash !== false).reduce((s, r) => s + Number(r.value), 0)
@@ -560,6 +574,9 @@ export default function MetasTab() {
     if (m.tipo === 'saldo_minimo') {
       return financeRows.filter(r => r.paid && r.impacts_cash !== false)
         .map((r, i) => ({ id: String(i), label: r.description, sublabel: fmtDate(r.date), value: fmtBRL(Number(r.value)) }))
+    }
+    if (m.tipo === 'saldo_manual') {
+      return [{ id: '0', label: 'Valor atualizado manualmente', sublabel: 'Edite a meta para atualizar', value: fmtBRL(m.valor_manual ?? 0) }]
     }
     const inRange = financeRows.filter(r => r.date >= start && r.date <= end && (!m.categoria || r.category === m.categoria))
     const list = m.tipo === 'despesa_maxima'
