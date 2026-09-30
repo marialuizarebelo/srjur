@@ -28,7 +28,7 @@ Deno.serve(async () => {
 
     const { data: tasks } = await supabase
       .from('tasks')
-      .select('id, title, due_date, due_time, type, responsible_ids')
+      .select('id, title, due_date, due_time, type, responsible_ids, tenant_id')
       .eq('due_date', todayStr)
       .not('due_time', 'is', null)
       .gte('due_time', `${nowHH}:${nowMM}`)
@@ -39,11 +39,14 @@ Deno.serve(async () => {
       return new Response(JSON.stringify({ sent: 0 }), { headers: { 'Content-Type': 'application/json' } })
     }
 
-    const { data: subs } = await supabase.from('push_subscriptions').select('*')
-    if (!subs?.length) return new Response(JSON.stringify({ sent: 0 }), { headers: { 'Content-Type': 'application/json' } })
+    // Cada tarefa avisa so os aparelhos do PROPRIO escritorio.
+    const { data: allSubs } = await supabase.from('push_subscriptions').select('*')
+    if (!allSubs?.length) return new Response(JSON.stringify({ sent: 0 }), { headers: { 'Content-Type': 'application/json' } })
 
     let sent = 0
     for (const task of tasks) {
+      const subs = allSubs.filter(sub => sub.tenant_id === task.tenant_id)
+      if (!subs.length) continue
       const payload = JSON.stringify({
         title: `⏰ ${task.due_time} — ${task.title}`,
         body: task.type ?? 'Compromisso agendado',

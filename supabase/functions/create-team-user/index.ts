@@ -2,7 +2,7 @@
 // Permite que uma admin principal crie outras usuárias admin (equipe) direto
 // pelo sistema, sem precisar acessar o painel do Supabase — com senha
 // provisória e módulos liberados definidos na hora da criação.
-// Limite de 3 usuárias admin no total (dono + até 2 adicionais).
+// Limite de 3 usuárias admin POR ESCRITÓRIO (dono + até 2 adicionais).
 //
 // Deploy: cole em Supabase Dashboard → Edge Functions → New Function
 // (nome da função: create-team-user). Desative "Verify JWT".
@@ -37,10 +37,12 @@ Deno.serve(async (req) => {
     if (!caller) return json({ error: 'Token inválido' }, 401)
 
     const { data: callerProfile } = await adminClient
-      .from('profiles').select('role').eq('user_id', caller.id).maybeSingle()
-    if (callerProfile?.role !== 'admin') {
+      .from('profiles').select('role, tenant_id').eq('user_id', caller.id).maybeSingle()
+    if (callerProfile?.role !== 'admin' || !callerProfile.tenant_id) {
       return json({ error: 'Apenas administradoras podem criar usuárias' }, 403)
     }
+    // A nova usuária SEMPRE nasce no escritório de quem está criando.
+    const tenantId = callerProfile.tenant_id
 
     const { email, password, display_name, role_title, allowed_modules } = await req.json()
     if (!email || !password) {
@@ -50,8 +52,9 @@ Deno.serve(async (req) => {
       return json({ error: 'A senha precisa ter ao menos 6 caracteres' }, 400)
     }
 
+    // Limite vale POR ESCRITÓRIO (antes contava o banco inteiro).
     const { count } = await adminClient
-      .from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'admin')
+      .from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'admin').eq('tenant_id', tenantId)
     if ((count ?? 0) >= 3) {
       return json({ error: 'Limite de 3 usuárias administradoras atingido' }, 400)
     }
@@ -61,15 +64,20 @@ Deno.serve(async (req) => {
       password,
       email_confirm: true,
       user_metadata: { display_name },
+      // app_metadata só o servidor grava: é daqui que o trigger handle_new_user
+      // tira papel e escritório (nunca do que o próprio usuário informa).
+      app_metadata: { role: 'admin', tenant_id: tenantId },
     })
     if (createError) return json({ error: createError.message }, 400)
 
     const userId = created?.user?.id
     if (!userId) return json({ error: 'Não foi possível criar a usuária' }, 500)
 
-    // O trigger on_auth_user_created já cria o profile como 'admin' — só
-    // completamos com os dados extras (nome, cargo, módulos liberados).
+    // O trigger on_auth_user_created já cria o profile (admin, deste escritório)
+    // a partir do app_metadata — só completamos com os dados extras.
     await adminClient.from('profiles').update({
+      tenant_id: tenantId,
+      role: 'admin',
       display_name: display_name ?? email,
       role_title: role_title ?? null,
       allowed_modules: allowed_modules ?? null,

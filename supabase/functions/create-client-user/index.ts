@@ -37,8 +37,8 @@ Deno.serve(async (req) => {
 
     // Confere se quem chamou é admin
     const { data: callerProfile } = await callerClient
-      .from('profiles').select('role').eq('user_id', caller.id).maybeSingle()
-    if (callerProfile?.role !== 'admin') {
+      .from('profiles').select('role, tenant_id').eq('user_id', caller.id).maybeSingle()
+    if (callerProfile?.role !== 'admin' || !callerProfile.tenant_id) {
       return new Response(JSON.stringify({ error: 'Apenas administradoras podem criar acesso de cliente' }), { status: 403, headers: corsHeaders })
     }
 
@@ -49,6 +49,14 @@ Deno.serve(async (req) => {
 
     // Cliente admin — usa a service role para operações privilegiadas
     const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+    const tenantId = callerProfile.tenant_id
+
+    // O cliente tem que ser do MESMO escritório de quem está criando o acesso.
+    const { data: clientRow } = await adminClient
+      .from('clients').select('id').eq('id', client_id).eq('tenant_id', tenantId).maybeSingle()
+    if (!clientRow) {
+      return new Response(JSON.stringify({ error: 'Cliente não encontrado neste escritório' }), { status: 404, headers: corsHeaders })
+    }
 
     // Cria o usuário já com e-mail confirmado e senha definida — sem precisar de e-mail de convite
     const { data: created, error: createError } = await adminClient.auth.admin.createUser({
@@ -56,6 +64,7 @@ Deno.serve(async (req) => {
       password,
       email_confirm: true,
       user_metadata: { display_name },
+      app_metadata: { role: 'client', tenant_id: tenantId },
     })
 
     let userId = created?.user?.id
@@ -66,9 +75,16 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: createError.message }), { status: 400, headers: corsHeaders })
       }
       // Usuário já existe — atualiza a senha dele em vez de criar de novo
-      const { data: list } = await adminClient.auth.admin.listUsers()
-      const existing = list.users.find(u => u.email === email)
+      const { data: list } = await adminClient.auth.admin.listUsers({ perPage: 1000 })
+      const existing = list.users.find(u => u.email?.toLowerCase() === String(email).toLowerCase())
       if (existing) {
+        // SEGURANÇA: só redefine a senha se esse login já é cliente DESTE escritório.
+        // Sem isso, uma admin de outro escritório poderia tomar a conta de qualquer e-mail.
+        const { data: existingProfile } = await adminClient
+          .from('profiles').select('role, tenant_id').eq('user_id', existing.id).maybeSingle()
+        if (existingProfile?.tenant_id !== tenantId || existingProfile?.role !== 'client') {
+          return new Response(JSON.stringify({ error: 'Este e-mail já é usado em outro acesso e não pode ser reaproveitado aqui' }), { status: 409, headers: corsHeaders })
+        }
         await adminClient.auth.admin.updateUserById(existing.id, { password, email_confirm: true })
         userId = existing.id
       }
@@ -83,6 +99,7 @@ Deno.serve(async (req) => {
       user_id: userId,
       display_name: display_name ?? email,
       role: 'client',
+      tenant_id: tenantId,
     }, { onConflict: 'user_id' })
 
     return new Response(JSON.stringify({ success: true, user_id: userId }), {

@@ -6,7 +6,7 @@ const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/asaas`
 // usam essa cobrança), sem precisar remover código — só definir
 // VITE_ENABLE_ASAAS=false nas variáveis de ambiente daquele deploy.
 export function isAsaasEnabled(): boolean {
-  return import.meta.env.VITE_ENABLE_ASAAS !== 'false'
+  return import.meta.env.VITE_ENABLE_ASAAS === 'true'
 }
 
 async function authHeader() {

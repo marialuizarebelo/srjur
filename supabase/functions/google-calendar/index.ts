@@ -34,6 +34,27 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 }
 
+// O `state` do OAuth carrega escritório/usuária e volta pelo navegador: sem
+// assinatura, qualquer um poderia forjá-lo e ligar uma conta Google a OUTRO
+// escritório. Assinamos com HMAC (chave = service role, que nunca sai do servidor).
+const enc = new TextEncoder()
+async function hmac(data: string) {
+  const key = await crypto.subtle.importKey('raw', enc.encode(SERVICE_ROLE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(data))
+  return btoa(String.fromCharCode(...new Uint8Array(sig)))
+}
+async function signState(payload: Record<string, unknown>) {
+  const body = btoa(JSON.stringify({ ...payload, exp: Date.now() + 15 * 60_000 }))
+  return `${body}.${await hmac(body)}`
+}
+async function verifyState(state: string) {
+  const [body, sig] = state.split('.')
+  if (!body || !sig || sig !== await hmac(body)) throw new Error('state inválido')
+  const data = JSON.parse(atob(body))
+  if (!data.exp || data.exp < Date.now()) throw new Error('state expirado')
+  return data
+}
+
 async function getCallerProfile(authHeader: string) {
   const callerClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { global: { headers: { Authorization: authHeader } } })
   const { data: { user } } = await callerClient.auth.getUser()
@@ -46,10 +67,16 @@ async function getCallerProfile(authHeader: string) {
 async function handleAuthUrl(req: Request) {
   const authHeader = req.headers.get('Authorization') ?? ''
   const caller = await getCallerProfile(authHeader)
-  if (caller?.role !== 'admin') return json({ error: 'Apenas administradoras' }, 403)
+  if (caller?.role !== 'admin' || !caller.tenant_id) return json({ error: 'Apenas administradoras' }, 403)
 
   const { owner_type, profile_id, return_to } = await req.json()
-  const state = btoa(JSON.stringify({ owner_type, profile_id: profile_id ?? null, return_to }))
+  if (owner_type !== 'office' && owner_type !== 'personal') return json({ error: 'owner_type inválido' }, 400)
+  if (owner_type !== 'office') {
+    // A agenda pessoal tem que ser de alguém DO MESMO escritório.
+    const { data: target } = await adminClient.from('profiles').select('id').eq('id', profile_id).eq('tenant_id', caller.tenant_id).maybeSingle()
+    if (!target) return json({ error: 'Usuária não encontrada neste escritório' }, 404)
+  }
+  const state = await signState({ owner_type, profile_id: profile_id ?? null, return_to, tenant_id: caller.tenant_id })
 
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
@@ -70,7 +97,9 @@ async function handleCallback(req: Request) {
   const state = url.searchParams.get('state')
   if (!code || !state) return new Response('Faltando code/state', { status: 400 })
 
-  const { owner_type, profile_id, return_to } = JSON.parse(atob(state))
+  let parsed: any
+  try { parsed = await verifyState(state) } catch (e) { return new Response(String(e), { status: 400 }) }
+  const { owner_type, profile_id, return_to, tenant_id } = parsed
 
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -95,12 +124,12 @@ async function handleCallback(req: Request) {
   // Não usamos upsert com onConflict aqui porque profile_id=NULL (caso "office")
   // quebra a comparação de unicidade do Postgres (NULL nunca é igual a NULL).
   // Em vez disso, apagamos qualquer conexão existente e inserimos uma nova.
-  let selQ = adminClient.from('google_calendar_connections').select('refresh_token').eq('owner_type', owner_type)
+  let selQ = adminClient.from('google_calendar_connections').select('refresh_token').eq('tenant_id', tenant_id).eq('owner_type', owner_type)
   selQ = owner_type === 'office' ? selQ.is('profile_id', null) : selQ.eq('profile_id', profile_id)
   const { data: existingRows } = await selQ.order('created_at', { ascending: false }).limit(1)
   const existing = existingRows?.[0] ?? null
 
-  let delQ = adminClient.from('google_calendar_connections').delete().eq('owner_type', owner_type)
+  let delQ = adminClient.from('google_calendar_connections').delete().eq('tenant_id', tenant_id).eq('owner_type', owner_type)
   delQ = owner_type === 'office' ? delQ.is('profile_id', null) : delQ.eq('profile_id', profile_id)
   await delQ
 
@@ -111,6 +140,7 @@ async function handleCallback(req: Request) {
   const refreshToken = tokens.refresh_token ?? existing?.refresh_token ?? null
 
   await adminClient.from('google_calendar_connections').insert({
+    tenant_id,
     owner_type,
     profile_id: owner_type === 'office' ? null : profile_id,
     google_email: userInfo.email ?? null,
@@ -129,10 +159,10 @@ async function handleCallback(req: Request) {
 async function handleDisconnect(req: Request) {
   const authHeader = req.headers.get('Authorization') ?? ''
   const caller = await getCallerProfile(authHeader)
-  if (caller?.role !== 'admin') return json({ error: 'Apenas administradoras' }, 403)
+  if (caller?.role !== 'admin' || !caller.tenant_id) return json({ error: 'Apenas administradoras' }, 403)
 
   const { owner_type, profile_id } = await req.json()
-  let q = adminClient.from('google_calendar_connections').delete().eq('owner_type', owner_type)
+  let q = adminClient.from('google_calendar_connections').delete().eq('tenant_id', caller.tenant_id).eq('owner_type', owner_type)
   q = owner_type === 'office' ? q.is('profile_id', null) : q.eq('profile_id', profile_id)
   await q
   return json({ success: true })
@@ -206,7 +236,7 @@ async function pushItem(conn: any, token: string, sourceTable: 'tasks' | 'deadli
     if (method === 'PATCH' && (res.status === 404 || res.status === 410)) {
       await adminClient.from(sourceTable)
         .update({ status: sourceTable === 'tasks' ? 'concluida' : 'cumprido' })
-        .eq('id', item.id)
+        .eq('id', item.id).eq('tenant_id', conn.tenant_id)
       await adminClient.from('google_event_links').delete()
         .eq('source_table', sourceTable).eq('source_id', item.id).eq('connection_id', conn.id)
       return { ok: true, autoCompleted: true }
@@ -217,6 +247,7 @@ async function pushItem(conn: any, token: string, sourceTable: 'tasks' | 'deadli
 
   const created = await res.json()
   await adminClient.from('google_event_links').upsert({
+    tenant_id: conn.tenant_id,
     source_table: sourceTable, source_id: item.id, connection_id: conn.id,
     google_event_id: created.id, synced_at: new Date().toISOString(), origin: 'push',
   }, { onConflict: 'source_table,source_id,connection_id' })
@@ -253,6 +284,7 @@ async function syncConnection(conn: any) {
       if (!startDate) continue
 
       const payload = {
+        tenant_id: conn.tenant_id,
         title: ev.summary ?? '(sem título)',
         due_date: startDate,
         due_time: startTime,
@@ -264,7 +296,7 @@ async function syncConnection(conn: any) {
 
       let taskId = existingLink?.source_id
       if (taskId) {
-        await adminClient.from('tasks').update(payload).eq('id', taskId)
+        await adminClient.from('tasks').update(payload).eq('id', taskId).eq('tenant_id', conn.tenant_id)
       } else {
         const { data: created } = await adminClient.from('tasks').insert(payload).select().single()
         taskId = created?.id
@@ -272,6 +304,7 @@ async function syncConnection(conn: any) {
       }
       if (taskId) {
         await adminClient.from('google_event_links').upsert({
+          tenant_id: conn.tenant_id,
           source_table: 'tasks', source_id: taskId, connection_id: conn.id,
           google_event_id: ev.id, synced_at: new Date().toISOString(), origin: 'pull',
         }, { onConflict: 'source_table,source_id,connection_id' })
@@ -289,7 +322,7 @@ async function syncConnection(conn: any) {
     .select('*').eq('connection_id', conn.id).eq('source_table', 'tasks').eq('origin', 'pull')
   for (const link of pullLinks ?? []) {
     if (seenGoogleIds.has(link.google_event_id)) continue
-    await adminClient.from('tasks').delete().eq('id', link.source_id)
+    await adminClient.from('tasks').delete().eq('id', link.source_id).eq('tenant_id', conn.tenant_id)
     await adminClient.from('google_event_links').delete().eq('id', link.id)
   }
 
@@ -302,9 +335,9 @@ async function syncConnection(conn: any) {
   // pertence mais" à agenda e apaga o evento do Google, em vez de continuar
   // empurrando atualização (e mantendo o evento "vivo") pra algo já resolvido.
   const [{ data: allTasks }, { data: allDeadlines }] = await Promise.all([
-    adminClient.from('tasks').select('*').not('status', 'in', '(cancelada,concluida)')
+    adminClient.from('tasks').select('*').eq('tenant_id', conn.tenant_id).not('status', 'in', '(cancelada,concluida)')
       .gte('due_date', dateMinStr).lte('due_date', dateMaxStr),
-    adminClient.from('deadlines').select('*').eq('status', 'pendente')
+    adminClient.from('deadlines').select('*').eq('tenant_id', conn.tenant_id).eq('status', 'pendente')
       .gte('due_date', dateMinStr).lte('due_date', dateMaxStr),
   ])
 
@@ -345,7 +378,7 @@ async function syncConnection(conn: any) {
     // Confere se o item ainda existe e se a falta de "pertencimento" é real
     // (não apenas porque saiu da janela de datas considerada)
     const { data: rec } = await adminClient.from(link.source_table)
-      .select('responsible_ids, status').eq('id', link.source_id).maybeSingle()
+      .select('responsible_ids, status').eq('id', link.source_id).eq('tenant_id', conn.tenant_id).maybeSingle()
     const isDone = rec && (link.source_table === 'tasks'
       ? (rec.status === 'concluida' || rec.status === 'cancelada')
       : (rec.status === 'cumprido' || rec.status === 'perdido'))
@@ -374,10 +407,12 @@ async function syncConnection(conn: any) {
 async function handleSync(req: Request) {
   const authHeader = req.headers.get('Authorization') ?? ''
   const caller = await getCallerProfile(authHeader)
-  if (!caller) return json({ error: 'Não autenticado' }, 401)
+  if (!caller || !caller.tenant_id) return json({ error: 'Não autenticado' }, 401)
 
+  // Só as conexões do escritório de quem pediu.
   const { data: connections } = await adminClient
     .from('google_calendar_connections').select('*, profiles(display_name)')
+    .eq('tenant_id', caller.tenant_id)
 
   if (!connections || connections.length === 0) {
     return json({ results: [], warning: 'Nenhuma conexão Google encontrada na tabela google_calendar_connections.' })
@@ -407,9 +442,8 @@ async function handleSync(req: Request) {
 }
 
 // ── Sincronização automática (chamada pelo pg_cron, sem usuária logada) ──
-// Roda pra TODAS as conexões do projeto (todos os tenants, se houver mais de
-// um) — não tem "quem está pedindo" num cron, então não faz sentido filtrar
-// por tenant_id como no /sync manual.
+// Roda pra TODAS as conexões do projeto, mas cada uma é sincronizada SÓ com os
+// dados do escritório dela (syncConnection filtra tudo por conn.tenant_id).
 async function handleCronSync(req: Request) {
   const secret = req.headers.get('x-cron-secret') ?? ''
   if (!CRON_SECRET || secret !== CRON_SECRET) return json({ error: 'Não autorizado' }, 401)

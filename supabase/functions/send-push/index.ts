@@ -15,12 +15,21 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json()
-    const { title, message, url = '/', user_id } = body
+    const { title, url = '/', user_id, tenant_id } = body
+    const message = body.message ?? body.body
+    // Sem escopo, a notificacao iria para TODOS os escritorios: exige um dos dois.
+    if (!user_id && !tenant_id) {
+      return new Response(JSON.stringify({ error: 'Informe tenant_id ou user_id' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      })
+    }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
 
     let query = supabase.from('push_subscriptions').select('*')
     if (user_id) query = query.eq('user_id', user_id)
+    if (tenant_id) query = query.eq('tenant_id', tenant_id)
 
     const { data: subs, error } = await query
     if (error) throw error

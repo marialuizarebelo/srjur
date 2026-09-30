@@ -38,12 +38,12 @@ async function getCallerProfile(authHeader: string) {
   return profile
 }
 
-async function getOfficeConnection() {
+async function getOfficeConnection(tenantId: string) {
   // Usa order+limit(1) em vez de maybeSingle(): se sobrar mais de uma linha
   // 'office' (duplicata deixada por uma reconexão anterior), maybeSingle()
   // lança erro e a conexao passa a parecer inexistente mesmo estando la.
   const { data } = await adminClient.from('google_calendar_connections')
-    .select('*').eq('owner_type', 'office').order('created_at', { ascending: false }).limit(1)
+    .select('*').eq('tenant_id', tenantId).eq('owner_type', 'office').order('created_at', { ascending: false }).limit(1)
   return data?.[0] ?? null
 }
 
@@ -74,9 +74,10 @@ async function ensureFreshToken(conn: any) {
 async function requireAdminAndToken(req: Request) {
   const authHeader = req.headers.get('Authorization') ?? ''
   const caller = await getCallerProfile(authHeader)
-  if (caller?.role !== 'admin') throw new Error('Apenas administradoras')
+  if (caller?.role !== 'admin' || !caller.tenant_id) throw new Error('Apenas administradoras')
 
-  const conn = await getOfficeConnection()
+  // SEMPRE o Drive do escritório de quem está pedindo — nunca o de outro.
+  const conn = await getOfficeConnection(caller.tenant_id)
   if (!conn || !conn.refresh_token) {
     throw new Error('Drive do escritório não conectado. Vá em Configurações → Escritório e conecte (ou reconecte) a Google Agenda do escritório.')
   }
