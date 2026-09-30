@@ -73,12 +73,18 @@ $$;
 -- Cliente do portal: o cliente cujo e-mail e o do usuario logado, DENTRO do
 -- escritorio dele (antes procurava no banco inteiro).
 create or replace function public.my_client_id()
-returns uuid language sql stable security definer set search_path = public as $$
-  select c.id
+returns uuid language plpgsql stable security definer set search_path = public as $$
+declare v uuid;
+begin
+  -- plpgsql (e nao sql) de proposito: a coluna clients.tenant_id so passa a
+  -- existir mais abaixo neste script, e funcao sql valida as colunas na criacao.
+  select c.id into v
   from public.clients c
   where lower(c.email) = lower((select email from auth.users where id = auth.uid()))
     and c.tenant_id = public.my_tenant_id()
   limit 1;
+  return v;
+end;
 $$;
 
 -- Preenche tenant_id no insert. Usuario logado: SEMPRE o escritorio dele
