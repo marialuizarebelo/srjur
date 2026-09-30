@@ -99,7 +99,6 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles, allMe
     label: '', tipo: opts[0].value, valor_alvo: '', periodo: 'mensal' as Meta['periodo'],
     ano: new Date().getFullYear(), mes: new Date().getMonth() + 1, semestre: 1,
     categoria: '', origem: '', prioridade: 'media' as Meta['prioridade'], observacoes: '', responsavel_id: '', metaPaiId: '',
-    valorManual: '',
   }
   const [form, setForm] = useState(empty)
   const [saving, setSaving] = useState(false)
@@ -115,7 +114,6 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles, allMe
         periodo: editing.periodo, ano: editing.ano, mes: editing.mes ?? new Date().getMonth() + 1, semestre: editing.semestre ?? 1,
         categoria: editing.categoria ?? '', origem: editing.origem ?? '', prioridade: editing.prioridade ?? 'media',
         observacoes: editing.observacoes ?? '', responsavel_id: editing.responsavel_id ?? '', metaPaiId: editing.meta_pai_id ?? '',
-        valorManual: editing.valor_manual != null ? String(editing.valor_manual) : '',
       })
     } else {
       setForm({ ...empty, tipo: opts[0].value })
@@ -139,7 +137,7 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles, allMe
       observacoes: form.observacoes.trim() || null,
       responsavel_id: form.responsavel_id || null,
       meta_pai_id: form.metaPaiId || null,
-      valor_manual: form.tipo === 'saldo_manual' && form.valorManual ? Number(form.valorManual.replace(',', '.')) : null,
+      valor_manual: form.tipo === 'saldo_manual' && editing?.tipo === 'saldo_manual' ? editing.valor_manual : null,
     }
     if (editing) {
       const { error } = await supabase.from('metas').update(payload).eq('id', editing.id)
@@ -182,12 +180,10 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles, allMe
             </div>
           </div>
 
-          {selectedTipo.value === 'saldo_manual' && (
-            <div className="space-y-1.5">
-              <Label>Valor atual guardado (R$)</Label>
-              <Input type="number" value={form.valorManual} onChange={e => setForm(f => ({ ...f, valorManual: e.target.value }))} placeholder="Ex: 40000" />
-              <p className="text-[11px] text-muted-foreground">Atualize aqui sempre que guardar valor na caixinha — não é calculado automaticamente pelo sistema.</p>
-            </div>
+          {selectedTipo.value === 'saldo_manual' && editing && (
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              O valor atual guardado é atualizado pelo botão "Atualizar saldo" no diário da meta (ícone de caderno no card), não aqui — assim fica registrado como histórico.
+            </p>
           )}
 
           {selectedTipo.extraField === 'categoria' && (
@@ -356,12 +352,17 @@ function MetaCard({ m, tipo, atingido, profiles, onEdit, onDelete, onDetails, on
 interface MetaNota { id: string; texto: string; created_at: string }
 interface MetaAcao { id: string; texto: string; concluida: boolean; created_at: string }
 
-function MetaDetalhesDialog({ open, onClose, meta }: { open: boolean; onClose: () => void; meta: Meta | null }) {
+function MetaDetalhesDialog({ open, onClose, meta, onUpdated }: { open: boolean; onClose: () => void; meta: Meta | null; onUpdated?: () => void }) {
   const [notas, setNotas] = useState<MetaNota[]>([])
   const [acoes, setAcoes] = useState<MetaAcao[]>([])
   const [novaNota, setNovaNota] = useState('')
   const [novaAcao, setNovaAcao] = useState('')
+  const [novoSaldo, setNovoSaldo] = useState('')
+  const [saldoAtual, setSaldoAtual] = useState<number | null>(null)
+  const [savingSaldo, setSavingSaldo] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => { setSaldoAtual(meta?.valor_manual ?? null) }, [meta?.id, meta?.valor_manual])
 
   async function load() {
     if (!meta) return
@@ -395,6 +396,21 @@ function MetaDetalhesDialog({ open, onClose, meta }: { open: boolean; onClose: (
   async function removeAcao(id: string) { await supabase.from('meta_acoes').delete().eq('id', id); load() }
   async function removeNota(id: string) { await supabase.from('meta_notas').delete().eq('id', id); load() }
 
+  async function atualizarSaldo() {
+    if (!novoSaldo.trim() || !meta) return
+    const valor = Number(novoSaldo.replace(',', '.'))
+    if (isNaN(valor)) { toast.error('Valor inválido'); return }
+    setSavingSaldo(true)
+    const { error } = await supabase.from('metas').update({ valor_manual: valor }).eq('id', meta.id)
+    if (error) { toast.error('Erro ao atualizar saldo: ' + error.message); setSavingSaldo(false); return }
+    await supabase.from('meta_notas').insert({ meta_id: meta.id, texto: `Saldo atualizado para ${fmtBRL(valor)}.` })
+    setSaldoAtual(valor)
+    setNovoSaldo('')
+    setSavingSaldo(false)
+    load()
+    onUpdated?.()
+  }
+
   if (!meta) return null
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
@@ -402,6 +418,18 @@ function MetaDetalhesDialog({ open, onClose, meta }: { open: boolean; onClose: (
         <DialogHeader><DialogTitle>{meta.label}</DialogTitle></DialogHeader>
         {loading ? <p className="text-sm text-muted-foreground text-center py-6">Carregando...</p> : (
           <div className="space-y-4 pt-1">
+            {meta.tipo === 'saldo_manual' && (
+              <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                <Label className="text-xs">Saldo atual: <strong>{fmtBRL(saldoAtual ?? 0)}</strong></Label>
+                <div className="flex gap-2">
+                  <Input type="number" value={novoSaldo} onChange={e => setNovoSaldo(e.target.value)} placeholder="Novo saldo (R$)"
+                    className="h-8 text-xs" onKeyDown={e => e.key === 'Enter' && atualizarSaldo()} />
+                  <Button size="sm" className="h-8 text-xs shrink-0" disabled={savingSaldo} onClick={atualizarSaldo}>Atualizar saldo</Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">Cada atualização fica registrada no diário abaixo, como uma linha do tempo.</p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label className="text-xs">Ações para alcançar a meta</Label>
               <div className="flex gap-2">
@@ -510,7 +538,7 @@ function MetasSection({ area, icon, metas, profiles, computeAtingido, computeDet
         </div>
       )}
       <MetaFormDialog open={formOpen} onClose={() => setFormOpen(false)} area={area} editing={editing} onSaved={onChanged} profiles={profiles} allMetas={metas} />
-      <MetaDetalhesDialog open={detailsOpen} onClose={() => setDetailsOpen(false)} meta={detailsMeta} />
+      <MetaDetalhesDialog open={detailsOpen} onClose={() => setDetailsOpen(false)} meta={detailsMeta} onUpdated={onChanged} />
       <DetailDialog open={composition.open} onClose={composition.close} title={composition.title} rows={composition.rows} />
     </ChartCard>
   )
