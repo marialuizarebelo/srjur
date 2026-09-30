@@ -360,6 +360,30 @@ export function ResponsavelFilter({ f }: { f: ReturnType<typeof useResponsavelFi
   )
 }
 
+/* ---------- Filtro por unidade de negócio (Advocacia x SaaS) ---------- */
+// Nunca esconde nada por padrão ("Todas") -- só ajuda a diferenciar/isolar
+// quando a usuária quiser, sem tirar SaaS da visão geral do financeiro/comercial.
+export type UnidadeKey = '' | 'advocacia' | 'saas'
+export function useUnidadeFilter() {
+  const [unidade, setUnidade] = useState<UnidadeKey>('')
+  return { unidade, setUnidade }
+}
+const UNIDADE_LABELS: Record<UnidadeKey, string> = { '': 'Todas as unidades', advocacia: 'Só Advocacia', saas: 'Só SaaS' }
+export function UnidadeFilter({ f }: { f: ReturnType<typeof useUnidadeFilter> }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Select value={f.unidade || '__todas__'} onValueChange={v => f.setUnidade(v === '__todas__' ? '' : (v as UnidadeKey))}>
+        <SelectTrigger className="h-7 text-xs w-40"><SelectValue>{UNIDADE_LABELS[f.unidade]}</SelectValue></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__todas__">Todas as unidades</SelectItem>
+          <SelectItem value="advocacia">Só Advocacia</SelectItem>
+          <SelectItem value="saas">Só SaaS</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
 /* ---------- Gráfico de tendência com tipo/transformação trocáveis ---------- */
 type ChartMode = 'area' | 'bar' | 'line'
 type ChartTransform = 'valor' | 'acumulado' | 'percentual'

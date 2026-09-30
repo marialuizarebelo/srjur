@@ -9,7 +9,7 @@ import { fmtBRL, fmtDate } from '@/lib/format'
 import {
   MONTHS, monthsBack, usePeriod, PeriodPicker, KpiCard, ChartCard, DonutWithLegend,
   DetailDialog, useDetail, AttentionPanel, type Attention, previousPeriodRange, trendText, NotesPanel,
-  useResponsavelFilter, ResponsavelFilter, TrendChart,
+  useResponsavelFilter, ResponsavelFilter, TrendChart, useUnidadeFilter, UnidadeFilter,
 } from './shared'
 
 export interface FinanceRow {
@@ -29,9 +29,11 @@ export interface FinanceRow {
   refletir_metricas: boolean
 }
 
-// Só as linhas de Advocacia que devem contar nas métricas/metas do escritório
-// -- exclui receita/despesa do SaaS (unidade separada) e qualquer lançamento
-// de caso gratuito/cortesia que a usuária tenha marcado pra não refletir.
+// `rows`: só Advocacia (exclui SaaS e cortesia não-refletida) -- usado pelas
+// Metas financeiras, que são sobre a banca, não sobre o produto SaaS.
+// `reflectingRows`: as duas unidades juntas, só tirando cortesia não-refletida
+// -- é a visão "geral" que a aba Financeiro usa, com um filtro de Unidade
+// por cima pra diferenciar Advocacia de SaaS sem esconder nada por padrão.
 export function useFinanceRows() {
   const [allRows, setAllRows] = useState<FinanceRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -41,8 +43,9 @@ export function useFinanceRows() {
       setLoading(false)
     })
   }, [])
-  const rows = useMemo(() => allRows.filter(r => r.business_unit !== 'saas' && r.refletir_metricas !== false), [allRows])
-  return { rows, allRows, loading }
+  const reflectingRows = useMemo(() => allRows.filter(r => r.refletir_metricas !== false), [allRows])
+  const rows = useMemo(() => reflectingRows.filter(r => r.business_unit !== 'saas'), [reflectingRows])
+  return { rows, reflectingRows, allRows, loading }
 }
 
 // Vínculo do responsável no financeiro é texto livre (nome digitado à mão,
@@ -57,13 +60,17 @@ function matchesResponsibleText(responsibleText: string | null, profileName: str
 }
 
 export default function FinanceiroTab() {
-  const { rows: rowsAll, loading } = useFinanceRows()
+  const { reflectingRows, loading } = useFinanceRows()
   const [projectionMonths, setProjectionMonths] = useState(3)
   const period = usePeriod()
   const detail = useDetail()
   const respFilter = useResponsavelFilter()
+  const unidadeFilter = useUnidadeFilter()
   const selectedProfileName = respFilter.profiles.find(p => p.id === respFilter.responsavelId)?.display_name
-  const rows = useMemo(() => rowsAll.filter(r => matchesResponsibleText(r.responsible, selectedProfileName)), [rowsAll, selectedProfileName])
+  const rows = useMemo(() => reflectingRows.filter(r =>
+    matchesResponsibleText(r.responsible, selectedProfileName) &&
+    (!unidadeFilter.unidade || (unidadeFilter.unidade === 'saas' ? r.business_unit === 'saas' : r.business_unit !== 'saas'))
+  ), [reflectingRows, selectedProfileName, unidadeFilter.unidade])
 
   const trendMonths = useMemo(() => monthsBack(12), [])
   const evolution = useMemo(() => trendMonths.map(m => {
@@ -172,7 +179,10 @@ export default function FinanceiroTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <PeriodPicker p={period} />
-        <ResponsavelFilter f={respFilter} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <UnidadeFilter f={unidadeFilter} />
+          <ResponsavelFilter f={respFilter} />
+        </div>
       </div>
 
       <AttentionPanel items={attention} />
