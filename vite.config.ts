@@ -15,6 +15,10 @@ export default defineConfig({
       // versão antiga pra sempre (só saía do travamento com refresh forçado
       // manual; no PWA instalado no celular nem isso era possível).
       registerType: 'autoUpdate',
+      // Registro manual em src/main.tsx (com checagem periódica de atualização) —
+      // desativa o script de registro automático injetado no index.html pra não
+      // registrar o service worker duas vezes.
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'icon-192.svg', 'icon-512.svg'],
       manifest: {
         name: 'SRJUR — Scartezzini & Rebelo',
