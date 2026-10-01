@@ -11,7 +11,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select'
 import { ClientCombobox } from '@/components/ClientCombobox'
-import { useProfilesMap } from '@/components/ResponsibleSelect'
+import { useProfilesMap, getAdminProfiles } from '@/components/ResponsibleSelect'
 import { Send, Receipt, Clock, CheckCircle2, XCircle, Check, X, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { fmtBRL, fmtDate } from '@/lib/format'
@@ -20,6 +20,24 @@ const CATEGORIES_RECEITA = ['Honorários Iniciais', 'Mensalidade', 'Acordo', 'Co
 const CATEGORIES_DESPESA = ['Operacional', 'Pessoal', 'Pró-labore/Salário', 'Impostos', 'Software', 'Marketing', 'Aluguel', 'Outros']
 const PAYMENT_METHODS = ['PIX/Transferência', 'Boleto', 'Cartão de Crédito', 'Cartão de Débito', 'Dinheiro']
 const PARTNERSHIP_CATEGORY = 'Parceria'
+const RECURRENCE_OPTIONS = ['Única', 'Semanal', 'Quinzenal', 'Mensal', 'Trimestral', 'Semestral', 'Anual']
+
+// Soma meses mantendo o mesmo dia do mês (ex: todo dia 5) — mesmo helper usado no Financeiro.
+function addMonthsFixedDay(dateStr: string, monthsToAdd: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const totalMonths = (m - 1) + monthsToAdd
+  const targetYear = y + Math.floor(totalMonths / 12)
+  const targetMonth = ((totalMonths % 12) + 12) % 12
+  const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate()
+  const clampedDay = Math.min(d, lastDayOfTargetMonth)
+  return `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`
+}
+
+function addDaysToDate(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00')
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
 
 interface ClientOption { id: string; name: string }
 
@@ -39,6 +57,8 @@ interface FinanceRequest {
   reviewed_at: string | null
   created_at: string
   giovanna_pct: number | null
+  installments: number | null
+  recurrence: string | null
 }
 
 interface FinanceRow {
@@ -72,6 +92,7 @@ export default function SolicitacoesFinanceiras() {
   const [form, setForm] = useState({
     type: 'receita', category: '', description: '', value: '', client_id: '',
     due_date: '', payment_method: '', notes: '', my_pct: '50',
+    recurrence: 'Única', installments: '1',
   })
 
   const loadData = async () => {
@@ -92,6 +113,7 @@ export default function SolicitacoesFinanceiras() {
   const resetForm = () => setForm({
     type: 'receita', category: '', description: '', value: '', client_id: '',
     due_date: '', payment_method: '', notes: '', my_pct: '50',
+    recurrence: 'Única', installments: '1',
   })
 
   const submit = async () => {
@@ -101,6 +123,7 @@ export default function SolicitacoesFinanceiras() {
     const myPct = parseFloat(form.my_pct.replace(',', '.'))
     if (isNaN(myPct) || myPct < 0 || myPct > 100) { toast.error('Sua % precisa estar entre 0 e 100'); return }
     if (saving) return
+    const numInstallments = parseInt(form.installments) || 1
     setSaving(true)
     try {
       const { error } = await supabase.from('finance_requests').insert({
@@ -108,6 +131,8 @@ export default function SolicitacoesFinanceiras() {
         value, client_id: form.client_id || null, due_date: form.due_date || null,
         payment_method: form.payment_method || null, notes: form.notes || null,
         giovanna_pct: myPct, created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
+        recurrence: form.recurrence === 'Única' ? null : form.recurrence,
+        installments: numInstallments > 1 ? numInstallments : null,
       })
       if (error) { toast.error('Erro ao enviar: ' + error.message); return }
       toast.success('Solicitação enviada — a outra parte vai revisar e lançar no financeiro dela')
@@ -124,27 +149,67 @@ export default function SolicitacoesFinanceiras() {
     // fatia que sobra, já que a fatia de quem pediu fica só registrada aqui.
     const requesterName = profilesMap[r.tenant_id]?.display_name ?? 'quem pediu'
     const requesterPct = r.giovanna_pct ?? 50
-    const myShare = r.value * (100 - requesterPct) / 100
-    const requesterShare = r.value * requesterPct / 100
-    if (!confirm(`Aprovar "${r.description}"?\n\nValor total: ${fmtBRL(r.value)}\nParte de ${requesterName} (${requesterPct}%): ${fmtBRL(requesterShare)}\nSua parte (${100 - requesterPct}%): ${fmtBRL(myShare)}\n\nSerá lançado no seu Financeiro só a sua parte, na categoria "Parceria".`)) return
-    const splitNote = `Solicitação de ${requesterName} — valor total ${fmtBRL(r.value)}, dividido ${requesterPct}% ${requesterName} / ${100 - requesterPct}% ${myName}. Este lançamento reflete só a sua parte (${fmtBRL(myShare)}).`
-    const { data: financeRow, error: financeError } = await supabase.from('finance').insert({
-      type: r.type, category: PARTNERSHIP_CATEGORY, description: r.description, value: myShare,
-      client_id: r.client_id, due_date: r.due_date, date: new Date().toISOString().slice(0, 10),
-      payment_method: r.payment_method, notes: [r.notes, splitNote].filter(Boolean).join('\n\n'),
-      responsible: `Solicitado por ${requesterName}`,
-      tenant_id: profile?.tenant_id ?? null,
-      // Cliente precisa ver o serviço como valor único (a divisão é interna entre as
-      // partes) — então, quando há cliente vinculado, esta fatia entra visível no
-      // portal dele, junto com a fatia da outra parte, somando o valor total pago.
-      portal_visible: !!r.client_id,
-    }).select('id').single()
+    const numInstallments = r.installments ?? 1
+    const isRecurring = !!r.recurrence && numInstallments > 1
+    // Mensalidade repete o valor cheio a cada ciclo; parcelamento divide o valor total
+    // entre as parcelas — mesma distinção usada no Financeiro.
+    const occurrenceTotal = isRecurring ? r.value : r.value / numInstallments
+    const myShare = occurrenceTotal * (100 - requesterPct) / 100
+    const requesterShare = occurrenceTotal * requesterPct / 100
+    const recurrenceInfo = numInstallments > 1
+      ? `\n\n${isRecurring ? `Recorrência: ${r.recurrence}, ${numInstallments} ciclo(s)` : `Parcelamento: ${numInstallments}x`}, cada ciclo de ${fmtBRL(occurrenceTotal)} total`
+      : ''
+    if (!confirm(`Aprovar "${r.description}"?\n\nValor total: ${fmtBRL(r.value)}\nParte de ${requesterName} (${requesterPct}%): ${fmtBRL(requesterShare)}\nSua parte (${100 - requesterPct}%): ${fmtBRL(myShare)}${recurrenceInfo}\n\nSerá lançado no seu Financeiro só a sua parte, na categoria "Parceria".`)) return
+    const splitNote = `Solicitação de ${requesterName} — valor total ${fmtBRL(r.value)}, dividido ${requesterPct}% ${requesterName} / ${100 - requesterPct}% ${myName}. Este lançamento reflete só a sua parte.`
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const baseDate = r.due_date || todayStr
+    const seriesId = numInstallments > 1 ? crypto.randomUUID() : undefined
+
+    const rows = Array.from({ length: numInstallments }, (_, i) => {
+      const occurrenceDate = numInstallments > 1 ? addMonthsFixedDay(baseDate, i) : baseDate
+      return {
+        type: r.type, category: PARTNERSHIP_CATEGORY,
+        description: numInstallments > 1 ? `${r.description} (${i + 1}/${numInstallments})` : r.description,
+        value: myShare,
+        client_id: r.client_id, due_date: occurrenceDate, date: numInstallments > 1 ? occurrenceDate : todayStr,
+        payment_method: r.payment_method, notes: [r.notes, splitNote].filter(Boolean).join('\n\n'),
+        responsible: `Solicitado por ${requesterName}`,
+        tenant_id: profile?.tenant_id ?? null,
+        // Cliente precisa ver o serviço como valor único (a divisão é interna entre as
+        // partes) — então, quando há cliente vinculado, esta fatia entra visível no
+        // portal dele, junto com a fatia da outra parte, somando o valor total pago.
+        portal_visible: !!r.client_id,
+        recurrence: r.recurrence,
+        installments: numInstallments > 1 ? numInstallments : null,
+        current_installment: numInstallments > 1 ? i + 1 : null,
+        series_id: seriesId,
+        nature: occurrenceDate <= todayStr ? 'real' : 'previsto',
+      }
+    })
+
+    const { data: financeRows, error: financeError } = await supabase.from('finance').insert(rows).select('id')
     if (financeError) { toast.error('Erro ao lançar no financeiro: ' + financeError.message); return }
     const { error: updateError } = await supabase.from('finance_requests').update({
       status: 'aprovado', reviewed_by: profile?.id ?? null, reviewed_at: new Date().toISOString(),
-      finance_id: financeRow.id,
+      finance_id: financeRows?.[0]?.id ?? null,
     }).eq('id', r.id)
     if (updateError) { toast.error('Lançado, mas erro ao atualizar a solicitação: ' + updateError.message); return }
+
+    // Mensalidade com prazo definido: cria uma tarefa pra verificar a renovação perto
+    // do último ciclo previsto, igual ao Financeiro.
+    if (isRecurring && r.category === 'Mensalidade') {
+      const lastDueDate = addMonthsFixedDay(baseDate, numInstallments - 1)
+      const checkDate = addDaysToDate(lastDueDate, -7)
+      const admins = await getAdminProfiles()
+      await supabase.from('tasks').insert({
+        title: `Verificar renovação de mensalidade (parceria) — ${r.description}`,
+        description: `A mensalidade "${r.description}" prevista até ${fmtDate(lastDueDate)} está terminando. Confirmar com o cliente se vai renovar.`,
+        type: 'cliente', status: 'pendente', priority: 'media', due_date: checkDate,
+        client_id: r.client_id, responsible_ids: admins.map(a => a.id),
+        created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
+      })
+    }
+
     toast.success('Aprovado e lançado no financeiro!')
     loadData()
   }
@@ -184,6 +249,7 @@ export default function SolicitacoesFinanceiras() {
             <p className="text-xs text-muted-foreground mt-0.5">
               {r.type === 'receita' ? 'Receita' : 'Despesa'}{r.category ? ` · ${r.category}` : ''}{client ? ` · ${client.name}` : ''}{r.due_date ? ` · vence ${fmtDate(r.due_date)}` : ''}
               {r.giovanna_pct != null && ` · ${fromName ?? 'quem pediu'} ${r.giovanna_pct}% / ${myName} ${100 - r.giovanna_pct}%`}
+              {r.installments && r.installments > 1 && ` · ${r.recurrence ? `${r.recurrence}, ${r.installments}x` : `${r.installments}x parcelado`}`}
             </p>
             {r.notes && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{r.notes}</p>}
           </div>
@@ -232,13 +298,26 @@ export default function SolicitacoesFinanceiras() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label>Valor total do serviço — o que o cliente paga (R$) *</Label>
+            <Label>
+              {form.recurrence !== 'Única'
+                ? 'Valor de cada ciclo da mensalidade — o que o cliente paga (R$) *'
+                : (parseInt(form.installments) || 1) > 1
+                  ? 'Valor total do serviço, a dividir nas parcelas (R$) *'
+                  : 'Valor total do serviço — o que o cliente paga (R$) *'}
+            </Label>
             <Input value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} placeholder="0,00" className="h-10" />
             <p className="text-[11px] text-muted-foreground">Informe o valor integral contratado com o cliente, não a sua parte. A divisão percentual abaixo calcula automaticamente a fatia de cada uma.</p>
           </div>
           <div className="space-y-2">
             <Label>Categoria</Label>
-            <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+            <Select value={form.category} onValueChange={v => setForm(f => ({
+              ...f,
+              category: v,
+              // Mensalidade é sempre recorrente — assume mensal e projeta os próximos
+              // 12 ciclos como previsto, igual ao Financeiro.
+              recurrence: v === 'Mensalidade' ? 'Mensal' : f.recurrence,
+              installments: v === 'Mensalidade' && f.installments === '1' ? '12' : f.installments,
+            }))}>
               <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
                 {(form.type === 'receita' ? CATEGORIES_RECEITA : CATEGORIES_DESPESA).map(c => (
@@ -255,10 +334,48 @@ export default function SolicitacoesFinanceiras() {
             <ClientCombobox clients={clients} value={form.client_id} onChange={id => setForm(f => ({ ...f, client_id: id }))} />
           </div>
           <div className="space-y-2">
-            <Label>Vencimento</Label>
+            <Label>{(parseInt(form.installments) || 1) > 1 ? 'Primeiro vencimento' : 'Vencimento'}</Label>
             <Input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} className="h-10" />
+            {(parseInt(form.installments) || 1) > 1 && (
+              <p className="text-[11px] text-muted-foreground">As demais datas caem automaticamente nesse mesmo dia, um mês depois da outra.</p>
+            )}
           </div>
         </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Recorrência</Label>
+            <Select value={form.recurrence} onValueChange={v => setForm(f => ({
+              ...f,
+              recurrence: v,
+              installments: v === 'Mensal' && f.installments === '1' ? '12' : f.installments,
+            }))}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {RECURRENCE_OPTIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>{form.category === 'Mensalidade' ? 'Ciclos a prever' : 'Parcelas'}</Label>
+            <Input type="number" min="1" max="48" value={form.installments} onChange={e => setForm(f => ({ ...f, installments: e.target.value }))} className="h-10" />
+          </div>
+        </div>
+
+        {(() => {
+          const numInst = parseInt(form.installments) || 1
+          if (numInst <= 1) return null
+          const total = parseFloat(form.value.replace(',', '.')) || 0
+          const isRecurring = form.recurrence !== 'Única'
+          const perCycle = isRecurring ? total : total / numInst
+          return (
+            <p className="text-xs text-muted-foreground -mt-2">
+              {isRecurring
+                ? `Mensalidade: lança ${fmtBRL(perCycle)} a cada ciclo (${form.recurrence}), por ${numInst} vez(es) — não divide o valor.`
+                : `Parcelamento: divide o total em ${numInst} cobranças de ${fmtBRL(perCycle)} cada, uma por mês.`}
+            </p>
+          )
+        })()}
 
         <div className="space-y-2">
           <Label>Forma de pagamento</Label>
