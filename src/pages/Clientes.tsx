@@ -90,6 +90,8 @@ interface Client {
   rep_role: string | null
   rep_document_type: string | null
   rep_address: string | null
+  is_inadimplente: boolean | null
+  inadimplencia_observacoes: string | null
 }
 
 interface Lead {
@@ -609,6 +611,13 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
             </div>
           )}
 
+          {client.is_inadimplente && (
+            <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 px-3 py-2">
+              <p className="text-xs font-semibold text-red-700 dark:text-red-400">⚠ Cliente inadimplente — em execução de cobrança</p>
+              {client.inadimplencia_observacoes && <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">{client.inadimplencia_observacoes}</p>}
+            </div>
+          )}
+
           {/* Linha de tempo rápida */}
           <div className="flex flex-wrap gap-3">
             {primeiroContato && (
@@ -863,6 +872,9 @@ function ClientCard({ client, onEdit }: { client: Client; onEdit: () => void }) 
             <Badge variant={client.status === 'ativo' ? 'default' : 'secondary'} className="text-[10px]">
               {client.status.toUpperCase()}
             </Badge>
+            {client.is_inadimplente && (
+              <Badge className="text-[10px] bg-red-600 hover:bg-red-600 text-white">INADIMPLENTE</Badge>
+            )}
           </div>
         </div>
       </div>
@@ -1296,6 +1308,7 @@ export default function Clientes() {
       birth_date: c.birth_date ?? '', signed_at: c.signed_at ?? '', first_contact_at: c.first_contact_at ?? '',
       rep_name: c.rep_name ?? '', rep_cpf: c.rep_cpf ?? '', rep_role: c.rep_role ?? '',
       rep_document_type: c.rep_document_type ?? 'Contrato Social', rep_address: c.rep_address ?? '',
+      is_inadimplente: c.is_inadimplente ?? false, inadimplencia_observacoes: c.inadimplencia_observacoes ?? '',
     })
     setEditingClient(c)
     setDialogOpen(true)
@@ -1329,6 +1342,7 @@ export default function Clientes() {
       drive_url: cf.drive_url || null, drive_folder_id: cf.drive_folder_id || null, tags: cf.tags || null,
       rep_name: cf.rep_name || null, rep_cpf: cf.rep_cpf || null, rep_role: cf.rep_role || null,
       rep_document_type: cf.rep_document_type || null, rep_address: cf.rep_address || null,
+      is_inadimplente: cf.is_inadimplente, inadimplencia_observacoes: cf.is_inadimplente ? (cf.inadimplencia_observacoes || null) : null,
     }
     if (editingClient) {
       const { error } = await supabase.from('clients').update(payload).eq('id', editingClient.id)
@@ -1927,9 +1941,14 @@ export default function Clientes() {
                     <TableCell className="text-sm">{c.email ?? '—'}</TableCell>
                     <TableCell className="text-sm">{c.responsible ?? '—'}</TableCell>
                     <TableCell>
-                      <Badge variant={c.status === 'ativo' ? 'default' : 'secondary'} className="text-[10px]">
-                        {c.status.toUpperCase()}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant={c.status === 'ativo' ? 'default' : 'secondary'} className="text-[10px]">
+                          {c.status.toUpperCase()}
+                        </Badge>
+                        {c.is_inadimplente && (
+                          <Badge className="text-[10px] bg-red-600 hover:bg-red-600 text-white">INADIMPLENTE</Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-sm">{c.signed_at ? fmtDateBR(c.signed_at) : '—'}</TableCell>
                     <TableCell>
