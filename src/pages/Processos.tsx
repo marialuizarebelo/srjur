@@ -76,6 +76,10 @@ interface Process {
   instance: string | null
   confidential: boolean
   closed_date: string | null
+  is_exito: boolean
+  valor_previsto_exito: number | null
+  exito_observacoes: string | null
+  exito_verificado: boolean
 }
 
 interface ProcessUpdate {
@@ -283,6 +287,7 @@ export default function Processos() {
     client_role: 'autor',
     opposing_parties: [{ name: '', cpf: '', role: 'reu' }] as { name: string; cpf: string; role: string }[], filing_date: '', citation_date: '',
     instance: '1º Grau', confidential: false, closed_date: '',
+    is_exito: false, valor_previsto_exito: '', exito_observacoes: '',
     _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '',
   })
 
@@ -306,6 +311,7 @@ export default function Processos() {
       client_role: 'autor',
       opposing_parties: [{ name: '', cpf: '', role: 'reu' }], filing_date: '', citation_date: '',
       instance: '1º Grau', confidential: false, closed_date: '',
+      is_exito: false, valor_previsto_exito: '', exito_observacoes: '',
       _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '' })
     setEditing(null)
   }
@@ -437,6 +443,8 @@ export default function Processos() {
       filing_date: p.filing_date ?? '', citation_date: p.citation_date ?? '',
       instance: p.instance ?? '1º Grau', confidential: p.confidential ?? false,
       closed_date: p.closed_date ?? '',
+      is_exito: p.is_exito ?? false, valor_previsto_exito: p.valor_previsto_exito ? String(p.valor_previsto_exito) : '',
+      exito_observacoes: p.exito_observacoes ?? '',
     })
     setEditing(p)
     setDialogOpen(true)
@@ -474,7 +482,14 @@ export default function Processos() {
       filing_date: pf.filing_date || null, citation_date: pf.citation_date || null,
       instance: pf.instance || null, confidential: pf.confidential,
       closed_date: pf.closed_date || null,
+      is_exito: pf.is_exito,
+      valor_previsto_exito: pf.is_exito && pf.valor_previsto_exito ? parseFloat(pf.valor_previsto_exito.replace(',', '.')) : null,
+      exito_observacoes: pf.is_exito ? (pf.exito_observacoes.trim() || null) : null,
     }
+    // Processo com contrato de êxito que está entrando na fase final agora
+    // (e ainda não teve o êxito verificado) -- dispara tarefa automática de
+    // conferência, já que o valor só vira certo quando o processo terminar.
+    const entrandoNaFaseFinal = !!editing && pf.is_exito && pf.phase === 'encerrado' && editing.phase !== 'encerrado' && !editing.exito_verificado
     let processId = editing?.id
     try {
       if (editing) {
@@ -482,6 +497,18 @@ export default function Processos() {
         if (error) throw error
         if (editing.status !== pf.status) logActivity('process', editing.id, `Status alterado para "${formatLabel(pf.status)}"`)
         if (editing.phase !== pf.phase) logActivity('process', editing.id, `Fase alterada para "${pf.phase}"`)
+        if (entrandoNaFaseFinal) {
+          await supabase.from('tasks').insert({
+            title: `Verificar êxito — ${pf.title}`,
+            description: `Processo com contrato de êxito entrou na fase final. Confirmar o resultado e, se houver valor a receber, lançar no financeiro.${pf.valor_previsto_exito ? ` Valor previsto: ${fmtBRL(parseFloat(pf.valor_previsto_exito.replace(',', '.')))}` : ''}`,
+            type: 'tarefa', status: 'pendente', priority: 'alta',
+            due_date: new Date().toISOString().slice(0, 10),
+            process_id: editing.id, client_id: pf.client_id || null,
+            responsible_ids: pf.responsible_ids, responsible: payload.responsible,
+            created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
+          })
+          await supabase.from('processes').update({ exito_verificado: true }).eq('id', editing.id)
+        }
       } else {
         const { data: created, error } = await supabase.from('processes').insert({ ...payload, created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null }).select().single()
         if (error) throw error
@@ -499,6 +526,7 @@ export default function Processos() {
         }
       }
       toast.success(editing ? 'Processo atualizado!' : 'Processo criado!')
+      if (entrandoNaFaseFinal) toast('Tarefa "Verificar êxito" criada automaticamente.', { duration: 6000 })
       setDialogOpen(false)
       resetPf()
       loadData()
@@ -708,6 +736,15 @@ export default function Processos() {
                   )}
                   {detailProcess.court && (
                     <div className="col-span-2"><p className="text-[11px] text-muted-foreground">Vara</p><p className="font-medium">{detailProcess.court}</p></div>
+                  )}
+                  {detailProcess.is_exito && (
+                    <div className="col-span-2">
+                      <p className="text-[11px] text-muted-foreground">Contrato de êxito</p>
+                      <p className="font-medium">
+                        {detailProcess.valor_previsto_exito != null ? `Previsto: ${fmtBRL(detailProcess.valor_previsto_exito)}` : 'Sem valor previsto informado'}
+                        {detailProcess.exito_observacoes ? ` — ${detailProcess.exito_observacoes}` : ''}
+                      </p>
+                    </div>
                   )}
                   {((detailProcess.opposing_parties && detailProcess.opposing_parties.length > 0) || detailProcess.opposing_party) && (
                     <div className="col-span-2">
@@ -1244,6 +1281,26 @@ export default function Processos() {
               <Label>Vara</Label>
               <Input value={pf.court} onChange={e => setPf(f => ({ ...f, court: e.target.value }))} placeholder="Ex: 8ª Vara de Família do Foro Central de Porto Alegre" className="h-10" />
             </div>
+
+            <label className="flex items-center gap-2 py-2.5 px-3 rounded-lg border cursor-pointer">
+              <Switch checked={pf.is_exito} onCheckedChange={v => setPf(f => ({ ...f, is_exito: v }))} />
+              <div>
+                <p className="text-sm font-medium">Contrato de êxito</p>
+                <p className="text-xs text-muted-foreground">O valor a receber só é certo quando o processo terminar — ao entrar em "Encerrado" o sistema cria uma tarefa pra conferir o resultado.</p>
+              </div>
+            </label>
+            {pf.is_exito && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 rounded-xl bg-muted/30">
+                <div className="space-y-2">
+                  <Label>Valor previsto (R$)</Label>
+                  <Input value={pf.valor_previsto_exito} onChange={e => setPf(f => ({ ...f, valor_previsto_exito: e.target.value }))} placeholder="Ex: 15000 (estimativa, não entra no financeiro)" className="h-10" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Observações do êxito</Label>
+                  <Input value={pf.exito_observacoes} onChange={e => setPf(f => ({ ...f, exito_observacoes: e.target.value }))} placeholder="Ex: 30% sobre o valor da condenação" className="h-10" />
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
