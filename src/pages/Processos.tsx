@@ -132,7 +132,7 @@ const DEFAULT_EXTRAJUDICIAL_PHASES: StageOption[] = [
 const AREAS = [
   'Cível', 'Trabalhista', 'Família', 'Sucessões', 'Empresarial',
   'Consumidor', 'Penal', 'Criminal', 'Tributário', 'Imobiliário',
-  'Previdenciário', 'Administrativo', 'Outro',
+  'Previdenciário', 'Administrativo', 'Execução de Honorários', 'Outro',
 ]
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -275,6 +275,7 @@ export default function Processos() {
   const [statusFilter, setStatusFilter] = useState<'todos' | 'em_andamento' | 'concluido' | 'arquivado' | 'suspenso'>('em_andamento')
   const [responsibleFilter, setResponsibleFilter] = useState('todos')
   const [clientFilter, setClientFilter] = useState('todos')
+  const [areaFilter, setAreaFilter] = useState('todos')
 
   // Process form
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -402,9 +403,10 @@ export default function Processos() {
       .filter(p => statusFilter === 'todos' || p.status === statusFilter)
       .filter(p => responsibleFilter === 'todos' || (p.responsible_ids ?? []).includes(responsibleFilter))
       .filter(p => clientFilter === 'todos' || p.client_id === clientFilter)
+      .filter(p => areaFilter === 'todos' || p.area === areaFilter)
       .filter(p => !search || p.title.toLowerCase().includes(search.toLowerCase()) ||
         p.number?.toLowerCase().includes(search.toLowerCase()))
-  }, [processes, statusFilter, responsibleFilter, clientFilter, search])
+  }, [processes, statusFilter, responsibleFilter, clientFilter, areaFilter, search])
 
   const byPhase = useMemo(() => {
     const map = new Map<string, Process[]>()
@@ -1062,6 +1064,15 @@ export default function Processos() {
             <SelectContent>
               <SelectItem value="todos">Todos</SelectItem>
               {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={areaFilter} onValueChange={setAreaFilter}>
+            <SelectTrigger className="w-44 h-9">
+              <SelectValue>{areaFilter === 'todos' ? 'Área' : areaFilter}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todas as áreas</SelectItem>
+              {AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
             </SelectContent>
           </Select>
           <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
