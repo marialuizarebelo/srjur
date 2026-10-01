@@ -130,6 +130,7 @@ export interface ClientFormData {
   potential_value: string; drive_url: string; drive_folder_id: string; tags: string; notes: string
   status: string; portal_visible: boolean; birth_date: string
   signed_at: string; first_contact_at: string
+  is_inadimplente: boolean; inadimplencia_observacoes: string
   rep_name: string; rep_cpf: string; rep_role: string; rep_document_type: string; rep_address: string
 }
 
@@ -143,6 +144,7 @@ export const emptyClientForm: ClientFormData = {
   potential_value: '', drive_url: '', drive_folder_id: '', tags: '', notes: '',
   status: 'ativo', portal_visible: false, birth_date: '',
   signed_at: '', first_contact_at: '',
+  is_inadimplente: false, inadimplencia_observacoes: '',
   rep_name: '', rep_cpf: '', rep_role: '', rep_document_type: 'Contrato Social', rep_address: '',
 }
 
@@ -531,6 +533,20 @@ export function ClientFormDialog({
                 </Select>
               </div>
             </div>
+
+            <label className="flex items-center gap-2 py-2.5 px-3 rounded-lg border cursor-pointer bg-red-50/50 dark:bg-red-900/10 border-red-200 dark:border-red-900">
+              <Switch checked={form.is_inadimplente} onCheckedChange={v => setForm(f => ({ ...f, is_inadimplente: v }))} />
+              <div>
+                <p className="text-sm font-medium">Cliente inadimplente (em execução de cobrança)</p>
+                <p className="text-xs text-muted-foreground">Cadastre o processo de execução normalmente em Processos — aqui é só o selo de alerta, visível no cadastro do cliente.</p>
+              </div>
+            </label>
+            {form.is_inadimplente && (
+              <div className="space-y-1.5">
+                <Label>Observações da cobrança</Label>
+                <Input value={form.inadimplencia_observacoes} onChange={e => setForm(f => ({ ...f, inadimplencia_observacoes: e.target.value }))} placeholder="Ex: execução nº .../ valor em aberto R$..." className="h-10" />
+              </div>
+            )}
 
             {/* Campos de indicação — aparecem só quando origem é Indicação */}
             {form.origin === 'Indicação' && (
