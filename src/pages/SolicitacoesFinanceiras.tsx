@@ -183,7 +183,7 @@ export default function SolicitacoesFinanceiras() {
           ? `${r.description} (${numInstallments}x no cartão)`
           : (effectiveInstallments > 1 ? `${r.description} (${i + 1}/${effectiveInstallments})` : r.description),
         value: myShare,
-        client_id: r.client_id, due_date: occurrenceDate, date: effectiveInstallments > 1 ? occurrenceDate : todayStr,
+        client_id: r.client_id, due_date: occurrenceDate, date: occurrenceDate,
         payment_method: r.payment_method, notes: [r.notes, splitNote].filter(Boolean).join('\n\n'),
         responsible: `Solicitado por ${requesterName}`,
         tenant_id: profile?.tenant_id ?? null,
@@ -382,25 +382,54 @@ export default function SolicitacoesFinanceiras() {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label>Recorrência</Label>
-            <Select value={form.recurrence} onValueChange={v => setForm(f => ({
-              ...f,
-              recurrence: v,
-              installments: v === 'Mensal' && f.installments === '1' ? '12' : f.installments,
-            }))}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {RECURRENCE_OPTIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
 
-        <div className="space-y-2">
-          <Label>{form.category === 'Mensalidade' ? 'Ciclos a prever' : form.payment_method === 'Cartão de Crédito' ? 'Parcelas no cartão' : 'Parcelas'}</Label>
-          <Input type="number" min="1" max="48" value={form.installments} onChange={e => setForm(f => ({ ...f, installments: e.target.value }))} className="h-10 w-full sm:w-40" />
-        </div>
+        {(() => {
+          const mode = form.recurrence !== 'Única' ? 'mensalidade' : (parseInt(form.installments) || 1) > 1 ? 'parcelado' : 'avista'
+          const options = [
+            { key: 'avista', title: 'À vista', desc: 'Um único pagamento.' },
+            { key: 'parcelado', title: 'Parcelado', desc: 'O valor total é DIVIDIDO nas parcelas.' },
+            { key: 'mensalidade', title: 'Mensalidade', desc: 'O valor cheio se REPETE todo mês. Só para contrato recorrente.' },
+          ] as const
+          const choose = (k: typeof options[number]['key']) => setForm(f => ({
+            ...f,
+            recurrence: k === 'mensalidade' ? (f.recurrence === 'Única' ? 'Mensal' : f.recurrence) : 'Única',
+            installments: k === 'avista' ? '1' : (parseInt(f.installments) || 1) > 1 ? f.installments : (k === 'mensalidade' ? '12' : '2'),
+          }))
+          return (
+            <div className="space-y-3">
+              <Label>Como o cliente vai pagar?</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {options.map(o => (
+                  <button key={o.key} type="button" onClick={() => choose(o.key)}
+                    className={`text-left rounded-2xl border p-3 transition-colors ${mode === o.key ? 'border-primary bg-primary/10' : 'border-[var(--glass-border)] hover:bg-[var(--glass-surface)]'}`}>
+                    <p className="text-sm font-bold">{o.title}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{o.desc}</p>
+                  </button>
+                ))}
+              </div>
+              {mode !== 'avista' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>{mode === 'mensalidade' ? 'Quantos meses prever' : form.payment_method === 'Cartão de Crédito' ? 'Parcelas no cartão' : 'Número de parcelas'}</Label>
+                    <Input type="number" min="2" max="48" value={form.installments} onChange={e => setForm(f => ({ ...f, installments: e.target.value }))} className="h-10 w-full sm:w-40" />
+                  </div>
+                  {mode === 'mensalidade' && (
+                    <div className="space-y-2">
+                      <Label>Ciclo</Label>
+                      <Select value={form.recurrence} onValueChange={v => v && setForm(f => ({ ...f, recurrence: v }))}>
+                        <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {RECURRENCE_OPTIONS.filter(r => r !== 'Única').map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {(() => {
           const numInst = parseInt(form.installments) || 1
@@ -434,12 +463,20 @@ export default function SolicitacoesFinanceiras() {
           }
           const isRecurring = form.recurrence !== 'Única'
           const perCycle = isRecurring ? gross : gross / numInst
+          const pct = Math.min(100, Math.max(0, parseFloat((form.my_pct || '0').replace(',', '.')) || 0))
+          const mine = perCycle * pct / 100
           return (
-            <p className="text-xs text-muted-foreground -mt-2">
-              {isRecurring
-                ? `Mensalidade: lança ${fmtBRL(perCycle)} a cada ciclo (${form.recurrence}), por ${numInst} vez(es) — não divide o valor.`
-                : `Parcelamento: divide o total em ${numInst} cobranças de ${fmtBRL(perCycle)} cada, uma por mês.`}
-            </p>
+            <div className="rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-surface)] p-3 text-xs space-y-1">
+              <p className="font-bold text-foreground">
+                {isRecurring
+                  ? `Mensalidade: ${numInst} lançamentos de ${fmtBRL(perCycle)} (o valor cheio se repete, não divide).`
+                  : `Parcelado: ${numInst} parcelas de ${fmtBRL(perCycle)} (total ${fmtBRL(gross)} dividido por ${numInst}).`}
+              </p>
+              <p className="text-muted-foreground">
+                Em cada parcela: {myName} {fmtBRL(mine)} · outra parte {fmtBRL(perCycle - mine)}
+              </p>
+              {isRecurring && <p className="text-muted-foreground">Quer dividir o valor em parcelas? Escolha "Parcelado" acima.</p>}
+            </div>
           )
         })()}
 
