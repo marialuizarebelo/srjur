@@ -205,6 +205,8 @@ export default function SolicitacoesFinanceiras() {
           ? `${r.description} (${numInstallments}x no cartão)`
           : (effectiveInstallments > 1 ? `${r.description} (${i + 1}/${effectiveInstallments})` : r.description),
         value: myShare,
+        // valor cheio da ocorrência (o que o cliente de fato paga) — é o que o portal exibe
+        portal_value: r.client_id ? occurrenceTotal : null,
         client_id: r.client_id, due_date: occurrenceDate, date: occurrenceDate,
         payment_method: r.payment_method, notes: [r.notes, splitNote].filter(Boolean).join('\n\n'),
         responsible: `Solicitado por ${requesterName}`,
@@ -500,8 +502,8 @@ export default function SolicitacoesFinanceiras() {
           const mode = form.recurrence !== 'Única' ? 'mensalidade' : (parseInt(form.installments) || 1) > 1 ? 'parcelado' : 'avista'
           const options = [
             { key: 'avista', title: 'À vista', desc: 'Um único pagamento.' },
-            { key: 'parcelado', title: 'Parcelado', desc: 'O valor total é DIVIDIDO nas parcelas.' },
-            { key: 'mensalidade', title: 'Mensalidade', desc: 'O valor cheio se REPETE todo mês. Só para contrato recorrente.' },
+            { key: 'parcelado', title: 'Parcelado', desc: 'Informo o valor TOTAL e o sistema divide nas parcelas.' },
+            { key: 'mensalidade', title: 'Parcela fixa / mensalidade', desc: 'Informo o valor de CADA parcela e ele se repete todo mês (ex.: 10x de R$ 500).' },
           ] as const
           const choose = (k: typeof options[number]['key']) => setForm(f => ({
             ...f,
@@ -510,7 +512,7 @@ export default function SolicitacoesFinanceiras() {
           }))
           return (
             <div className="space-y-3">
-              <Label>Como o cliente vai pagar?</Label>
+              <Label>{form.type === 'receita' ? 'Como o cliente vai pagar?' : 'Como será pago?'}</Label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {options.map(o => (
                   <button key={o.key} type="button" onClick={() => choose(o.key)}
@@ -523,7 +525,7 @@ export default function SolicitacoesFinanceiras() {
               {mode !== 'avista' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>{mode === 'mensalidade' ? 'Quantos meses prever' : form.payment_method === 'Cartão de Crédito' ? 'Parcelas no cartão' : 'Número de parcelas'}</Label>
+                    <Label>{mode === 'mensalidade' ? 'Quantas parcelas / meses' : form.payment_method === 'Cartão de Crédito' ? 'Parcelas no cartão' : 'Número de parcelas'}</Label>
                     <Input type="number" min="2" max="48" value={form.installments} onChange={e => setForm(f => ({ ...f, installments: e.target.value }))} className="h-10 w-full sm:w-40" />
                   </div>
                   {mode === 'mensalidade' && (

@@ -6,7 +6,7 @@ import { DollarSign, CheckCircle2, Clock, ExternalLink } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
 
 interface FinanceEntry {
-  id: string; description: string; value: number; date: string; due_date: string | null
+  id: string; description: string; value: number; portal_value?: number | null; date: string; due_date: string | null
   paid: boolean; payment_link: string | null
 }
 
@@ -23,8 +23,8 @@ export default function PortalFinanceiro() {
 
   const pending = useMemo(() => entries.filter(e => !e.paid), [entries])
   const paid = useMemo(() => entries.filter(e => e.paid), [entries])
-  const totalPending = pending.reduce((s, e) => s + Number(e.value), 0)
-  const totalPaid = paid.reduce((s, e) => s + Number(e.value), 0)
+  const totalPending = pending.reduce((s, e) => s + Number(e.portal_value ?? e.value), 0)
+  const totalPaid = paid.reduce((s, e) => s + Number(e.portal_value ?? e.value), 0)
 
   return (
     <div className="space-y-6">
@@ -59,7 +59,7 @@ export default function PortalFinanceiro() {
                 <p className="text-[11px] text-muted-foreground">{e.due_date ? `Vence em ${fmtDate(e.due_date)}` : fmtDate(e.date)}</p>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-sm font-semibold">{fmtBRL(e.value)}</p>
+                <p className="text-sm font-semibold">{fmtBRL(e.portal_value ?? e.value)}</p>
                 {e.payment_link && (
                   <a href={e.payment_link} target="_blank" rel="noreferrer">
                     <Button size="sm" variant="outline" className="h-6 text-[10px] mt-1 rounded-lg">
@@ -85,7 +85,7 @@ export default function PortalFinanceiro() {
                 <p className="text-sm font-medium truncate">{e.description}</p>
                 <p className="text-[11px] text-muted-foreground">{fmtDate(e.date)}</p>
               </div>
-              <p className="text-sm font-semibold shrink-0">{fmtBRL(e.value)}</p>
+              <p className="text-sm font-semibold shrink-0">{fmtBRL(e.portal_value ?? e.value)}</p>
             </div>
           ))}
         </div>

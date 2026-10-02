@@ -29,12 +29,12 @@ export default function PortalDashboard() {
       supabase.from('processes').select('id,title,number,phase,updated_at').order('updated_at', { ascending: false }).limit(4),
       supabase.from('tasks').select('id,title,due_date').eq('status', 'pendente').order('due_date').limit(5),
       supabase.from('portal_messages').select('id,title,created_at,read_at').order('created_at', { ascending: false }).limit(3),
-      supabase.from('finance').select('value').eq('type', 'receita').eq('paid', false),
+      supabase.from('finance').select('value, portal_value').eq('type', 'receita').eq('paid', false),
     ])
     setProcesses((pr as ProcessLite[]) ?? [])
     setUpcoming((tk as TaskLite[]) ?? [])
     setMessages((msg as MessageLite[]) ?? [])
-    setPendingValue((fin ?? []).reduce((s, f: any) => s + Number(f.value), 0))
+    setPendingValue((fin ?? []).reduce((s, f: any) => s + Number(f.portal_value ?? f.value), 0))
     setLoading(false)
   }
 
