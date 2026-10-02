@@ -22,3 +22,23 @@ alter table public.finance_requests drop constraint if exists finance_requests_f
 alter table public.finance_requests
   add constraint finance_requests_finance_id_fkey
   foreign key (finance_id) references public.finance(id) on delete set null;
+
+-- Portal do cliente: precisa mostrar o valor CHEIO que o cliente paga (ex.: 500), não só
+-- a fatia de quem aprovou (250). O app passa a gravar portal_value ao aprovar; aqui
+-- preenchemos as solicitações já aprovadas (sem mudar o que está visível ou não no portal).
+alter table public.finance add column if not exists portal_value numeric;
+with req as (
+  select r.finance_id, r.value, coalesce(r.installments,1) n, r.recurrence, r.payment_method, coalesce(r.card_fee_percent,0) fee
+  from public.finance_requests r
+  where r.status = 'aprovado' and r.client_id is not null and r.finance_id is not null
+), occ as (
+  select finance_id,
+    case when payment_method = 'Cartão de Crédito' and n > 1 and recurrence is null then value * (1 - fee/100)
+         when recurrence is not null and n > 1 then value
+         else value / n end as total
+  from req
+)
+update public.finance f set portal_value = o.total
+from occ o join public.finance f0 on f0.id = o.finance_id
+where f.category = 'Parceria' and f.portal_value is null
+  and (f.id = o.finance_id or (f0.series_id is not null and f.series_id = f0.series_id));
