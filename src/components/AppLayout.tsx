@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { GlobalSearch } from '@/components/GlobalSearch'
 import { NotificationsPanel } from '@/components/NotificationsPanel'
 import { applyThemeColor } from '@/lib/themeColor'
+import { useAuth } from '@/contexts/AuthContext'
 import { setPdfOfficeName } from '@/lib/exportData'
 
 function useDynamicFavicon() {
@@ -47,6 +48,23 @@ function useDynamicFavicon() {
 }
 
 export function AppLayout({ children }: { children: ReactNode }) {
+  const { profile: sessionProfile } = useAuth()
+  // Registra qual versão do sistema esta pessoa está rodando (diagnóstico de "versão antiga").
+  useEffect(() => {
+    if (!sessionProfile) return
+    ;(async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const bundle = Array.from(document.scripts).map(s => s.src).find(s => /\/assets\/index-[^/]+\.js/.test(s))?.split('/').pop() ?? 'dev'
+        await supabase.from('app_sessions').upsert({
+          user_id: user.id, host: window.location.host, display_name: sessionProfile.display_name ?? null,
+          bundle, sw_controlled: !!navigator.serviceWorker?.controller, user_agent: navigator.userAgent.slice(0, 200),
+          seen_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,host' })
+      } catch { /* telemetria nunca atrapalha o uso */ }
+    })()
+  }, [sessionProfile?.id])
   const { theme, toggleTheme } = useTheme()
   const { hidden, toggleHidden } = usePrivacy()
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
