@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { ncStyle, ncGlass } from '@/lib/notionColors'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -106,7 +107,7 @@ function addDaysToDate(dateStr: string, days: number): string {
 }
 
 const RECURRENCE_OPTIONS = ['Única', 'Semanal', 'Quinzenal', 'Mensal', 'Trimestral', 'Semestral', 'Anual']
-const PIE_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366F1', '#14B8A6']
+const PIE_COLORS = ['#8577C9', '#6A8FC7', '#6E9C7D', '#D9A441', '#D96C87', '#C4567C', '#7A84C9', '#5FA39A']
 
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
@@ -139,49 +140,46 @@ function MonthNavigator({ month, year, onChange }: {
 }
 
 // ── Clickable summary card ──
+// Cor do card pela cor semântica já usada nas chamadas (verde = entrada, âmbar = a receber,
+// rosa = saída/inadimplência, lilás = saldo, cinza = neutro).
+function toneKey(color?: string): 'green' | 'yellow' | 'red' | 'purple' | 'gray' {
+  const c = (color ?? '').toLowerCase()
+  if (c === '#5d8a6d' || c === '#6e9c7d') return 'green'
+  if (c === '#d9a441') return 'yellow'
+  if (c === '#d96c87') return 'red'
+  if (c === '#8577c9') return 'purple'
+  return 'gray'
+}
+
 function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClick, highlight, muted }: {
   title: string; value: string; subtitle?: string
-  icon: React.ElementType; color: string
+  icon?: React.ElementType; color: string
   active?: boolean; onClick?: () => void
-  highlight?: boolean  // fundo colorido invertido
-  muted?: boolean      // esmaecido
+  highlight?: boolean  // tile mais forte (Recebido)
+  muted?: boolean
 }) {
   const { hidden } = usePrivacy()
   const valueClass = hidden ? 'blur-sm select-none' : ''
-  if (highlight) {
-    return (
-      <Card
-        className={`p-3 sm:p-4 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${active ? 'ring-2 ring-white/60' : ''}`}
-        style={{ backgroundColor: color, border: 'none' }}
-        onClick={onClick}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-white/80 truncate">{title}</p>
-            {subtitle && <p className="text-[10px] text-white/60 truncate">{subtitle}</p>}
-            <p className={`font-bold mt-1.5 text-white whitespace-nowrap overflow-hidden ${value.length > 12 ? 'text-xs sm:text-sm' : value.length > 9 ? 'text-sm sm:text-base' : 'text-base sm:text-lg'} ${valueClass}`}>{value}</p>
-          </div>
-          <div className="h-9 w-9 rounded-xl flex items-center justify-center bg-white/20 shrink-0">
-            <Icon className="h-4 w-4 text-white" />
-          </div>
-        </div>
-      </Card>
-    )
-  }
+  const key = toneKey(muted ? undefined : color)
+  const c = ncStyle(key)
   return (
     <Card
-      className={`p-3 sm:p-4 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${active ? 'ring-2 ring-primary' : ''} ${muted ? 'opacity-60' : ''}`}
+      className={`p-4 sm:p-5 cursor-pointer transition-[filter] hover:brightness-[0.98] ${active ? 'ring-2 ring-primary' : ''}`}
+      style={ncGlass(key, highlight ? 2 : 1)}
       onClick={onClick}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs text-muted-foreground font-medium truncate">{title}</p>
-          {subtitle && <p className="text-[10px] text-muted-foreground/60 truncate">{subtitle}</p>}
-          <p className={`font-bold mt-1.5 whitespace-nowrap overflow-hidden ${value.length > 12 ? 'text-xs sm:text-sm' : value.length > 9 ? 'text-sm sm:text-base' : 'text-base sm:text-lg'} ${valueClass}`} style={{ color: muted ? undefined : color }}>{value}</p>
+          <p className="text-xs font-bold truncate" style={{ color: c.text }}>{title}</p>
+          {subtitle && <p className="text-[11px] text-muted-foreground truncate">{subtitle}</p>}
+          <p className={`font-display text-xl sm:text-2xl text-glow mt-2 whitespace-nowrap overflow-hidden text-foreground ${valueClass}`}
+            style={{ color: key === 'gray' ? undefined : c.text }}>{value}</p>
         </div>
-        <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}15` }}>
-          <Icon className="h-4 w-4" style={{ color: muted ? undefined : color }} />
-        </div>
+        {Icon && (
+          <div className="h-9 w-9 rounded-xl hidden sm:flex items-center justify-center shrink-0" style={{ backgroundColor: `color-mix(in srgb, ${c.dot} 24%, transparent)` }}>
+            <Icon className="h-4 w-4" style={{ color: c.text }} />
+          </div>
+        )}
       </div>
     </Card>
   )
@@ -192,46 +190,39 @@ function SummaryCard({ title, value, subtitle, icon: Icon, color, active, onClic
 function SplitCard({ leftLabel, leftValue, leftActive, onClickLeft, leftColor, rightLabel, rightValue, rightActive, onClickRight, rightColor, icon: Icon }: {
   leftLabel: string; leftValue: number; leftActive: boolean; onClickLeft: () => void; leftColor?: string
   rightLabel: string; rightValue: number; rightActive: boolean; onClickRight: () => void; rightColor?: string
-  icon: React.ElementType
+  icon?: React.ElementType
 }) {
   const { hidden } = usePrivacy()
   const valueClass = hidden ? 'blur-sm select-none' : ''
-  const lc = leftColor ?? (leftValue >= 0 ? '#8B5CF6' : '#ef4444')
-  const rc = rightColor ?? (rightValue >= 0 ? '#8B5CF6' : '#ef4444')
-  const leftStr = fmtBRL(leftValue)
-  const rightStr = fmtBRL(rightValue)
-  const sizeClass = (s: string) => s.length > 12 ? 'text-xs sm:text-sm' : s.length > 9 ? 'text-sm sm:text-base' : 'text-base sm:text-lg'
+  const half = (label: string, val: number, color: string | undefined, active: boolean, onClick: () => void, _edge: boolean) => {
+    const key = color ? toneKey(color) : (val < 0 ? 'red' : 'purple')
+    const c = ncStyle(key)
+    return (
+      <div
+        onClick={onClick}
+        className={`p-4 sm:p-5 cursor-pointer transition-[filter] hover:brightness-[0.98] ${active ? 'ring-2 ring-inset ring-primary' : ''}`}
+        style={{ backgroundColor: `color-mix(in srgb, ${c.dot} 9%, transparent)` }}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-bold truncate" style={{ color: c.text }}>{label}</p>
+            <p className={`font-display text-xl sm:text-2xl text-glow mt-2 whitespace-nowrap overflow-hidden ${key === 'gray' ? 'text-foreground' : ''} ${valueClass}`}
+              style={{ color: key === 'gray' ? undefined : c.text }}>{fmtBRL(val)}</p>
+          </div>
+          {Icon && (
+            <div className="h-9 w-9 rounded-xl hidden sm:flex items-center justify-center shrink-0" style={{ backgroundColor: `color-mix(in srgb, ${c.dot} 24%, transparent)` }}>
+              <Icon className="h-4 w-4" style={{ color: c.text }} />
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
   return (
     <Card className="col-span-2 p-0 overflow-hidden">
-      <div className="grid grid-cols-2 divide-x">
-        <div
-          onClick={onClickLeft}
-          className={`flex items-center justify-between gap-2 p-3 sm:p-4 cursor-pointer transition-colors hover:bg-muted/40 ${leftActive ? 'bg-primary/5' : ''}`}
-        >
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground font-medium truncate">{leftLabel}</p>
-            <p className={`font-bold mt-1 whitespace-nowrap overflow-hidden ${sizeClass(leftStr)} ${valueClass}`} style={{ color: lc }}>
-              {leftStr}
-            </p>
-          </div>
-          <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${lc}15` }}>
-            <Icon className="h-4 w-4" style={{ color: lc }} />
-          </div>
-        </div>
-        <div
-          onClick={onClickRight}
-          className={`flex items-center justify-between gap-2 p-3 sm:p-4 cursor-pointer transition-colors hover:bg-muted/40 ${rightActive ? 'bg-primary/5' : ''}`}
-        >
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground font-medium truncate">{rightLabel}</p>
-            <p className={`font-bold mt-1 whitespace-nowrap overflow-hidden ${sizeClass(rightStr)} ${valueClass}`} style={{ color: rc }}>
-              {rightStr}
-            </p>
-          </div>
-          <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${rc}15` }}>
-            <Icon className="h-4 w-4" style={{ color: rc }} />
-          </div>
-        </div>
+      <div className="grid grid-cols-2 divide-x divide-[var(--glass-border)]">
+        {half(leftLabel, leftValue, leftColor, leftActive, onClickLeft, true)}
+        {half(rightLabel, rightValue, rightColor, rightActive, onClickRight, false)}
       </div>
     </Card>
   )
@@ -1786,15 +1777,15 @@ export default function Financeiro() {
 
       {/* ── Summary Cards (clickable) ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
-        <SummaryCard title="Receitas" subtitle="total" value={fmtBRL(totalReceitas)} icon={ArrowUpCircle} color="#16a34a" muted active={activeCard === 'receitas'} onClick={() => setActiveCard(activeCard === 'receitas' ? null : 'receitas')} />
-        <SummaryCard title="Recebido" subtitle="pago" value={fmtBRL(receitasPagas)} icon={TrendingUp} color="#22c55e" highlight active={activeCard === 'receitas-pagas'} onClick={() => setActiveCard(activeCard === 'receitas-pagas' ? null : 'receitas-pagas')} />
-        <SummaryCard title="A receber" subtitle="pendente" value={fmtBRL(receitasPendentes)} icon={Clock} color="#f59e0b" active={activeCard === 'receitas-pendentes'} onClick={() => setActiveCard(activeCard === 'receitas-pendentes' ? null : 'receitas-pendentes')} />
-        <SummaryCard title="Inadimplência" subtitle="receitas vencidas" value={fmtBRL(inadimplencia)} icon={AlertTriangle} color={inadimplencia > 0 ? '#ef4444' : '#6b7280'} active={activeCard === 'inadimplencia'} onClick={() => setActiveCard(activeCard === 'inadimplencia' ? null : 'inadimplencia')} />
+        <SummaryCard title="Receitas" subtitle="total" value={fmtBRL(totalReceitas)} icon={ArrowUpCircle} color="#5D8A6D" muted active={activeCard === 'receitas'} onClick={() => setActiveCard(activeCard === 'receitas' ? null : 'receitas')} />
+        <SummaryCard title="Recebido" subtitle="pago" value={fmtBRL(receitasPagas)} icon={TrendingUp} color="#6E9C7D" highlight active={activeCard === 'receitas-pagas'} onClick={() => setActiveCard(activeCard === 'receitas-pagas' ? null : 'receitas-pagas')} />
+        <SummaryCard title="A receber" subtitle="pendente" value={fmtBRL(receitasPendentes)} icon={Clock} color="#D9A441" active={activeCard === 'receitas-pendentes'} onClick={() => setActiveCard(activeCard === 'receitas-pendentes' ? null : 'receitas-pendentes')} />
+        <SummaryCard title="Inadimplência" subtitle="receitas vencidas" value={fmtBRL(inadimplencia)} icon={AlertTriangle} color={inadimplencia > 0 ? '#D96C87' : '#6E7A94'} active={activeCard === 'inadimplencia'} onClick={() => setActiveCard(activeCard === 'inadimplencia' ? null : 'inadimplencia')} />
         <SplitCard
           icon={ArrowDownCircle}
-          leftLabel="Despesas" leftValue={totalDespesas} leftColor="#ef4444"
+          leftLabel="Despesas" leftValue={totalDespesas} leftColor="#D96C87"
           leftActive={activeCard === 'despesas'} onClickLeft={() => setActiveCard(activeCard === 'despesas' ? null : 'despesas')}
-          rightLabel="Não impacta caixa" rightValue={totalDespesasNaoCaixa} rightColor="#6b7280"
+          rightLabel="Não impacta caixa" rightValue={totalDespesasNaoCaixa} rightColor="#6E7A94"
           rightActive={activeCard === 'despesas-nao-caixa'} onClickRight={() => setActiveCard(activeCard === 'despesas-nao-caixa' ? null : 'despesas-nao-caixa')}
         />
         <SplitCard
@@ -1839,8 +1830,8 @@ export default function Financeiro() {
                   <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                   <YAxis tick={{ fontSize: 10 }} />
                   <RTooltip formatter={(v) => fmtBRL(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                  <Bar dataKey="aReceber" name="A Receber" fill="#86efac" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="aPagar" name="A Pagar" fill="#fca5a5" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="aReceber" name="A Receber" fill="#8FC7A2" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="aPagar" name="A Pagar" fill="#EDB3C0" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -1884,8 +1875,8 @@ export default function Financeiro() {
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 10 }} />
                     <RTooltip formatter={(v) => fmtBRL(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                    <Area type="monotone" dataKey="receitas" stroke="#22c55e" fill="#22c55e20" strokeWidth={2} />
-                    <Area type="monotone" dataKey="despesas" stroke="#ef4444" fill="#ef444420" strokeWidth={2} />
+                    <Area type="monotone" dataKey="receitas" stroke="#6E9C7D" fill="#6E9C7D20" strokeWidth={2} />
+                    <Area type="monotone" dataKey="despesas" stroke="#D96C87" fill="#D96C8720" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -1964,7 +1955,7 @@ export default function Financeiro() {
           {(['mes', 'ano', 'custom'] as const).map(m => (
             <Button
               key={m}
-              variant={viewMode === m ? 'default' : 'ghost'}
+              variant={viewMode === m ? 'secondary' : 'ghost'}
               size="sm"
               className="h-7 text-xs"
               onClick={() => setViewMode(m)}
@@ -2030,7 +2021,7 @@ export default function Financeiro() {
           {(['todos', 'receita', 'despesa'] as const).map(t => (
             <Button
               key={t}
-              variant={typeFilter === t ? 'default' : 'ghost'}
+              variant={typeFilter === t ? 'secondary' : 'ghost'}
               size="sm"
               className="h-7 text-xs"
               onClick={() => setTypeFilter(t)}

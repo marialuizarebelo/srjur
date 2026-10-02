@@ -26,7 +26,7 @@ export async function getDriveAccessToken(): Promise<string> {
 export interface DriveFolder { id: string; name: string; url: string }
 
 // Cores oficiais da paleta de pastas do Google Drive
-export const DRIVE_COLOR_RED = '#fb4c2f'
+export const DRIVE_COLOR_RED = '#E2654B'
 export const DRIVE_COLOR_GREEN = '#b3dc6c' // verde-limão, igual ao padrão já usado nas pastas de clientes ativos
 
 export async function createDriveFolder(name: string, parentId?: string | null, color?: string): Promise<DriveFolder> {

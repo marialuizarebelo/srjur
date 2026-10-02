@@ -16,9 +16,9 @@ export const TIPOS_PRAZO = [
 ].sort((a, b) => a.localeCompare(b, 'pt-BR'))
 
 const TAG_COLORS = [
-  '#EC4899', '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B',
-  '#EF4444', '#14B8A6', '#6366F1', '#F97316', '#06B6D4',
-  '#84CC16', '#D946EF', '#0EA5E9', '#A855F7', '#F43F5E',
+  '#C4567C', '#8577C9', '#6A8FC7', '#6E9C7D', '#D9A441',
+  '#D96C87', '#5FA39A', '#7A84C9', '#E2654B', '#5AA9B5',
+  '#8FA96A', '#B873B8', '#5AA5C4', '#A07BC9', '#D96C87',
 ]
 
 export function getTagColor(text: string) {

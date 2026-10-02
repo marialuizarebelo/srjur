@@ -44,11 +44,11 @@ interface MarketingItem {
 }
 
 const STATUSES = [
-  { value: 'ideia', label: 'Ideia', color: '#9CA3AF' },
-  { value: 'roteiro', label: 'Roteiro', color: '#F59E0B' },
-  { value: 'producao', label: 'Produção', color: '#3B82F6' },
-  { value: 'agendado', label: 'Agendado', color: '#8B5CF6' },
-  { value: 'publicado', label: 'Publicado', color: '#10B981' },
+  { value: 'ideia', label: 'Ideia', color: '#8A93AA' },
+  { value: 'roteiro', label: 'Roteiro', color: '#D9A441' },
+  { value: 'producao', label: 'Produção', color: '#6A8FC7' },
+  { value: 'agendado', label: 'Agendado', color: '#8577C9' },
+  { value: 'publicado', label: 'Publicado', color: '#6E9C7D' },
 ]
 
 const PLATFORMS = ['Instagram', 'LinkedIn', 'Facebook', 'Site', 'Outro']
@@ -281,7 +281,7 @@ export default function Marketing() {
     const statusIdx = STATUSES.findIndex(s => s.value === item.status)
     const nextStatus = statusIdx < STATUSES.length - 1 ? STATUSES[statusIdx + 1] : null
     return (
-      <div className="p-3 rounded-lg border bg-background hover:shadow-md transition-shadow cursor-pointer" onClick={() => setViewItem(item)}>
+      <div className="p-3.5 rounded-2xl border border-[var(--glass-border)] bg-card shadow-[0_12px_28px_-20px_var(--glass-drop),inset_0_1px_0_var(--glass-highlight)] hover:brightness-[0.98] transition-[filter] cursor-pointer" onClick={() => setViewItem(item)}>
         <div className="flex items-start justify-between gap-2 mb-1.5">
           <p className="text-sm font-medium truncate flex-1">{item.title}</p>
           <ResponsibleAvatars ids={item.responsible_ids} profilesMap={profilesMap} size="xs" />
@@ -334,12 +334,12 @@ export default function Marketing() {
 
       <div className="flex items-center gap-1 flex-wrap">
         <button onClick={() => setPlatformFilter('todas')}
-          className={`h-7 px-3 rounded-full text-xs font-medium border transition-all ${platformFilter === 'todas' ? 'bg-foreground text-background border-foreground' : 'border-border/60 text-muted-foreground'}`}>
+          className={`h-8 px-4 rounded-full text-[13px] font-semibold border transition-all ${platformFilter === 'todas' ? 'bg-[var(--glass-surface)] text-foreground border-[var(--glass-border)] shadow-[inset_0_0_0_1px_var(--glass-border)] font-bold' : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-[var(--glass-surface)]'}`}>
           Todas
         </button>
         {PLATFORMS.map(p => (
           <button key={p} onClick={() => setPlatformFilter(p)}
-            className={`h-7 px-3 rounded-full text-xs font-medium border transition-all ${platformFilter === p ? 'bg-foreground text-background border-foreground' : 'border-border/60 text-muted-foreground'}`}>
+            className={`h-8 px-4 rounded-full text-[13px] font-semibold border transition-all ${platformFilter === p ? 'bg-[var(--glass-surface)] text-foreground border-[var(--glass-border)] shadow-[inset_0_0_0_1px_var(--glass-border)] font-bold' : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-[var(--glass-surface)]'}`}>
             {p}
           </button>
         ))}
@@ -380,7 +380,7 @@ export default function Marketing() {
           {filtered.map(item => {
             const statusInfo = STATUSES.find(s => s.value === item.status)
             return (
-              <div key={item.id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-xl border bg-card hover:shadow-sm transition-shadow cursor-pointer"
+              <div key={item.id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3.5 rounded-2xl border border-[var(--glass-border)] bg-card shadow-[0_12px_28px_-20px_var(--glass-drop),inset_0_1px_0_var(--glass-highlight)] hover:brightness-[0.98] transition-[filter] cursor-pointer"
                 onClick={() => setViewItem(item)}>
                 <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
                   <div className="h-2 w-2 rounded-full shrink-0 mt-2 sm:mt-0" style={{ backgroundColor: statusInfo?.color }} />

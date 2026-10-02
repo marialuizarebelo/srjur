@@ -69,10 +69,10 @@ function ClientList({ onSelect }: { onSelect: (c: ClientLite) => void }) {
           <Input placeholder="Buscar cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-10" />
         </div>
         <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5 shrink-0">
-          <Button variant={view === 'cards' ? 'default' : 'ghost'} size="icon" className="h-9 w-9" onClick={() => setView('cards')}>
+          <Button variant={view === 'cards' ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9" onClick={() => setView('cards')}>
             <LayoutGrid className="h-3.5 w-3.5" />
           </Button>
-          <Button variant={view === 'table' ? 'default' : 'ghost'} size="icon" className="h-9 w-9" onClick={() => setView('table')}>
+          <Button variant={view === 'table' ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9" onClick={() => setView('table')}>
             <List className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -101,7 +101,7 @@ function ClientList({ onSelect }: { onSelect: (c: ClientLite) => void }) {
                   <td className="px-4 py-2.5 font-medium">{c.name}</td>
                   <td className="px-4 py-2.5 text-muted-foreground">{c.email ?? '—'}</td>
                   <td className="px-4 py-2.5">
-                    <Badge variant={c.status === 'ativo' ? 'default' : 'secondary'} className="text-[10px]">{c.status.toUpperCase()}</Badge>
+                    <Badge variant={c.status === 'ativo' ? 'active' : 'secondary'} className="text-[10px]">{c.status.toUpperCase()}</Badge>
                   </td>
                 </tr>
               ))}
@@ -120,7 +120,7 @@ function ClientList({ onSelect }: { onSelect: (c: ClientLite) => void }) {
                   <p className="text-sm font-medium truncate">{c.name}</p>
                   <p className="text-[11px] text-muted-foreground truncate">{c.email ?? 'Sem e-mail cadastrado'}</p>
                 </div>
-                <Badge variant={c.status === 'ativo' ? 'default' : 'secondary'} className="text-[10px] shrink-0">
+                <Badge variant={c.status === 'ativo' ? 'active' : 'secondary'} className="text-[10px] shrink-0">
                   {c.status.toUpperCase()}
                 </Badge>
               </div>
@@ -366,7 +366,7 @@ function ClientDetail({ client, onBack }: { client: ClientLite; onBack: () => vo
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold leading-tight">{client.name}</h2>
-              <Badge variant={client.status === 'ativo' ? 'default' : 'secondary'} className="text-[10px]">{client.status.toUpperCase()}</Badge>
+              <Badge variant={client.status === 'ativo' ? 'active' : 'secondary'} className="text-[10px]">{client.status.toUpperCase()}</Badge>
             </div>
           </div>
         </div>

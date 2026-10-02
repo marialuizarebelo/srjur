@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { ncStyle, ncGlass } from '@/lib/notionColors'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,18 +23,24 @@ import { useAuth } from '@/contexts/AuthContext'
 import { fmtBRL, fmtDate } from '@/lib/format'
 
 // ── Label colors (soft/muted palette) ────────────────────────────────────
-const LABEL_COLORS = [
-  { bg: '#FFF0F0', text: '#E57373', border: '#FFCDD2', name: 'vermelho' },
-  { bg: '#FFF4EC', text: '#FF9E66', border: '#FFD9C0', name: 'laranja' },
-  { bg: '#FFFBEA', text: '#F0C040', border: '#FFF0A8', name: 'amarelo' },
-  { bg: '#F0FBF4', text: '#66BB8A', border: '#C8EDD5', name: 'verde' },
-  { bg: '#EDFAF7', text: '#4DB6AC', border: '#B2DFDB', name: 'teal' },
-  { bg: '#EFF6FF', text: '#7EB3F5', border: '#BFDBFE', name: 'azul' },
-  { bg: '#F3EEFF', text: '#A78BDA', border: '#DDD6FE', name: 'roxo' },
-  { bg: '#FFF0F7', text: '#F08BBB', border: '#FBCFE8', name: 'rosa' },
-  { bg: '#F6F6F7', text: '#9CA3AF', border: '#E5E7EB', name: 'cinza' },
-  { bg: '#F0FAFF', text: '#60BFEA', border: '#BAE6FD', name: 'céu' },
-]
+// Cor padrão de cada categoria de template (usada quando o template não tem etiqueta própria).
+const CATEGORY_COLORS: Record<string, string> = {
+  onboarding: 'teal', cobrança: 'yellow', cobranca: 'yellow', andamento: 'blue', prazo: 'green',
+  proposta: 'purple', contrato: 'brown', geral: 'gray',
+}
+// Categoria do template: a salva, ou deduzida pelo nome quando está vazia (templates antigos/de demonstração).
+function categoryOf(t: { category?: string | null; name?: string | null; body?: string | null }): string {
+  if (t.category) return t.category
+  const n = ((t.name || (t as unknown as { title?: string }).title || '') + ' ' + (t.body ?? '').slice(0, 80)).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  if (/cobran|mensalidade|pagamento/.test(n)) return 'Cobrança'
+  if (/proposta|honorario/.test(n)) return 'Proposta'
+  if (/contrato|renova|assinatura/.test(n)) return 'Contrato'
+  if (/audiencia|prazo|vencimento/.test(n)) return 'Prazo'
+  if (/andamento|atualiza|processo/.test(n)) return 'Andamento'
+  if (/solicita|document|boas.vindas|onboard/.test(n)) return 'Onboarding'
+  return 'Geral'
+}
+const LABEL_COLORS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'gray', 'sky'].map(key => ({ key, name: key }))
 
 // ── Variables catalog ────────────────────────────────────────────────────
 const VARIABLE_GROUPS = [
@@ -311,12 +318,12 @@ export default function Comunicacoes() {
   }
 
   function getLabelStyle(colorIndex: number) {
-    return LABEL_COLORS[colorIndex] ?? LABEL_COLORS[8]
+    return ncStyle((LABEL_COLORS[colorIndex] ?? LABEL_COLORS[8]).key)
   }
 
   // Templates
   const filtered = useMemo(() => templates.filter(t => {
-    if (catFilter !== 'todas' && t.category !== catFilter) return false
+    if (catFilter !== 'todas' && categoryOf(t) !== catFilter) return false
     if (chanFilter !== 'todos' && t.channel !== chanFilter && t.channel !== 'ambos') return false
     if (search && !t.name.toLowerCase().includes(search.toLowerCase())) return false
     if (labelFilter && !(t.tag_ids ?? []).includes(labelFilter)) return false
@@ -472,52 +479,65 @@ export default function Comunicacoes() {
   function TemplateCard({ t }: { t: Template }) {
     const [expanded, setExpanded] = useState(false)
     const tagIds = t.tag_ids ?? []
+    const ChannelIcon = t.channel === 'whatsapp' ? Smartphone : Mail
+    const firstLabel = tagIds.map(id => labels.find(l => l.id === id)).find(Boolean)
+    const catKey = CATEGORY_COLORS[categoryOf(t).toLowerCase()]
+    const tintKey = firstLabel ? LABEL_COLORS[firstLabel.color_index]?.key : catKey
+    const tint = tintKey ? ncStyle(tintKey) : null
+    // Destaca as {{variáveis}} do texto como "chips" sutis
+    const parts = (t.body ?? '').split(/(\{\{[^}]+\}\})/g)
 
     return (
-      <div className="rounded-2xl border border-border/60 bg-card shadow-sm hover:shadow-md transition-all p-5 space-y-3 flex flex-col">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold leading-snug">{t.name}</p>
-            <div className="flex flex-wrap gap-1 mt-2">
-              <span className="inline-flex items-center rounded-full text-[10px] px-2 py-0.5 font-medium bg-muted text-muted-foreground border border-border/50">
-                {t.category}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full text-[10px] px-2 py-0.5 font-medium bg-muted text-muted-foreground border border-border/50">
-                {t.channel === 'whatsapp' ? <Smartphone className="h-2.5 w-2.5" /> : <Mail className="h-2.5 w-2.5" />}
-                {CHANNEL_LABELS[t.channel]}
-              </span>
-              {tagIds.map(id => <LabelChip key={id} labelId={id} />)}
-            </div>
+      <div style={tintKey ? ncGlass(tintKey, 1.1) : undefined}
+        className={`group/tpl relative flex flex-col gap-4 rounded-3xl border p-5 ${tint ? '' : 'border-[var(--glass-border)] bg-card'} shadow-[0_20px_50px_-30px_rgba(20,33,61,0.25)] transition-[filter] hover:brightness-[0.98] dark:shadow-[0_20px_50px_-28px_rgba(0,0,0,0.6)]`}>
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 shrink-0 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-surface)] flex items-center justify-center text-muted-foreground">
+            <ChannelIcon className="h-4 w-4" />
           </div>
-          <div className="flex items-center gap-0.5 shrink-0">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold leading-snug truncate">{t.name || (t as unknown as { title?: string }).title || 'Template sem título'}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+              {[categoryOf(t), CHANNEL_LABELS[t.channel]].filter(Boolean).join(' · ')}
+            </p>
+            {tagIds.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {tagIds.map(id => <LabelChip key={id} labelId={id} />)}
+              </div>
+            )}
+          </div>
+          <div className="absolute right-3 top-3 z-10 flex items-center gap-0.5 rounded-full border border-[var(--glass-border)] bg-card/90 p-0.5 backdrop-blur sm:opacity-0 sm:group-hover/tpl:opacity-100 focus-within:opacity-100 transition-opacity">
             <button onClick={() => { navigator.clipboard.writeText(t.body); toast.success('Copiado!') }}
-              className="h-7 w-7 rounded-lg hover:bg-muted flex items-center justify-center transition-colors" title="Copiar">
+              className="h-8 w-8 rounded-full hover:bg-[var(--glass-surface)] flex items-center justify-center transition-colors" title="Copiar">
               <Copy className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
             <button onClick={() => openEdit(t)}
-              className="h-7 w-7 rounded-lg hover:bg-muted flex items-center justify-center transition-colors" title="Editar">
+              className="h-8 w-8 rounded-full hover:bg-[var(--glass-surface)] flex items-center justify-center transition-colors" title="Editar">
               <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
             <button onClick={() => deleteTemplate(t.id)}
-              className="h-7 w-7 rounded-lg hover:bg-muted flex items-center justify-center transition-colors" title="Excluir">
+              className="h-8 w-8 rounded-full hover:bg-[var(--glass-surface)] flex items-center justify-center transition-colors" title="Excluir">
               <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
             </button>
           </div>
         </div>
 
-        <div className="bg-muted/30 rounded-xl px-3 py-2.5 cursor-pointer flex-1" onClick={() => setExpanded(e => !e)}>
-          <p className={`text-[11px] text-muted-foreground whitespace-pre-wrap leading-relaxed ${expanded ? '' : 'line-clamp-3'}`}>
-            {t.body}
+        <div className="flex-1 cursor-pointer" onClick={() => setExpanded(e => !e)}>
+          <p className={`text-[13px] text-muted-foreground whitespace-pre-wrap leading-relaxed ${expanded ? '' : 'line-clamp-4'}`}>
+            {parts.map((p, i) => p.startsWith('{{')
+              ? <span key={i} className="rounded-md bg-primary/15 px-1 py-0.5 font-mono text-[11px] text-[var(--accent-light)]">{p}</span>
+              : <span key={i}>{p}</span>)}
           </p>
-          <button className="flex items-center gap-1 text-[10px] text-muted-foreground mt-1.5 hover:text-foreground transition-colors">
+          <button className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground mt-2 hover:text-foreground transition-colors">
             {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            {expanded ? 'Recolher' : 'Ver completo'}
+            {expanded ? 'Recolher' : 'Ler completo'}
           </button>
         </div>
 
-        <Button size="sm" className="w-full rounded-xl h-8 text-xs" onClick={() => openSend(t)}>
-          <Send className="h-3 w-3 mr-1.5" />Usar template
-        </Button>
+        <div className="flex items-center justify-end gap-3 pt-3 border-t" style={{ borderColor: tint ? tint.border : 'var(--glass-border)' }}>
+          <Button size="sm" variant="secondary" className="shrink-0 hover:bg-primary hover:text-primary-foreground" onClick={() => openSend(t)}>
+            <Send className="h-3 w-3" />Usar
+          </Button>
+        </div>
       </div>
     )
   }
@@ -526,9 +546,9 @@ export default function Comunicacoes() {
     <div className="flex flex-col md:flex-row gap-6">
       {/* ── Sidebar: Labels ── */}
       <aside className="w-full md:w-52 shrink-0 space-y-3">
-        <div className="rounded-2xl border border-border/60 bg-card shadow-sm p-4 space-y-3">
+        <div className="rounded-3xl border border-[var(--glass-border)] bg-card p-5 space-y-3 shadow-[0_20px_50px_-30px_rgba(20,33,61,0.25)] dark:shadow-[0_20px_50px_-28px_rgba(0,0,0,0.6)]">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold flex items-center gap-1.5">
+            <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground flex items-center gap-1.5">
               <Tag className="h-3.5 w-3.5 text-muted-foreground" />Etiquetas
             </p>
             <button onClick={() => { setEditingLabel(null); setNewLabelName(''); setNewLabelColor(0); setLabelFormOpen(true) }}
@@ -539,16 +559,16 @@ export default function Comunicacoes() {
 
           <div className="space-y-1">
             <button onClick={() => setLabelFilter('')}
-              className={`w-full text-left text-xs px-2 py-1.5 rounded-lg transition-colors ${!labelFilter ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/50'}`}>
+              className={`w-full text-left text-xs px-2 py-1.5 rounded-lg transition-colors ${!labelFilter ? 'bg-[var(--glass-surface)] shadow-[inset_0_0_0_1px_var(--glass-border)] font-bold' : 'text-muted-foreground hover:bg-[var(--glass-surface)]'}`}>
               Todas as etiquetas
             </button>
             {labels.map(l => {
               const c = getLabelStyle(l.color_index)
               const active = labelFilter === l.id
               return (
-                <div key={l.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors group ${active ? 'bg-muted' : 'hover:bg-muted/50'}`}
+                <div key={l.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors group ${active ? 'bg-[var(--glass-surface)] shadow-[inset_0_0_0_1px_var(--glass-border)]' : 'hover:bg-[var(--glass-surface)]'}`}
                   onClick={() => setLabelFilter(active ? '' : l.id)}>
-                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: c.text }} />
+                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: c.dot }} />
                   <span className="text-xs flex-1">{l.name}</span>
                   <div className="hidden group-hover:flex items-center gap-0.5">
                     <button onClick={e => { e.stopPropagation(); setEditingLabel(l); setNewLabelName(l.name); setNewLabelColor(l.color_index); setLabelFormOpen(true) }}
@@ -574,7 +594,7 @@ export default function Comunicacoes() {
                 {LABEL_COLORS.map((c, i) => (
                   <button key={i} onClick={() => setNewLabelColor(i)}
                     className={`h-5 w-5 rounded-full border-2 transition-transform hover:scale-110 ${newLabelColor === i ? 'border-foreground scale-110' : 'border-transparent'}`}
-                    style={{ backgroundColor: c.text }} />
+                    style={{ backgroundColor: ncStyle(c.key).dot }} />
                 ))}
               </div>
               <div className="flex gap-1.5">
@@ -605,25 +625,28 @@ export default function Comunicacoes() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap gap-2 items-center">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)}
-              className="pl-8 h-8 w-48 rounded-xl text-xs" />
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-3 items-center justify-between">
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar template..." value={search} onChange={e => setSearch(e.target.value)}
+                className="pl-10 h-10 rounded-full" />
+            </div>
+            <div className="flex items-center gap-0.5 rounded-full border border-[var(--glass-border)] bg-[var(--glass-surface)] p-[3px]">
+              {[{v:'todos',l:'Todos'},{v:'whatsapp',l:'WhatsApp'},{v:'email',l:'E-mail'}].map(o => (
+                <button key={o.v} onClick={() => setChanFilter(o.v)}
+                  className={`px-4 h-8 rounded-full text-[13px] font-bold transition-all ${chanFilter===o.v ? 'bg-[var(--glass-surface)] text-foreground shadow-[inset_0_0_0_1px_var(--glass-border)]' : 'text-muted-foreground hover:text-foreground'}`}>
+                  {o.l}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-2">
             {(['todas', ...CATEGORIES]).map(c => (
               <button key={c} onClick={() => setCatFilter(c)}
-                className={`h-7 px-3 rounded-full text-xs font-medium border transition-all ${catFilter === c ? 'bg-foreground text-background border-foreground' : 'border-border/60 text-muted-foreground hover:border-border'}`}>
+                className={`h-8 px-4 rounded-full text-[13px] font-semibold border transition-all ${catFilter === c ? 'bg-[var(--glass-surface)] text-foreground border-[var(--glass-border)] shadow-[inset_0_0_0_1px_var(--glass-border)] font-bold' : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-[var(--glass-surface)]'}`}>
+                {c !== 'todas' && CATEGORY_COLORS[c.toLowerCase()] && <span className="inline-block h-2 w-2 rounded-full mr-2" style={{ backgroundColor: ncStyle(CATEGORY_COLORS[c.toLowerCase()]).dot }} />}
                 {c === 'todas' ? 'Todas' : c}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-0.5 bg-muted/40 rounded-xl p-0.5 ml-auto">
-            {[{v:'todos',l:'Todos'},{v:'whatsapp',l:'WhatsApp'},{v:'email',l:'E-mail'}].map(o => (
-              <button key={o.v} onClick={() => setChanFilter(o.v)}
-                className={`px-3 h-7 rounded-lg text-xs font-medium transition-all ${chanFilter===o.v ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'}`}>
-                {o.l}
               </button>
             ))}
           </div>
@@ -631,8 +654,9 @@ export default function Comunicacoes() {
 
         {/* Grid */}
         {filtered.length === 0 ? (
-          <div className="py-16 text-center text-muted-foreground">
-            <p className="text-sm">Nenhum template encontrado</p>
+          <div className="py-20 text-center text-muted-foreground rounded-3xl border border-dashed border-[var(--glass-border)]">
+            <p className="text-sm font-semibold text-foreground">Nenhum template encontrado</p>
+            <p className="text-xs mt-1">Ajuste os filtros ou crie um novo template.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -681,7 +705,7 @@ export default function Comunicacoes() {
                     return (
                       <button key={l.id} onClick={() => toggleFormTag(l.id)}
                         className="inline-flex items-center gap-1 rounded-full text-[10px] px-2 py-0.5 border transition-all"
-                        style={sel ? { backgroundColor: c.bg, color: c.text, borderColor: c.border } : { backgroundColor: 'transparent', color: '#9CA3AF', borderColor: '#E5E7EB' }}>
+                        style={sel ? { backgroundColor: c.bg, color: c.text, borderColor: c.border } : { backgroundColor: 'transparent', color: 'var(--muted-foreground)', borderColor: 'var(--glass-border)' }}>
                         {sel && <Check className="h-2.5 w-2.5" />}{l.name}
                       </button>
                     )

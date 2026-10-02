@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/integrations/supabase/client'
+import { useEventColors } from '@/lib/eventColors'
+import { ncStyle, ncGlass } from '@/lib/notionColors'
 import { Card } from '@/components/ui/card'
 import { Sensitive } from '@/components/Sensitive'
 import { Badge } from '@/components/ui/badge'
@@ -107,36 +109,34 @@ interface StatCardProps {
   value: string | number
   subtitle?: string
   icon: React.ElementType
-  lightColor: string
-  darkColor: string
-  bgColor: string
+  tone?: 'active' | 'pending' | 'overdue'
+  color: string
   onClick?: () => void
 }
 
-function StatCard({ title, value, subtitle, icon: Icon, lightColor, darkColor, bgColor, onClick }: StatCardProps) {
-  const isDark = document.documentElement.classList.contains('dark')
-  const accent = isDark ? darkColor : lightColor
-  // bgColor entra como cor de destaque (borda, selo do ícone e um preenchimento
-  // bem sutil do card) — só a borda não bastava pra diferenciar os cards de
-  // relance, ficavam todos parecendo iguais (mesmo fundo neutro).
-  const border = bgColor.length === 9 ? bgColor.slice(0, 7) : bgColor
+function StatCard({ title, value, subtitle, icon: Icon, tone, color, onClick }: StatCardProps) {
+  const c = ncStyle(color)
+  const toneClass = tone === 'pending' ? 'text-amber-700 dark:text-amber-300'
+    : tone === 'overdue' ? 'text-red-700 dark:text-red-300'
+    : tone === 'active' ? 'text-green-700 dark:text-green-300'
+    : 'text-muted-foreground'
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border-l-4 p-5 shadow-sm transition-transform duration-150 ${onClick ? 'cursor-pointer hover:scale-[1.02] hover:shadow-md active:scale-[0.99]' : ''}`}
-      style={{ borderLeftColor: border, backgroundColor: border + (isDark ? '14' : '0d') }}
+      className={`relative overflow-hidden rounded-3xl p-4 sm:p-5 dark:backdrop-blur-[24px] transition-[filter] duration-200 ${onClick ? 'cursor-pointer hover:brightness-[0.98]' : ''}`}
+      style={ncGlass(color)}
       onClick={onClick}
     >
-      <div className="flex items-center gap-2 mb-3">
-        <div className="h-7 w-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: border + '1a' }}>
-          <Icon className="h-3.5 w-3.5" style={{ color: accent }} />
+      <div className="flex items-center gap-2 sm:gap-2.5 mb-3 sm:mb-4">
+        <div className="h-8 w-8 shrink-0 rounded-[10px] flex items-center justify-center" style={{ backgroundColor: `color-mix(in srgb, ${c.dot} 24%, transparent)` }}>
+          <Icon className="h-4 w-4" style={{ color: c.text }} />
         </div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.1em] leading-tight" style={{ color: c.text }}>{title}</p>
       </div>
-      <p className="text-4xl font-bold text-foreground"><Sensitive>{value}</Sensitive></p>
-      {subtitle && <p className="text-xs mt-1.5 font-medium" style={{ color: accent }}>{subtitle}</p>}
+      <p className="font-display text-3xl sm:text-4xl text-foreground text-glow"><Sensitive>{value}</Sensitive></p>
+      {subtitle && <p className={`text-xs mt-2 font-semibold ${toneClass}`}>{subtitle}</p>}
       {onClick && (
-        <div className="absolute bottom-2 right-3 opacity-40">
-          <ChevronRight className="h-3.5 w-3.5" style={{ color: accent }} />
+        <div className="absolute bottom-3 right-4 opacity-60">
+          <ChevronRight className="h-4 w-4" style={{ color: c.text }} />
         </div>
       )}
     </div>
@@ -152,6 +152,7 @@ interface AttentionItem {
   days?: number
   priority?: string
   kind?: 'tarefa' | 'prazo'
+  subtype?: string
 }
 
 function AttentionColumn({
@@ -213,6 +214,7 @@ function AttentionColumn({
 /* ---------- WeekAgendaView ---------- */
 
 function WeekAgendaView({ weekByDay, onItemClick, onAddDay }: { weekByDay: AttentionItem[][]; onItemClick: (item: AttentionItem) => void; onAddDay: (date: string) => void }) {
+  const { styleOf } = useEventColors()
   const today = new Date()
   const dayOfWeek = today.getDay()
   const monday = new Date(today)
@@ -234,7 +236,7 @@ function WeekAgendaView({ weekByDay, onItemClick, onAddDay }: { weekByDay: Atten
         return (
           <div
             key={label}
-            className={`group rounded-2xl p-3 min-h-[260px] border ${isToday ? 'border-primary bg-primary/5' : 'border-border/60 bg-muted/20'}`}
+            className={`group rounded-2xl p-3 min-h-[84px] sm:min-h-[260px] border ${isToday ? 'border-primary bg-primary/5' : 'border-border/60 bg-muted/20'}`}
           >
             <div className="flex items-center justify-between mb-2">
               <span className={`text-[11px] font-semibold uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>{label}</span>
@@ -257,16 +259,20 @@ function WeekAgendaView({ weekByDay, onItemClick, onAddDay }: { weekByDay: Atten
               {items.length === 0 ? (
                 <p className="text-[10px] text-muted-foreground/70 pt-1">Sem itens</p>
               ) : (
-                items.map(item => (
+                items.map(item => {
+                  const st = styleOf(String(item.subtype ?? item.kind))
+                  return (
                   <div
                     key={item.id}
-                    className="bg-background/70 dark:bg-white/5 rounded-lg p-1.5 cursor-pointer hover:bg-background transition-colors"
+                    className="rounded-lg border px-2 py-1.5 cursor-pointer hover:brightness-95 transition-all"
+                    style={{ backgroundColor: st.bg, color: st.text, borderColor: `color-mix(in srgb, ${st.dot} 38%, transparent)` }}
                     onClick={() => onItemClick(item)}
                   >
-                    <p className="text-[11px] font-medium truncate leading-snug">{item.title}</p>
-                    {item.subtitle && <p className="text-[10px] text-muted-foreground truncate">{item.subtitle}</p>}
+                    <p className="text-[11px] font-semibold truncate leading-snug">{item.title}</p>
+                    {item.subtitle && <p className="text-[10px] opacity-70 truncate">{item.subtitle}</p>}
                   </div>
-                ))
+                  )
+                })
               )}
             </div>
           </div>
@@ -524,7 +530,7 @@ export default function Dashboard() {
       const [{ data: allTasks }, { data: allDeadlines }] = await Promise.all([
         supabase
           .from('tasks')
-          .select('id, title, responsible, due_date, priority')
+          .select('id, title, responsible, due_date, priority, type')
           .eq('status', 'pendente')
           .order('due_date', { ascending: true })
           .limit(50),
@@ -559,6 +565,7 @@ export default function Dashboard() {
             days: diff,
             priority: t.priority ?? undefined,
             kind: t.kind,
+            subtype: t.kind === 'tarefa' ? t.type : undefined,
           }
           if (diff < 0) overdue.push(item)
           else if (diff === 0) todayItems.push(item)
@@ -666,7 +673,7 @@ export default function Dashboard() {
               ? `${Math.abs(diff!)}d atrasada`
               : `Vence ${fmtDate(t.due_date)}`
             : undefined,
-          extraColor: overdue ? '#f87171' : undefined,
+          extraColor: overdue ? '#E794A9' : undefined,
         }
       }),
     }))
@@ -692,7 +699,7 @@ export default function Dashboard() {
           label: d.title,
           sublabel: d.responsible ?? undefined,
           extra: `${Math.abs(diff)}d atrasado`,
-          extraColor: '#f87171',
+          extraColor: '#E794A9',
           badge: 'ATRASADO',
           badgeVariant: 'destructive' as const,
         }
@@ -721,7 +728,7 @@ export default function Dashboard() {
         label: item.title,
         sublabel: item.subtitle,
         extra: extraLabel,
-        extraColor: diff !== undefined && diff < 0 ? '#f87171' : '#60a5fa',
+        extraColor: diff !== undefined && diff < 0 ? '#E794A9' : '#60a5fa',
         badge: item.priority === 'alta' || item.priority === 'urgente' ? item.priority.toUpperCase() : undefined,
         badgeVariant: 'destructive',
       }],
@@ -885,44 +892,38 @@ export default function Dashboard() {
         {/* Left column */}
         <div className="space-y-6">
           {/* Stat cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <StatCard
               title="Clientes Ativos"
+              color="yellow"
               value={stats.clients}
               icon={Users}
-              lightColor="#7a5500"
-              darkColor="#f5d98a"
-              bgColor="#D4A84388"
               onClick={openClients}
             />
             <StatCard
               title="Processos Ativos"
+              color="purple"
               value={stats.processes}
               subtitle={`${recentProcesses.length} consultivos`}
               icon={Scale}
-              lightColor="#2e1a5c"
-              darkColor="#c8b8f0"
-              bgColor="#8B7BB888"
               onClick={openProcesses}
             />
             <StatCard
               title="Tarefas Pendentes"
+              color="green"
               value={stats.tasks}
               subtitle={overdueTasks.length > 0 ? `${overdueTasks.length} atrasadas` : undefined}
+              tone="pending"
               icon={ClipboardList}
-              lightColor="#1e4020"
-              darkColor="#a8d4a8"
-              bgColor="#6B9E6B88"
               onClick={openTasks}
             />
             <StatCard
               title="Prazos Atrasados"
+              color="red"
               value={stats.overdueDeadlines}
               subtitle={stats.overdueDeadlines > 0 ? 'atenção' : undefined}
+              tone="overdue"
               icon={AlertTriangle}
-              lightColor="#6b2010"
-              darkColor="#f5b09a"
-              bgColor="#C4604A88"
               onClick={openDeadlines}
             />
           </div>
@@ -946,22 +947,23 @@ export default function Dashboard() {
           {/* Finance summary cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: 'Receitas (mês)', value: fmtBRL(finance.receitas), color: 'text-green-600' },
-              { label: 'Despesas (mês)', value: fmtBRL(finance.despesas), color: 'text-red-500' },
-              { label: 'Lucro Líquido', value: fmtBRL(finance.receitas - finance.despesas), color: '' },
-              { label: 'Inadimplência', value: fmtBRL(finance.inadimplencia), color: 'text-red-500', bell: true },
-            ].map(({ label, value, color, bell }) => (
+              { label: 'Receitas (mês)', value: fmtBRL(finance.receitas), color: 'text-green-700 dark:text-green-300', nc: 'green' },
+              { label: 'Despesas (mês)', value: fmtBRL(finance.despesas), color: 'text-red-700 dark:text-red-300', nc: 'red' },
+              { label: 'Lucro Líquido', value: fmtBRL((finance.receitas - finance.despesas)), color: (finance.receitas - finance.despesas) >= 0 ? 'text-purple-700 dark:text-purple-300' : 'text-red-700 dark:text-red-300', nc: (finance.receitas - finance.despesas) >= 0 ? 'purple' : 'red' },
+              { label: 'Inadimplência', value: fmtBRL(finance.inadimplencia), color: finance.inadimplencia > 0 ? 'text-red-700 dark:text-red-300' : 'text-foreground', nc: finance.inadimplencia > 0 ? 'red' : 'gray', bell: true },
+            ].map(({ label, value, color, bell, nc }) => (
               <Card
                 key={label}
-                className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+                className="p-5 cursor-pointer hover:brightness-[0.98] transition-[filter]"
+                style={ncGlass(nc)}
                 onClick={() => navigate('/financeiro')}
               >
                 <div className="flex items-center gap-2">
                   <p className="text-xs text-muted-foreground">{label}</p>
                   {bell && <Bell className="h-3 w-3 text-muted-foreground" />}
                 </div>
-                <p className={`text-lg font-bold ${color}`}><Sensitive>{value}</Sensitive></p>
-                <p className="text-[10px] text-muted-foreground/60 mt-0.5">Ver financeiro →</p>
+                <p className={`font-display text-2xl text-glow mt-2 ${color}`}><Sensitive>{value}</Sensitive></p>
+                <p className="text-[11px] text-muted-foreground mt-1">Ver financeiro →</p>
               </Card>
             ))}
           </div>
@@ -982,8 +984,8 @@ export default function Dashboard() {
                       formatter={(value) => fmtBRL(Number(value))}
                       contentStyle={{ fontSize: 12, borderRadius: 8 }}
                     />
-                    <Bar dataKey="receitas" fill="#86efac" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="despesas" fill="#fca5a5" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="receitas" fill="#8FC7A2" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="despesas" fill="#EDB3C0" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
