@@ -332,7 +332,7 @@ export default function SolicitacoesFinanceiras() {
     const modo = isCardLumpSum
       ? `Cartão em ${n}x — a operadora repassa ${fmtBRL(perCycle)} líquido de uma vez (taxa ${fee}%)`
       : isRecurring
-        ? `Mensalidade (${r.recurrence}) — ${n} lançamentos de ${fmtBRL(perCycle)}; o valor cheio se repete`
+        ? `Mensalidade (${r.recurrence}) — ${n} meses de ${fmtBRL(perCycle)} cada; o mesmo valor todo mês`
         : n > 1
           ? `Parcelado em ${n}x de ${fmtBRL(perCycle)} (total dividido)`
           : 'À vista — pagamento único'
@@ -427,9 +427,9 @@ export default function SolicitacoesFinanceiras() {
           <div className="space-y-2">
             <Label>
               {form.recurrence !== 'Única'
-                ? 'Valor de cada ciclo da mensalidade — o que o cliente paga (R$) *'
+                ? 'Valor de UM mês — o que o cliente paga todo mês (R$) *'
                 : (parseInt(form.installments) || 1) > 1
-                  ? 'Valor total do serviço, a dividir nas parcelas (R$) *'
+                  ? 'Valor TOTAL do serviço, que será dividido em parcelas (R$) *'
                   : 'Valor total do serviço — o que o cliente paga (R$) *'}
             </Label>
             <Input value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} placeholder="0,00" className="h-10" />
@@ -501,9 +501,9 @@ export default function SolicitacoesFinanceiras() {
         {(() => {
           const mode = form.recurrence !== 'Única' ? 'mensalidade' : (parseInt(form.installments) || 1) > 1 ? 'parcelado' : 'avista'
           const options = [
-            { key: 'avista', title: 'À vista', desc: 'Um único pagamento.' },
-            { key: 'parcelado', title: 'Parcelado', desc: 'Informo o valor TOTAL e o sistema divide nas parcelas.' },
-            { key: 'mensalidade', title: 'Parcela fixa / mensalidade', desc: 'Informo o valor de CADA parcela e ele se repete todo mês (ex.: 10x de R$ 500).' },
+            { key: 'avista', title: 'À vista', desc: 'O cliente paga tudo de uma só vez.' },
+            { key: 'parcelado', title: 'Valor único parcelado', desc: 'O cliente tem UM valor total a pagar (ex.: R$ 5.000) e vai pagar dividido em várias parcelas. Informe o valor TOTAL; o sistema divide.' },
+            { key: 'mensalidade', title: 'Mensalidade', desc: 'O cliente paga o MESMO valor todo mês (ex.: R$ 500 por mês). Informe o valor de UM mês; ele se repete.' },
           ] as const
           const choose = (k: typeof options[number]['key']) => setForm(f => ({
             ...f,
@@ -525,7 +525,7 @@ export default function SolicitacoesFinanceiras() {
               {mode !== 'avista' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>{mode === 'mensalidade' ? 'Quantas parcelas / meses' : form.payment_method === 'Cartão de Crédito' ? 'Parcelas no cartão' : 'Número de parcelas'}</Label>
+                    <Label>{mode === 'mensalidade' ? 'Por quantos meses?' : form.payment_method === 'Cartão de Crédito' ? 'Em quantas parcelas no cartão?' : 'Em quantas parcelas?'}</Label>
                     <Input type="number" min="2" max="48" value={form.installments} onChange={e => setForm(f => ({ ...f, installments: e.target.value }))} className="h-10 w-full sm:w-40" />
                   </div>
                   {mode === 'mensalidade' && (
@@ -583,13 +583,13 @@ export default function SolicitacoesFinanceiras() {
             <div className="rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-surface)] p-3 text-xs space-y-1">
               <p className="font-bold text-foreground">
                 {isRecurring
-                  ? `Mensalidade: ${numInst} lançamentos de ${fmtBRL(perCycle)} (o valor cheio se repete, não divide).`
+                  ? `Mensalidade: ${numInst} meses de ${fmtBRL(perCycle)} cada — o mesmo valor todo mês.`
                   : `Parcelado: ${numInst} parcelas de ${fmtBRL(perCycle)} (total ${fmtBRL(gross)} dividido por ${numInst}).`}
               </p>
               <p className="text-muted-foreground">
-                Em cada parcela: {myName} {fmtBRL(mine)} · outra parte {fmtBRL(perCycle - mine)}
+                {isRecurring ? 'Em cada mês' : 'Em cada parcela'}: {myName} {fmtBRL(mine)} · outra parte {fmtBRL(perCycle - mine)}
               </p>
-              {isRecurring && <p className="text-muted-foreground">Quer dividir o valor em parcelas? Escolha "Parcelado" acima.</p>}
+              {isRecurring && <p className="text-muted-foreground">Se o cliente tem um valor único para pagar dividido em vezes, escolha "Valor único parcelado" acima.</p>}
             </div>
           )
         })()}
