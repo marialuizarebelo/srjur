@@ -15,28 +15,48 @@ setInterval(() => { updateSW() }, 60 * 1000)
 
 // Mesmo com o service worker, uma aba/PWA aberta há dias pode continuar na versão
 // antiga (formulários velhos, correções que não chegam). Comparamos o arquivo
-// principal em uso com o publicado: se mudou, avisa e recarrega.
-let versionAnnounced = false
+// principal em uso com o publicado: se mudou, o sistema SE ATUALIZA sozinho — sem
+// ninguém precisar apertar nada — esperando só a pessoa parar de digitar/fechar o pop-up.
+async function hardReload() {
+  try {
+    const regs = await navigator.serviceWorker?.getRegistrations?.()
+    await Promise.all((regs ?? []).map(r => r.unregister()))
+    const keys = await caches?.keys?.()
+    await Promise.all((keys ?? []).filter(k => k !== 'srjur-migrations').map(k => caches.delete(k)))
+  } catch { /* segue mesmo assim */ }
+  location.reload()
+}
+function userIsBusy() {
+  const a = document.activeElement as HTMLElement | null
+  const typing = !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)
+  return typing || !!document.querySelector('[role="dialog"]')
+}
+let updating = false
 async function checkNewVersion() {
-  if (versionAnnounced) return
+  if (updating) return
   try {
     const running = Array.from(document.scripts).map(s => s.src).find(s => /\/assets\/index-[^/]+\.js/.test(s))
     if (!running) return
     const html = await (await fetch('/index.html?v=' + Date.now(), { cache: 'no-store' })).text()
     const published = html.match(/\/assets\/index-[^"']+\.js/)?.[0]
     if (!published || running.endsWith(published)) return
-    versionAnnounced = true
-    if (document.visibilityState === 'hidden') { location.reload(); return }
-    toast('Nova versão do sistema disponível', {
-      duration: Infinity,
-      description: 'Atualize para usar as correções mais recentes.',
-      action: { label: 'Atualizar agora', onClick: () => location.reload() },
-    })
+    updating = true
+    const go = () => {
+      if (document.visibilityState === 'hidden' || !userIsBusy()) {
+        toast('Atualizando o sistema para a versão mais recente…', { duration: 3000 })
+        setTimeout(hardReload, 2500)
+      } else {
+        // a pessoa está digitando: não perde o que escreveu — tenta de novo em instantes
+        toast('Há uma versão nova do sistema. Vou atualizar assim que você terminar.', { id: 'update-wait', duration: 8000 })
+        setTimeout(go, 20 * 1000)
+      }
+    }
+    go()
   } catch { /* sem rede: tenta de novo depois */ }
 }
-setInterval(checkNewVersion, 2 * 60 * 1000)
+setInterval(checkNewVersion, 60 * 1000)
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkNewVersion() })
-setTimeout(checkNewVersion, 15 * 1000)
+setTimeout(checkNewVersion, 10 * 1000)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
