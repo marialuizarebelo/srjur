@@ -96,7 +96,12 @@ export default function SolicitacoesFinanceiras() {
     setDetailRows([])
     if (r.status !== 'aprovado' || !r.finance_id) return
     setDetailLoading(true)
-    const { data: first } = await supabase.from('finance').select('id, series_id').eq('id', r.finance_id).maybeSingle()
+    // Quem aprovou tem a linha pelo id; quem pediu tem a linha-espelho dela (marcada nas observações).
+    let { data: first } = await supabase.from('finance').select('id, series_id').eq('id', r.finance_id).maybeSingle()
+    if (!first) {
+      const { data: mirror } = await supabase.from('finance').select('id, series_id').like('notes', `%[espelho:${r.finance_id}]%`).maybeSingle()
+      first = mirror
+    }
     if (first) {
       const q = supabase.from('finance').select('id, description, value, due_date, paid, current_installment')
       const { data } = first.series_id
@@ -190,7 +195,7 @@ export default function SolicitacoesFinanceiras() {
       : numInstallments > 1
         ? `\n\n${isRecurring ? `Recorrência: ${r.recurrence}, ${numInstallments} ciclo(s)` : `Parcelamento: ${numInstallments}x`}, cada ciclo de ${fmtBRL(occurrenceTotal)} total`
         : ''
-    if (!confirm(`Aprovar "${r.description}"?\n\nValor total: ${fmtBRL(r.value)}\nParte de ${requesterName} (${requesterPct}%): ${fmtBRL(requesterShare)}\nSua parte (${100 - requesterPct}%): ${fmtBRL(myShare)}${recurrenceInfo}\n\nSerá lançado no seu Financeiro só a sua parte, na categoria "Parceria".`)) return
+    if (!confirm(`Aprovar "${r.description}"?\n\nValor total: ${fmtBRL(r.value)}\nParte de ${requesterName} (${requesterPct}%): ${fmtBRL(requesterShare)}\nSua parte (${100 - requesterPct}%): ${fmtBRL(myShare)}${recurrenceInfo}\n\nCada uma fica com a sua parte lançada no próprio financeiro (categoria "Parceria"), com pago/pendente separados.`)) return
     const splitNote = `Solicitação de ${requesterName} — valor total ${fmtBRL(r.value)}, dividido ${requesterPct}% ${requesterName} / ${100 - requesterPct}% ${myName}. Este lançamento reflete só a sua parte.`
     const todayStr = new Date().toISOString().slice(0, 10)
     const baseDate = r.due_date || todayStr
@@ -611,7 +616,7 @@ export default function SolicitacoesFinanceiras() {
               {myName} {form.my_pct || 0}% · outra parte {100 - (parseFloat(form.my_pct) || 0)}%
             </span>
           </div>
-          <p className="text-[11px] text-muted-foreground">Isso vai pra categoria "Parceria" no financeiro de quem aprovar, já com o valor calculado só na parte dela.</p>
+          <p className="text-[11px] text-muted-foreground">Ao aprovar, cada uma recebe no próprio financeiro (categoria "Parceria") só a sua parte, já calculada — e cada uma marca o seu pago separadamente.</p>
         </div>
 
         <Button className="w-full" onClick={submit} disabled={saving}>
