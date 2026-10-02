@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -57,6 +58,8 @@ interface FinanceRequest {
   reviewed_at: string | null
   created_at: string
   giovanna_pct: number | null
+  reviewed_by: string | null
+  finance_id: string | null
   installments: number | null
   recurrence: string | null
   card_fee_percent: number | null
@@ -84,6 +87,25 @@ export default function SolicitacoesFinanceiras() {
   const [partnershipFinance, setPartnershipFinance] = useState<FinanceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [detail, setDetail] = useState<FinanceRequest | null>(null)
+  const [detailRows, setDetailRows] = useState<{ id: string; description: string; value: number; due_date: string | null; paid: boolean; current_installment: number | null }[]>([])
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  async function openDetail(r: FinanceRequest) {
+    setDetail(r)
+    setDetailRows([])
+    if (r.status !== 'aprovado' || !r.finance_id) return
+    setDetailLoading(true)
+    const { data: first } = await supabase.from('finance').select('id, series_id').eq('id', r.finance_id).maybeSingle()
+    if (first) {
+      const q = supabase.from('finance').select('id, description, value, due_date, paid, current_installment')
+      const { data } = first.series_id
+        ? await q.eq('series_id', first.series_id).order('current_installment')
+        : await q.eq('id', first.id)
+      setDetailRows((data as typeof detailRows) ?? [])
+    }
+    setDetailLoading(false)
+  }
 
   // "Meu nome" e "nome da outra parte" — resolvidos dinamicamente pelo tenant_id
   // (que é o profile.id de quem é dona daquele tenant), então funciona pros
@@ -248,7 +270,7 @@ export default function SolicitacoesFinanceiras() {
     const client = clients.find(c => c.id === r.client_id)
     const fromName = profilesMap[r.tenant_id]?.display_name
     return (
-      <Card className="p-4">
+      <Card className="p-4 cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--foreground)_5%,var(--card))]" onClick={() => openDetail(r)}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
@@ -264,7 +286,8 @@ export default function SolicitacoesFinanceiras() {
               {r.giovanna_pct != null && ` · ${fromName ?? 'quem pediu'} ${r.giovanna_pct}% / ${myName} ${100 - r.giovanna_pct}%`}
               {r.installments && r.installments > 1 && ` · ${r.recurrence ? `${r.recurrence}, ${r.installments}x` : `${r.installments}x parcelado`}`}
             </p>
-            {r.notes && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{r.notes}</p>}
+            {r.notes && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap line-clamp-2">{r.notes}</p>}
+            <p className="text-[11px] text-primary mt-1.5">Ver detalhes</p>
           </div>
           <div className="text-right shrink-0">
             <p className={`text-sm font-semibold ${r.type === 'receita' ? 'text-green-600' : 'text-red-500'}`}>{fmtBRL(r.value)}</p>
@@ -274,7 +297,7 @@ export default function SolicitacoesFinanceiras() {
           </div>
         </div>
         {showActions && (
-          <div className="flex gap-2 mt-3 pt-3 border-t">
+          <div className="flex gap-2 mt-3 pt-3 border-t" onClick={e => e.stopPropagation()}>
             <Button size="sm" variant="outline" className="flex-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => reject(r)}>
               <X className="h-3.5 w-3.5 mr-1.5" />Rejeitar
             </Button>
@@ -287,8 +310,97 @@ export default function SolicitacoesFinanceiras() {
     )
   }
 
+  function DetailDialog() {
+    const r = detail
+    if (!r) return null
+    const status = STATUS_MAP[r.status] ?? STATUS_MAP.pendente
+    const Icon = status.icon
+    const client = clients.find(c => c.id === r.client_id)
+    const fromName = profilesMap[r.tenant_id]?.display_name ?? 'Quem pediu'
+    const otherName = r.tenant_id === profile?.tenant_id ? 'Outra parte' : myName
+    const n = r.installments ?? 1
+    const pct = r.giovanna_pct ?? 50
+    const isCardLumpSum = r.payment_method === 'Cartão de Crédito' && n > 1 && !r.recurrence
+    const isRecurring = !!r.recurrence && n > 1
+    const fee = r.card_fee_percent || 0
+    const perCycle = isCardLumpSum ? r.value * (1 - fee / 100) : isRecurring ? r.value : r.value / n
+    const reqShare = perCycle * pct / 100
+    const otherShare = perCycle - reqShare
+    const reviewer = r.reviewed_by ? profilesMap[r.reviewed_by]?.display_name : null
+    const modo = isCardLumpSum
+      ? `Cartão em ${n}x — a operadora repassa ${fmtBRL(perCycle)} líquido de uma vez (taxa ${fee}%)`
+      : isRecurring
+        ? `Mensalidade (${r.recurrence}) — ${n} lançamentos de ${fmtBRL(perCycle)}; o valor cheio se repete`
+        : n > 1
+          ? `Parcelado em ${n}x de ${fmtBRL(perCycle)} (total dividido)`
+          : 'À vista — pagamento único'
+    const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
+      <div className="flex items-start justify-between gap-4 py-2 border-b border-[var(--glass-border)] last:border-0">
+        <span className="text-xs text-muted-foreground shrink-0">{label}</span>
+        <span className="text-sm text-right">{children}</span>
+      </div>
+    )
+    return (
+      <Dialog open onOpenChange={v => { if (!v) setDetail(null) }}>
+        <DialogContent className="max-w-[560px] w-[96vw] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="pr-6">{r.description}</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-between gap-3">
+            <p className={`text-2xl font-bold ${r.type === 'receita' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>{fmtBRL(r.value)}</p>
+            <Badge className="gap-1" style={{ backgroundColor: `${status.color}22`, color: status.color }}>
+              <Icon className="h-3 w-3" />{status.label}
+            </Badge>
+          </div>
+          <div>
+            <Row label="Tipo">{r.type === 'receita' ? 'Receita' : 'Despesa'}{r.category ? ` · ${r.category}` : ''}</Row>
+            <Row label="Enviada por">{fromName}</Row>
+            <Row label="Cliente">{client?.name ?? '—'}</Row>
+            <Row label="1º vencimento">{r.due_date ? fmtDate(r.due_date) : '—'}</Row>
+            <Row label="Forma de pagamento">{r.payment_method ?? '—'}</Row>
+            <Row label="Como será cobrado">{modo}</Row>
+            <Row label={`Divisão (${fromName} ${pct}% / ${otherName} ${100 - pct}%)`}>
+              {n > 1 ? 'por parcela: ' : ''}{fromName} {fmtBRL(reqShare)} · {otherName} {fmtBRL(otherShare)}
+            </Row>
+            <Row label="Enviada em">{fmtDate(r.created_at.slice(0, 10))}</Row>
+            {r.reviewed_at && <Row label={r.status === 'aprovado' ? 'Aprovada em' : 'Revisada em'}>{fmtDate(r.reviewed_at.slice(0, 10))}{reviewer ? ` por ${reviewer}` : ''}</Row>}
+          </div>
+          {r.notes && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Observações</p>
+              <p className="text-sm whitespace-pre-wrap rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-surface)] p-3">{r.notes}</p>
+            </div>
+          )}
+          {r.status === 'aprovado' && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-2">Lançamentos gerados</p>
+              {detailLoading ? (
+                <p className="text-xs text-muted-foreground">Carregando...</p>
+              ) : detailRows.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhum lançamento encontrado — pode ter sido excluído do financeiro.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {detailRows.map(d => (
+                    <div key={d.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--glass-border)] px-3 py-2 text-xs">
+                      <span className="truncate">{d.current_installment ? `Parcela ${d.current_installment} · ` : ''}{d.due_date ? `venc. ${fmtDate(d.due_date)}` : 'sem vencimento'}</span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <span className="font-semibold">{fmtBRL(Number(d.value))}</span>
+                        <Badge className={d.paid ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}>{d.paid ? 'Pago' : 'Pendente'}</Badge>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      <DetailDialog />
       <div>
         <h1 className="text-2xl font-semibold flex items-center gap-2"><Receipt className="h-6 w-6" />Solicitações Financeiras</h1>
         <p className="text-sm text-muted-foreground">
