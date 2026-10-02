@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
+import { logActivity } from '@/lib/activityLog'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -978,8 +979,9 @@ export default function Financeiro() {
     setSaving(true)
     try {
       if (editingId) {
-        const { error } = await supabase.from('finance').update(basePayload).eq('id', editingId)
+        const { data: upd, error } = await supabase.from('finance').update(basePayload).eq('id', editingId).select('id')
         if (error) throw error
+        if (!upd || upd.length === 0) throw new Error('sem permissão para editar este lançamento')
       } else if (isCardLumpSum) {
         // Cartão de crédito parcelado: a operadora repassa o valor integral menos a taxa,
         // de uma vez só — não faz sentido dividir em N lançamentos mensais como no boleto.
@@ -1061,9 +1063,14 @@ export default function Financeiro() {
     }
     const today = new Date().toISOString().slice(0, 10)
     const nowPaid = status !== 'pago'
-    const { error } = await supabase.from('finance')
+    const { data: upd, error } = await supabase.from('finance')
       .update({ paid: nowPaid, payment_date: nowPaid ? today : null })
       .eq('id', row.id)
+      .select('id')
+    if (!error && (!upd || upd.length === 0)) {
+      toast.error('Não foi possível alterar — sem permissão para este lançamento.')
+      return
+    }
     if (nowPaid === false) {
       await supabase.from('finance_payments').delete().eq('finance_id', row.id)
     }
@@ -1147,27 +1154,43 @@ export default function Financeiro() {
 
   const [deleteTarget, setDeleteTarget] = useState<FinanceRow | null>(null)
 
+  // Exclui e CONFIRMA que apagou (RLS pode negar sem dar erro) — e registra no
+  // histórico do cliente quem excluiu o quê, pra nada sumir sem rastro.
+  async function deleteRows(query: (q: ReturnType<typeof supabase.from>) => any, expected: FinanceRow[]) {
+    const { data, error } = await query(supabase.from('finance')).select('id')
+    if (error) { toast.error('Erro ao excluir: ' + error.message); return 0 }
+    const deletedIds = new Set(((data ?? []) as { id: string }[]).map(d => d.id))
+    if (deletedIds.size === 0) { toast.error('Não foi possível excluir — sem permissão para este lançamento.'); return 0 }
+    const who = profile?.nickname || profile?.display_name || 'Alguém'
+    for (const r of expected.filter(r => deletedIds.has(r.id) && r.client_id)) {
+      const parcela = r.installments && r.installments > 1 && r.current_installment ? ` (parcela ${r.current_installment}/${r.installments})` : ''
+      logActivity('client', r.client_id as string, `${who} excluiu o lançamento financeiro "${r.description}"${parcela} — ${fmtBRL(Number(r.value))}${r.due_date ? `, venc. ${fmtDate(r.due_date)}` : ''}.`)
+    }
+    return deletedIds.size
+  }
+
   const handleDelete = async (id: string) => {
     const row = rows.find(r => r.id === id)
     if (row?.series_id) { setDeleteTarget(row); return }
     if (!confirm('Excluir este lançamento?')) return
-    await supabase.from('finance').delete().eq('id', id)
+    if (row) await deleteRows(q => q.delete().eq('id', id), [row])
     loadData()
   }
 
   async function deleteSeriesChoice(scope: 'one' | 'future' | 'all') {
     if (!deleteTarget) return
+    const sameSeries = rows.filter(r => r.series_id && r.series_id === deleteTarget.series_id)
+    let n = 0
     if (scope === 'one') {
-      await supabase.from('finance').delete().eq('id', deleteTarget.id)
+      n = await deleteRows(q => q.delete().eq('id', deleteTarget.id), [deleteTarget])
     } else if (scope === 'future') {
-      await supabase.from('finance').delete()
-        .eq('series_id', deleteTarget.series_id)
-        .gte('current_installment', deleteTarget.current_installment ?? 0)
+      n = await deleteRows(q => q.delete().eq('series_id', deleteTarget.series_id).gte('current_installment', deleteTarget.current_installment ?? 0),
+        sameSeries.filter(r => (r.current_installment ?? 0) >= (deleteTarget.current_installment ?? 0)))
     } else {
-      await supabase.from('finance').delete().eq('series_id', deleteTarget.series_id)
+      n = await deleteRows(q => q.delete().eq('series_id', deleteTarget.series_id), sameSeries)
     }
     setDeleteTarget(null)
-    toast.success('Excluído!')
+    if (n > 0) toast.success('Excluído!')
     loadData()
   }
 
@@ -1191,9 +1214,10 @@ export default function Financeiro() {
     const ids = Array.from(selectedIds)
     if (ids.length === 0) return
     const today = new Date().toISOString().slice(0, 10)
-    const { error } = await supabase.from('finance').update({ paid: true, payment_date: today }).in('id', ids)
+    const { data: upd, error } = await supabase.from('finance').update({ paid: true, payment_date: today }).in('id', ids).select('id')
     if (error) { toast.error('Erro: ' + error.message); return }
-    toast.success(`${ids.length} lançamento(s) marcado(s) como pago!`)
+    if (!upd || upd.length === 0) { toast.error('Não foi possível marcar como pago — sem permissão para estes lançamentos.'); return }
+    toast.success(`${upd.length} lançamento(s) marcado(s) como pago!`)
     setSelectedIds(new Set())
     loadData()
   }
@@ -1202,9 +1226,9 @@ export default function Financeiro() {
     const ids = Array.from(selectedIds)
     if (ids.length === 0) return
     if (!confirm(`Excluir ${ids.length} lançamento(s) selecionado(s)? Essa ação não pode ser desfeita.`)) return
-    const { error } = await supabase.from('finance').delete().in('id', ids)
-    if (error) { toast.error('Erro: ' + error.message); return }
-    toast.success(`${ids.length} lançamento(s) excluído(s)!`)
+    const n = await deleteRows(q => q.delete().in('id', ids), rows.filter(r => ids.includes(r.id)))
+    if (n === 0) return
+    toast.success(`${n} lançamento(s) excluído(s)!`)
     setSelectedIds(new Set())
     loadData()
   }

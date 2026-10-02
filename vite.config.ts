@@ -36,6 +36,10 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // sem isso o service worker novo não assume as abas/PWA já abertos e o app
+        // continua rodando a versão antiga mesmo depois do deploy.
+        clientsClaim: true,
+        skipWaiting: true,
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         // xlsx e jspdf são grandes — não pré-cachear, carregar da rede quando necessário
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // 4 MiB
