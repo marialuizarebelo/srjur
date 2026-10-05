@@ -73,7 +73,33 @@ export async function fetchAll<T>(table: string, columns: string, build?: (q: an
   return out
 }
 
+/* ---------- Busca tolerante a colunas que ainda não existem no banco ---------- */
+// Tenta com as colunas novas; se a migration ainda não foi rodada, repete só com as antigas.
+export async function fetchAllSafe<T>(table: string, baseCols: string, optionalCols: string[], build?: (q: any) => any): Promise<{ rows: T[]; missing: boolean }> {
+  if (optionalCols.length === 0) return { rows: await fetchAll<T>(table, baseCols, build), missing: false }
+  const page = 1000
+  const tentar = async (cols: string) => {
+    const out: T[] = []
+    for (let from = 0; ; from += page) {
+      let q: any = supabase.from(table).select(cols)
+      if (build) q = build(q)
+      const { data, error } = await q.range(from, from + page - 1)
+      if (error) return null
+      out.push(...((data ?? []) as T[]))
+      if (!data || data.length < page) break
+    }
+    return out
+  }
+  const comNovas = await tentar(`${baseCols}, ${optionalCols.join(', ')}`)
+  if (comNovas) return { rows: comNovas, missing: false }
+  return { rows: (await tentar(baseCols)) ?? [], missing: true }
+}
+
 /* ---------- Financeiro: fonte única das abas ---------- */
+// Mesmas regras da tela Financeiro, para os números baterem:
+//  - pago = soma dos pagamentos parciais, se houver; senão o valor inteiro quando marcado como pago
+//  - em aberto = valor − pago
+//  - "caixa" = lançamentos que impactam o caixa (os demais são só registro)
 export interface FinRow {
   id: string
   type: 'receita' | 'despesa'
@@ -95,35 +121,89 @@ export interface FinRow {
   installments: number | null
   card_fee_percent: number | null
   series_id: string | null
-  /** Quanto já foi pago em pagamentos parciais (lançamentos ainda não quitados). */
-  parcial: number
-  /** Valor ainda em aberto (0 se quitado). */
+  nature: string | null
+  /** Movimento entre as duas empresas (ex.: licença do SaaS paga pela Advocacia): não conta na visão "Empresa toda". */
+  intragrupo: boolean
+  /** 'fixo' | 'variavel' (só despesas). */
+  cost_type: string | null
+  /** Quanto já foi efetivamente pago/recebido (limitado ao valor). */
+  pago: number
+  /** Valor ainda em aberto. */
   aberto: number
+  /** Quando cada parte do dinheiro entrou/saiu (parciais têm data própria). */
+  eventos: { date: string; amount: number }[]
 }
 
-const FIN_COLS = 'id, type, category, description, value, date, due_date, paid, payment_date, payment_method, impacts_cash, process_id, client_id, recurrence, responsible, business_unit, refletir_metricas, installments, card_fee_percent, series_id'
+const FIN_COLS = 'id, type, category, description, value, date, due_date, paid, payment_date, payment_method, impacts_cash, process_id, client_id, recurrence, responsible, business_unit, refletir_metricas, installments, card_fee_percent, series_id, nature'
 
 export function useFinanceData() {
   const [rows, setRows] = useState<FinRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [missing, setMissing] = useState(false)
   useEffect(() => {
     (async () => {
       const [fin, pays] = await Promise.all([
-        fetchAll<Omit<FinRow, 'parcial' | 'aberto'>>('finance', FIN_COLS),
-        fetchAll<{ finance_id: string; amount: number }>('finance_payments', 'finance_id, amount'),
+        fetchAllSafe<any>('finance', FIN_COLS, ['intragrupo', 'cost_type']),
+        fetchAll<{ finance_id: string; amount: number; payment_date: string }>('finance_payments', 'finance_id, amount, payment_date'),
       ])
-      const parc = new Map<string, number>()
-      pays.forEach(p => parc.set(p.finance_id, (parc.get(p.finance_id) ?? 0) + Number(p.amount)))
-      setRows(fin.map(r => {
-        const parcial = r.paid ? 0 : (parc.get(r.id) ?? 0)
-        return { ...r, value: Number(r.value), parcial, aberto: r.paid ? 0 : Math.max(0, Number(r.value) - parcial) }
+      setMissing(fin.missing)
+      const parc = new Map<string, { amount: number; payment_date: string }[]>()
+      pays.forEach(p => parc.set(p.finance_id, [...(parc.get(p.finance_id) ?? []), { amount: Number(p.amount), payment_date: p.payment_date }]))
+      setRows(fin.rows.map(r => {
+        const value = Number(r.value)
+        const ps = parc.get(r.id)
+        const pagoBruto = ps && ps.length > 0 ? sum(ps.map(p => p.amount)) : (r.paid ? value : 0)
+        const pago = Math.min(pagoBruto, value)
+        const eventos = ps && ps.length > 0
+          ? ps.map(p => ({ date: p.payment_date.slice(0, 10), amount: p.amount }))
+          : (r.paid ? [{ date: (r.payment_date ?? r.date).slice(0, 10), amount: value }] : [])
+        return { ...r, value, intragrupo: r.intragrupo === true, cost_type: r.cost_type ?? null, pago, aberto: Math.max(value - pago, 0), eventos } as FinRow
       }))
       setLoading(false)
     })()
   }, [])
   // Cortesia não refletida fica de fora das métricas (mesma regra de sempre)
   const reflecting = useMemo(() => rows.filter(r => r.refletir_metricas !== false), [rows])
-  return { rows: reflecting, loading }
+  return { rows: reflecting, all: rows, loading, missing }
+}
+
+/** Entra no caixa de verdade (os demais lançamentos são só registro). */
+export const isCaixa = (r: FinRow) => r.impacts_cash !== false
+
+/**
+ * Recorte por unidade. Em "Empresa toda" os movimentos entre as duas empresas
+ * (intragrupo) saem, senão a mesma receita/despesa seria contada duas vezes.
+ */
+export function filtraFin(rows: FinRow[], unidade: '' | 'advocacia' | 'saas') {
+  return rows.filter(r => {
+    if (!unidade) return !r.intragrupo
+    return unidade === 'saas' ? r.business_unit === 'saas' : r.business_unit !== 'saas'
+  })
+}
+
+/** Saldo em caixa: o que entrou menos o que saiu (só lançamentos de caixa, pelo valor efetivamente pago). */
+export const saldoDe = (rows: FinRow[]) => sum(rows.filter(isCaixa).map(r => (r.type === 'receita' ? r.pago : -r.pago)))
+
+/** Os mesmos totais da tela Financeiro para um conjunto de lançamentos e um período (por data do lançamento). */
+export function resumoFin(rows: FinRow[], start: string, end: string, hoje: string) {
+  const noPeriodo = rows.filter(r => inRange(r.date, start, end))
+  const rec = noPeriodo.filter(r => r.type === 'receita')
+  const desp = noPeriodo.filter(r => r.type === 'despesa')
+  const recCaixa = rec.filter(isCaixa)
+  const despCaixa = desp.filter(isCaixa)
+  return {
+    receitas: sum(rec.map(r => r.value)),
+    despesas: sum(despCaixa.map(r => r.value)),
+    despesasNaoCaixa: sum(desp.filter(r => !isCaixa(r)).map(r => r.value)),
+    recebido: sum(recCaixa.map(r => r.pago)),
+    pago: sum(despCaixa.map(r => r.pago)),
+    aReceber: sum(recCaixa.map(r => r.aberto)),
+    aPagar: sum(despCaixa.map(r => r.aberto)),
+    previstoReceitas: sum(rec.filter(r => r.nature === 'previsto').map(r => r.value)),
+    previstoDespesas: sum(despCaixa.filter(r => r.nature === 'previsto').map(r => r.value)),
+    emAtraso: sum(rows.filter(r => r.type === 'receita' && isCaixa(r) && r.aberto > 0 && !!r.due_date && r.due_date < hoje).map(r => r.aberto)),
+    saldoTotal: saldoDe(rows),
+  }
 }
 
 /** Despesa que de fato sai do caixa. */

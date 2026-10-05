@@ -5,16 +5,17 @@ import {
 import { fmtBRL, fmtDate } from '@/lib/format'
 import {
   monthsBack, usePeriod, KpiCard, ChartCard, DonutWithLegend, DetailDialog, useDetail, AttentionPanel, type Attention,
-  previousPeriodRange, trendText, NotesPanel, useResponsavelFilter, useUnidadeFilter, matchUnidadeFinance, matchUnidadeCliente,
+  previousPeriodRange, trendText, NotesPanel, useResponsavelFilter, useUnidadeFilter, matchUnidadeCliente,
 } from './shared'
 import {
   PAL, ComboChart, HBars, BucketBars, MiniTable, StatStrip, SectionTitle,
-  sum, avg, pct, fmtPct, fmtNum, daysBetween, addDays, inRange, todayISO, groupSum, groupCount, fetchAll, useFinanceData, isRecorrente,
+  sum, avg, pct, fmtPct, fmtNum, daysBetween, addDays, inRange, todayISO, groupSum, groupCount, fetchAll, fetchAllSafe, useFinanceData, isRecorrente, isCaixa, filtraFin,
 } from './kit'
 
 interface ClientRow {
   id: string; name: string; area: string | null; status: string; type: string | null; origin: string | null; city: string | null; state: string | null
   created_at: string; responsible_ids: string[] | null; is_cortesia: boolean; is_juridico: boolean; is_saas: boolean
+  inactivated_at?: string | null; inactive_reason?: string | null
 }
 interface ProcessLite { client_id: string | null; status: string }
 
@@ -30,15 +31,15 @@ export default function ClientesTab() {
 
   useEffect(() => {
     Promise.all([
-      fetchAll<ClientRow>('clients', 'id, name, area, status, type, origin, city, state, created_at, responsible_ids, is_cortesia, is_juridico, is_saas'),
+      fetchAllSafe<ClientRow>('clients', 'id, name, area, status, type, origin, city, state, created_at, responsible_ids, is_cortesia, is_juridico, is_saas', ['inactivated_at', 'inactive_reason']),
       fetchAll<ProcessLite>('processes', 'client_id, status'),
-    ]).then(([c, p]) => { setClientsRaw(c); setProcesses(p); setLoading(false) })
+    ]).then(([c, p]) => { setClientsRaw(c.rows); setProcesses(p); setLoading(false) })
   }, [])
 
   // Fora da carteira: casos gratuitos (cortesia). Jurídico x SaaS segue a Visão escolhida no topo.
   const clients = useMemo(() => clientsRaw.filter(c => respFilter.matches(c.responsible_ids) && !c.is_cortesia && matchUnidadeCliente(c, unidade)), [clientsRaw, respFilter.responsavelId, unidade])
   const clientById = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients])
-  const finance = useMemo(() => finAll.filter(f => matchUnidadeFinance(f.business_unit, unidade) && f.client_id && clientById.has(f.client_id)), [finAll, unidade, clientById])
+  const finance = useMemo(() => filtraFin(finAll, unidade).filter(f => f.client_id && clientById.has(f.client_id)), [finAll, unidade, clientById])
 
   const hoje = todayISO()
   const { start, end } = period.range
@@ -52,6 +53,12 @@ export default function ClientesTab() {
   const novos = useMemo(() => clients.filter(c => inRange(c.created_at, start, end)), [clients, start, end])
   const novosPrev = useMemo(() => clients.filter(c => inRange(c.created_at, prev.start, prev.end)), [clients, prev])
   const retencao = pct(ativos.length, ativos.length + inativos.length)
+  const encerradoEm = (c: ClientRow) => (c.status === 'inativo' ? c.inactivated_at?.slice(0, 10) ?? null : null)
+  const encerradosPeriodo = clients.filter(c => inRange(encerradoEm(c), start, end))
+  const encerradosPrev = clients.filter(c => inRange(encerradoEm(c), prev.start, prev.end))
+  const baseInicio = clients.filter(c => c.status !== 'prospecto' && c.created_at.slice(0, 10) < start && (!encerradoEm(c) || encerradoEm(c)! >= start))
+  const churn = pct(encerradosPeriodo.length, baseInicio.length)
+  const motivos = useMemo(() => groupCount(inativos, c => c.inactive_reason?.trim() || 'Motivo não informado'), [inativos])
   const idadeAnos = (c: ClientRow) => daysBetween(c.created_at, hoje) / 365
   const relacionamentoMedio = avg(ativos.map(idadeAnos))
 
@@ -74,9 +81,9 @@ export default function ClientesTab() {
   const recorrentes = useMemo(() => new Set(finance.filter(f => f.type === 'receita' && isRecorrente(f) && inRange(f.date, addDays(hoje, -60), hoje)).map(f => f.client_id!)), [finance, hoje])
 
   /* ---------- Inadimplência por cliente ---------- */
-  const vencidas = useMemo(() => finance.filter(f => f.type === 'receita' && !f.paid && f.aberto > 0 && (f.due_date ?? f.date) < hoje), [finance, hoje])
+  const vencidas = useMemo(() => finance.filter(f => f.type === 'receita' && isCaixa(f) && f.aberto > 0 && !!f.due_date && f.due_date < hoje), [finance, hoje])
   const valorAtraso = sum(vencidas.map(f => f.aberto))
-  const totalVencidoHistorico = sum(finance.filter(f => f.type === 'receita' && (f.due_date ?? f.date) <= hoje).map(f => f.value))
+  const totalVencidoHistorico = sum(finance.filter(f => f.type === 'receita' && isCaixa(f) && !!f.due_date && f.due_date <= hoje).map(f => f.value))
   const devedores = useMemo(() => {
     const m = new Map<string, { id: string; valor: number; maxDias: number; qtd: number }>()
     vencidas.forEach(f => {
@@ -149,6 +156,8 @@ export default function ClientesTab() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiCard title="Clientes ativos" hint="Clientes com status ativo (sem casos gratuitos). Segue a Visão escolhida: jurídicos, SaaS ou os dois." value={ativos.length} icon={Users} color={PAL.blue} spark={sp('base')} onClick={() => openClients('Clientes ativos', ativos)} />
         <KpiCard title="Novos clientes" hint="Clientes cadastrados no período." value={novos.length} icon={UserPlus} color={PAL.green} spark={sp('novos')} trend={trendText(novos.length, novosPrev.length)} onClick={() => openClients('Novos clientes no período', novos)} />
+        <KpiCard title="Encerraram no período" hint="Clientes que passaram a Encerrado dentro do período (pela data de encerramento do cadastro)." value={encerradosPeriodo.length} icon={UserMinus} color={PAL.red} trendTone="down-good"
+          trend={`${fmtPct(churn, 1)} da carteira do início do período${encerradosPrev.length ? ` · antes: ${encerradosPrev.length}` : ''}`} onClick={() => openClients('Encerraram no período', encerradosPeriodo)} />
         <KpiCard title="Inativos" hint="Clientes com status inativo." value={inativos.length} icon={UserMinus} color={PAL.gray} trendTone="down-good" onClick={() => openClients('Clientes inativos', inativos)} />
         <KpiCard title="Retenção da carteira" hint="Ativos ÷ (ativos + inativos): quantos dos clientes que já tivemos seguem conosco." value={fmtPct(retencao)} icon={Percent} color={retencao >= 85 ? PAL.green : PAL.amber} onClick={() => openClients('Clientes inativos', inativos)} />
         <KpiCard title="Tempo de relacionamento" hint="Idade média dos clientes ativos, a partir da data de cadastro." value={ativos.length ? `${fmtNum(relacionamentoMedio, 1)} ${Math.round(relacionamentoMedio * 10) === 10 ? "ano" : "anos"}` : '—'} icon={Clock} color={PAL.sky} onClick={() => openClients('Clientes ativos', ativos)} />
@@ -167,6 +176,10 @@ export default function ClientesTab() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ChartCard title="Carteira por área" icon={Scale}>
           <DonutWithLegend data={porArea} formatValue={v => String(v)} onSelect={name => openClients(`Clientes — ${name}`, ativos.filter(c => (c.area ?? 'Não classificado') === name))} />
+        </ChartCard>
+        <ChartCard title="Por que clientes encerraram" icon={UserMinus}>
+          <HBars data={motivos} format={v => `${v}`} color={PAL.red} empty="Nenhum cliente encerrado" onSelect={name => openClients(`Encerrados — ${name}`, inativos.filter(c => (c.inactive_reason?.trim() || 'Motivo não informado') === name))} />
+          <p className="text-[11px] text-muted-foreground mt-3">Preencha o motivo ao marcar o cliente como Encerrado no cadastro.</p>
         </ChartCard>
         <ChartCard title="Pessoa física × jurídica" icon={Users}>
           <DonutWithLegend data={porTipo} formatValue={v => String(v)} onSelect={name => openClients(`Clientes — ${name}`, ativos.filter(c => (c.type === 'pessoa_juridica' ? 'Pessoa jurídica' : c.type === 'pessoa_fisica' ? 'Pessoa física' : 'Não informado') === name))} />

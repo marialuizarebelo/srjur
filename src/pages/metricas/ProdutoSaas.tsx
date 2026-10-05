@@ -4,29 +4,31 @@ import {
 } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
 import {
-  monthsBack, usePeriod, KpiCard, ChartCard, DonutWithLegend, AttentionPanel, type Attention, NotesPanel,
+  monthsBack, usePeriod, useUnidadeFilter, KpiCard, ChartCard, DonutWithLegend, AttentionPanel, type Attention, NotesPanel,
   DetailDialog, useDetail, previousPeriodRange, trendText,
 } from './shared'
 import {
   PAL, ComboChart, HBars, MiniTable, StatStrip, SectionTitle,
-  sum, avg, pct, fmtPct, fmtNum, inRange, todayISO, groupSum, fetchAll, daysBetween,
-  useFinanceData, isDespesaCaixa, isRecorrente, assinaturasDoMes, pontesMrr, type Assinatura, type FinRow,
+  sum, avg, pct, fmtPct, fmtNum, addDays, inRange, todayISO, groupSum, groupCount, fetchAllSafe, daysBetween,
+  useFinanceData, isDespesaCaixa, isRecorrente, isCaixa, assinaturasDoMes, pontesMrr, type Assinatura, type FinRow,
 } from './kit'
 
-interface ClientRow { id: string; name: string; area: string | null; status: string; created_at: string; is_juridico: boolean; is_saas: boolean }
+interface ClientRow { id: string; name: string; area: string | null; status: string; created_at: string; is_juridico: boolean; is_saas: boolean; inactivated_at?: string | null; inactive_reason?: string | null }
 
 export default function ProdutoSaasTab() {
   const period = usePeriod()
+  const { unidade } = useUnidadeFilter()
   const detail = useDetail()
   const { rows: finAll, loading: loadingFin } = useFinanceData()
   const [loading, setLoading] = useState(true)
   const [clients, setClients] = useState<ClientRow[]>([])
 
   useEffect(() => {
-    fetchAll<ClientRow>('clients', 'id, name, area, status, created_at, is_juridico, is_saas', q => q.eq('is_saas', true)).then(c => { setClients(c); setLoading(false) })
+    fetchAllSafe<ClientRow>('clients', 'id, name, area, status, created_at, is_juridico, is_saas', ['inactivated_at', 'inactive_reason'], q => q.eq('is_saas', true)).then(c => { setClients(c.rows); setLoading(false) })
   }, [])
 
-  const finance = useMemo(() => finAll.filter(f => f.business_unit === 'saas'), [finAll])
+  // Na visão "Empresa toda" as licenças pagas entre as duas empresas ficam fora (não são cliente de fora).
+  const finance = useMemo(() => finAll.filter(f => f.business_unit === 'saas' && !(unidade === '' && f.intragrupo)), [finAll, unidade])
   const clientById = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients])
   const nomeCliente = (a: Assinatura) => (a.clientId && clientById.get(a.clientId)?.name) || a.descricao
   const hoje = todayISO()
@@ -71,6 +73,15 @@ export default function ProdutoSaasTab() {
   const novosPeriodo = clients.filter(c => inRange(c.created_at, start, end))
   const novosPrev = clients.filter(c => inRange(c.created_at, prev.start, prev.end))
   const retencaoClientes = pct(ativos.length, ativos.length + inativos.length)
+  // Churn de clientes com a data real de encerramento (gatilho do banco). Sem a data, o cliente
+  // inativo não entra na conta mensal (fica só no total de inativos).
+  const encerradoEm = (c: ClientRow) => (c.status === 'inativo' ? c.inactivated_at?.slice(0, 10) ?? null : null)
+  const baseAtivaEm = (data: string) => clients.filter(c => c.status !== 'prospecto' && c.created_at.slice(0, 10) <= data && (!encerradoEm(c) || encerradoEm(c)! > data))
+  const mesAtualIni = trendMonths[12].start
+  const ativosInicioMes = baseAtivaEm(addDays(mesAtualIni, -1))
+  const encerradosMes = clients.filter(c => inRange(encerradoEm(c), mesAtualIni, trendMonths[12].end))
+  const churnClientes = pct(encerradosMes.length, ativosInicioMes.length)
+  const encerradosPeriodo = clients.filter(c => inRange(encerradoEm(c), start, end))
   const tambemJuridico = ativos.filter(c => c.is_juridico)
 
   /* ---------- Financeiro SaaS ---------- */
@@ -89,7 +100,7 @@ export default function ProdutoSaasTab() {
   const margemBruta = Math.max(0, Math.min(1, receita > 0 ? (receita - despesa) / receita : 0.8))
   const ltv = churnMedio6 > 0 ? (atual.arpa * (margemBruta || 0.8)) / (churnMedio6 / 100) : 0
   const vidaMediaMeses = churnMedio6 > 0 ? 100 / churnMedio6 : 0
-  const vencidas = useMemo(() => finance.filter(f => f.type === 'receita' && !f.paid && f.aberto > 0 && (f.due_date ?? f.date) < hoje), [finance, hoje])
+  const vencidas = useMemo(() => finance.filter(f => f.type === 'receita' && isCaixa(f) && f.aberto > 0 && !!f.due_date && f.due_date < hoje), [finance, hoje])
   const valorVencido = sum(vencidas.map(f => f.aberto))
   const burn = avg(monthsBack(4).slice(0, 3).map(m => sum(finance.filter(f => isDespesaCaixa(f) && inRange(f.date, m.start, m.end)).map(f => f.value))))
 
@@ -112,8 +123,10 @@ export default function ProdutoSaasTab() {
   }), [finance, trendMonths])
   const clientesEvol = useMemo(() => trendMonths.slice(1).map(m => ({
     month: m.label, novos: clients.filter(c => inRange(c.created_at, m.start, m.end)).length,
-    base: clients.filter(c => c.created_at.slice(0, 10) <= m.end).length,
+    saidas: -clients.filter(c => inRange(encerradoEm(c), m.start, m.end)).length,
+    base: baseAtivaEm(m.end).length,
   })), [clients, trendMonths])
+  const motivosEncerramento = useMemo(() => groupCount(clients.filter(c => c.status === 'inativo'), c => c.inactive_reason?.trim() || 'Motivo não informado'), [clients])
   const coortes = useMemo(() => {
     const map = new Map<string, ClientRow[]>()
     clients.forEach(c => { const d = new Date(c.created_at); const k = `${d.getFullYear()}-T${Math.floor(d.getMonth() / 3) + 1}`; map.set(k, [...(map.get(k) ?? []), c]) })
@@ -211,16 +224,24 @@ export default function ProdutoSaasTab() {
           trend={vidaMediaMeses > 0 ? `vida média ≈ ${fmtNum(vidaMediaMeses, 0)} meses` : 'sem churn observado'} trendTone="neutral" onClick={() => openAss('Assinaturas ativas', assAtuais)} />
         <KpiCard title="CAC do SaaS" hint="Despesas de Marketing do SaaS no período ÷ clientes novos. Zero se não houver lançamentos de Marketing no SaaS." value={cacSaas > 0 ? fmtBRL(cacSaas) : '—'} icon={Hourglass} color={PAL.pink} sensitive
           trend={ltv > 0 && cacSaas > 0 ? `LTV:CAC ${fmtNum(ltv / cacSaas, 1)}×` : undefined} trendTone="neutral" onClick={() => openFin('Marketing do SaaS no período', marketingSaas)} />
+        <KpiCard title="Churn de clientes" hint="Clientes que encerraram no mês ÷ clientes ativos no início do mês (pela data de encerramento do cadastro)." value={fmtPct(churnClientes, 1)} icon={UserMinus} color={PAL.red} trendTone="down-good"
+          trend={`${encerradosMes.length} encerrado(s) no mês`} onClick={() => openClients('Clientes que encerraram no mês', encerradosMes)} />
         <KpiCard title="Clientes retidos" hint="Clientes SaaS ativos ÷ todos os já cadastrados (ativos + inativos)." value={fmtPct(retencaoClientes)} icon={Users} color={PAL.teal}
           trend={`${ativos.length} ativos · ${inativos.length} inativos`} trendTone="neutral" onClick={() => openClients('Clientes SaaS inativos', inativos)} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Entrada de clientes e tamanho da base" icon={UserPlus}>
-          <ComboChart data={clientesEvol} format={v => String(v)} yFormat={v => String(v)} series={[
-            { key: 'novos', name: 'Novos clientes', color: PAL.green },
-            { key: 'base', name: 'Base acumulada', color: PAL.purple, kind: 'line' },
+          <ComboChart data={clientesEvol} format={v => String(Math.abs(v))} yFormat={v => String(v)} series={[
+            { key: 'novos', name: 'Entraram', color: PAL.green, stack: 'e' },
+            { key: 'saidas', name: 'Encerraram', color: PAL.red, stack: 'e' },
+            { key: 'base', name: 'Base ativa', color: PAL.purple, kind: 'line' },
           ]} onPointClick={i => { const m = clientesEvol[i]; const t = trendMonths[i + 1]; openClients(`Clientes novos — ${m.month}`, clients.filter(c => inRange(c.created_at, t.start, t.end))) }} />
+        </ChartCard>
+        <ChartCard title="Por que clientes encerraram" icon={UserMinus}>
+          <HBars data={motivosEncerramento} format={v => `${v} cliente(s)`} color={PAL.red} empty="Nenhum cliente encerrado"
+            onSelect={name => openClients(`Encerrados — ${name}`, clients.filter(c => c.status === 'inativo' && (c.inactive_reason?.trim() || 'Motivo não informado') === name))} />
+          <p className="text-[11px] text-muted-foreground mt-3">{encerradosPeriodo.length} encerramento(s) no período. Preencha data e motivo ao marcar o cliente como Encerrado.</p>
         </ChartCard>
         <ChartCard title="Retenção por coorte de entrada" icon={Users}>
           <MiniTable

@@ -6,14 +6,15 @@ import { fmtBRL, fmtDate } from '@/lib/format'
 import { Sensitive } from '@/components/Sensitive'
 import {
   monthsBack, usePeriod, KpiCard, ChartCard, DetailDialog, useDetail, AttentionPanel, type Attention, previousPeriodRange, trendText,
-  NotesPanel, useUnidadeFilter, matchUnidadeFinance, matchUnidadeCliente, UNIDADE_LABELS,
+  NotesPanel, useUnidadeFilter, matchUnidadeCliente, UNIDADE_LABELS,
 } from './shared'
 import {
   PAL, ComboChart, HBars, MiniTable, SectionTitle,
   sum, pct, fmtPct, daysBetween, addDays, inRange, todayISO, groupSum, fetchAll,
-  useFinanceData, isDespesaCaixa, assinaturasDoMes, type FinRow,
+  useFinanceData, isDespesaCaixa, isCaixa, filtraFin, saldoDe, assinaturasDoMes, type FinRow,
 } from './kit'
 import { useMetasData, metaProjecao } from './Metas'
+import { QualidadePanel } from './Qualidade'
 
 interface ClientLite { id: string; name: string; status: string; created_at: string; is_juridico: boolean; is_saas: boolean; is_cortesia: boolean }
 interface LeadLite { name: string; status: string; client_id: string | null; created_at: string; potential_value: number | null; updated_at: string | null; next_followup: string | null }
@@ -53,7 +54,7 @@ export default function VisaoGeralTab() {
   const trendMonths = useMemo(() => monthsBack(12), [])
 
   /* ---------- Base por Visão ---------- */
-  const fin = useMemo(() => finAll.filter(r => matchUnidadeFinance(r.business_unit, unidade)), [finAll, unidade])
+  const fin = useMemo(() => filtraFin(finAll, unidade), [finAll, unidade])
   const clients = useMemo(() => clientsRaw.filter(c => !c.is_cortesia && matchUnidadeCliente(c, unidade)), [clientsRaw, unidade])
 
   /* ---------- Financeiro ---------- */
@@ -65,16 +66,16 @@ export default function VisaoGeralTab() {
   }
   const cur = useMemo(() => calc(fin, start, end), [fin, start, end])
   const ant = useMemo(() => calc(fin, prev.start, prev.end), [fin, prev])
-  const saldo = (rows: FinRow[]) => sum(rows.filter(r => r.paid && r.impacts_cash !== false).map(r => (r.type === 'receita' ? r.value : -r.value)))
-  const saldoTotal = useMemo(() => saldo(fin), [fin])
-  const vencidas = useMemo(() => fin.filter(r => r.type === 'receita' && !r.paid && r.aberto > 0 && (r.due_date ?? r.date) < hoje), [fin, hoje])
+  const saldoTotal = useMemo(() => saldoDe(fin), [fin])
+  const vencidas = useMemo(() => fin.filter(r => r.type === 'receita' && isCaixa(r) && r.aberto > 0 && !!r.due_date && r.due_date < hoje), [fin, hoje])
   const valorVencido = sum(vencidas.map(r => r.aberto))
 
   const serie = useMemo(() => {
-    let acc = sum(fin.filter(r => r.paid && r.impacts_cash !== false && (r.payment_date ?? r.date) < trendMonths[0].start).map(r => (r.type === 'receita' ? r.value : -r.value)))
+    const eventos = fin.filter(isCaixa).flatMap(r => r.eventos.map(e => ({ ...e, type: r.type })))
+    let acc = sum(eventos.filter(e => e.date < trendMonths[0].start).map(e => (e.type === 'receita' ? e.amount : -e.amount)))
     return trendMonths.map(m => {
       const c = calc(fin, m.start, m.end)
-      acc += sum(fin.filter(r => r.paid && r.impacts_cash !== false && inRange(r.payment_date ?? r.date, m.start, m.end)).map(r => (r.type === 'receita' ? r.value : -r.value)))
+      acc += sum(eventos.filter(e => inRange(e.date, m.start, m.end)).map(e => (e.type === 'receita' ? e.amount : -e.amount)))
       const recAdv = sum(finAll.filter(r => r.type === 'receita' && r.business_unit !== 'saas' && inRange(r.date, m.start, m.end)).map(r => r.value))
       const recSaas = sum(finAll.filter(r => r.type === 'receita' && r.business_unit === 'saas' && inRange(r.date, m.start, m.end)).map(r => r.value))
       return { month: m.label, receitas: c.receitas, despesas: c.despesas, resultado: c.resultado, saldo: acc, advocacia: recAdv, saas: recSaas, _start: m.start, _end: m.end }
@@ -86,13 +87,13 @@ export default function VisaoGeralTab() {
     const adv = finAll.filter(r => r.business_unit !== 'saas'); const saas = finAll.filter(r => r.business_unit === 'saas')
     const bloco = (rows: FinRow[], clientsOf: ClientLite[]) => {
       const c = calc(rows, start, end); const p = calc(rows, prev.start, prev.end)
-      return { ...c, prevResultado: p.resultado, prevReceitas: p.receitas, caixa: saldo(rows), atraso: sum(rows.filter(r => r.type === 'receita' && !r.paid && r.aberto > 0 && (r.due_date ?? r.date) < hoje).map(r => r.aberto)), clientes: clientsOf.filter(x => x.status === 'ativo').length }
+      return { ...c, prevResultado: p.resultado, prevReceitas: p.receitas, caixa: saldoDe(rows), atraso: sum(rows.filter(r => r.type === 'receita' && isCaixa(r) && r.aberto > 0 && !!r.due_date && r.due_date < hoje).map(r => r.aberto)), clientes: clientsOf.filter(x => x.status === 'ativo').length }
     }
     const cl = clientsRaw.filter(c => !c.is_cortesia)
     return {
       adv: bloco(adv, cl.filter(c => c.is_juridico)),
       saas: bloco(saas, cl.filter(c => c.is_saas)),
-      emp: bloco(finAll, cl.filter(c => c.is_juridico || c.is_saas)),
+      emp: bloco(filtraFin(finAll, ''), cl.filter(c => c.is_juridico || c.is_saas)),
     }
   }, [finAll, clientsRaw, start, end, prev, hoje])
   const mrrSaas = useMemo(() => sum(Array.from(assinaturasDoMes(finAll.filter(r => r.business_unit === 'saas'), trendMonths[11].start, trendMonths[11].end).values()).map(a => a.mrr)), [finAll, trendMonths])
@@ -161,6 +162,7 @@ export default function VisaoGeralTab() {
   return (
     <div className="space-y-4">
       <AttentionPanel items={attention} />
+      <QualidadePanel />
 
       <SectionTitle hint={`Período selecionado · ${UNIDADE_LABELS[unidade]}`}>Dinheiro</SectionTitle>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -168,7 +170,7 @@ export default function VisaoGeralTab() {
         <KpiCard title="Despesas" hint="Despesas do período que afetam o caixa." value={fmtBRL(cur.despesas)} icon={TrendingUp} color={PAL.red} sensitive spark={sp('despesas')} trendTone="down-good" trend={trendText(cur.despesas, ant.despesas)} onClick={() => openFin('Despesas do período', fin.filter(r => isDespesaCaixa(r) && inRange(r.date, start, end)))} />
         <KpiCard title="Resultado" hint="Receitas menos despesas." value={fmtBRL(cur.resultado)} icon={DollarSign} color={cur.resultado >= 0 ? PAL.green : PAL.red} sensitive spark={sp('resultado')} trend={trendText(cur.resultado, ant.resultado)} onClick={() => openFin('Lançamentos do período', fin.filter(r => inRange(r.date, start, end) && (r.type === 'receita' || r.impacts_cash !== false)))} />
         <KpiCard title="Margem" hint="Resultado ÷ receitas." value={fmtPct(cur.margem)} icon={Percent} color={PAL.blue} trend={ant.receitas > 0 ? `${fmtPct(ant.margem)} no período anterior` : undefined} trendTone="neutral" onClick={() => openFin('Lançamentos do período', fin.filter(r => inRange(r.date, start, end)))} />
-        <KpiCard title="Saldo em caixa" hint="Tudo que foi recebido menos tudo que foi pago, desde o início." value={fmtBRL(saldoTotal)} icon={Wallet} color={PAL.purple} sensitive spark={sp('saldo')} onClick={() => openFin('Lançamentos pagos', fin.filter(r => r.paid && r.impacts_cash !== false))} />
+        <KpiCard title="Saldo em caixa" hint="Tudo que foi recebido menos tudo que foi pago, desde o início." value={fmtBRL(saldoTotal)} icon={Wallet} color={PAL.purple} sensitive spark={sp('saldo')} onClick={() => openFin('Lançamentos que compõem o saldo', fin.filter(r => isCaixa(r) && r.pago > 0), r => r.pago)} />
         <KpiCard title="Em atraso" hint="Receitas vencidas e ainda não pagas." value={fmtBRL(valorVencido)} icon={AlertTriangle} color={valorVencido ? PAL.red : PAL.green} sensitive trendTone="down-good" onClick={() => openFin('Receitas vencidas', vencidas, r => r.aberto)} />
       </div>
 

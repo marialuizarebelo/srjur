@@ -129,6 +129,8 @@ export interface ClientFormData {
   potential_value: string; drive_url: string; drive_folder_id: string; tags: string; notes: string
   status: string; portal_visible: boolean; birth_date: string
   signed_at: string; first_contact_at: string
+  /** Data e motivo do encerramento (só quando o status é Encerrado). */
+  inactivated_at?: string; inactive_reason?: string
   rep_name: string; rep_cpf: string; rep_role: string; rep_document_type: string; rep_address: string
   is_juridico: boolean; is_saas: boolean; is_cortesia: boolean
 }
@@ -142,11 +144,12 @@ export const emptyClientForm: ClientFormData = {
   responsible: '', responsible_ids: [], origin: '', referred_by: '', referral_fee_pct: '', area: '', areas_selected: [],
   potential_value: '', drive_url: '', drive_folder_id: '', tags: '', notes: '',
   status: 'ativo', portal_visible: false, birth_date: '',
-  signed_at: '', first_contact_at: '',
+  signed_at: '', first_contact_at: '', inactivated_at: '', inactive_reason: '',
   rep_name: '', rep_cpf: '', rep_role: '', rep_document_type: 'Contrato Social', rep_address: '',
   is_juridico: true, is_saas: false, is_cortesia: false,
 }
 
+export const INACTIVE_REASONS = ['Causa concluída', 'Cancelou o contrato', 'Inadimplência', 'Preço', 'Foi para outro escritório / concorrente', 'Sem uso do sistema', 'Outro']
 export const GENDERS = ['Masculino', 'Feminino', 'Outro', 'Não informado']
 export const MARITAL_STATUSES = ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável', 'Não informado']
 export const REP_ROLES = ['Sócio-Administrador', 'Diretor', 'Procurador']
@@ -537,6 +540,27 @@ export function ClientFormDialog({
                 </Select>
               </div>
             </div>
+
+            {/* Encerramento: alimenta churn e retenção nas métricas */}
+            {form.status === 'inativo' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Data do encerramento</Label>
+                  <Input type="date" value={form.inactivated_at ?? ''} onChange={e => setForm(f => ({ ...f, inactivated_at: e.target.value }))} className="h-10" />
+                  <p className="text-[11px] text-muted-foreground">Se ficar vazia, vale o dia em que o status virou Encerrado.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Motivo do encerramento</Label>
+                  <Select value={form.inactive_reason || '__nenhum__'} onValueChange={v => setForm(f => ({ ...f, inactive_reason: v === '__nenhum__' ? '' : (v ?? '') }))}>
+                    <SelectTrigger className="h-10"><SelectValue>{form.inactive_reason || 'Selecione'}</SelectValue></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__nenhum__">Não informado</SelectItem>
+                      {INACTIVE_REASONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
 
             {/* Campos de indicação — aparecem só quando origem é Indicação */}
             {form.origin === 'Indicação' && (

@@ -249,7 +249,7 @@ export default function Tarefas() {
     title: '', description: '', type: 'tarefa', status: 'pendente',
     priority: 'media', start_date: '', due_date: '', due_time: '', responsible_ids: [] as string[],
     client_id: '', process_id: '', recurrence: 'Única', portal_visible: false,
-    workflow_stage: 'a_fazer',
+    workflow_stage: 'a_fazer', business_unit: 'advocacia',
     _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '',
   })
 
@@ -257,7 +257,7 @@ export default function Tarefas() {
     setTf({ title: '', description: '', type: 'tarefa', status: 'pendente',
       priority: 'media', start_date: '', due_date: '', due_time: '', responsible_ids: [],
       client_id: '', process_id: '', recurrence: 'Única', portal_visible: false,
-      workflow_stage: 'a_fazer',
+      workflow_stage: 'a_fazer', business_unit: 'advocacia',
       _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '' })
     setEditing(null)
   }
@@ -366,6 +366,7 @@ export default function Tarefas() {
       client_id: t.client_id ?? '', process_id: t.process_id ?? '',
       recurrence: t.recurrence ?? 'Única', portal_visible: t.portal_visible,
       workflow_stage: t.workflow_stage ?? 'a_fazer',
+      business_unit: (t as any).business_unit === 'saas' ? 'saas' : 'advocacia',
     })
     setEditing(t)
     setDialogOpen(true)
@@ -387,11 +388,15 @@ export default function Tarefas() {
         portal_visible: tf.portal_visible,
         workflow_stage: tf.workflow_stage,
       }
+      // Unidade da tarefa (Advocacia/SaaS): se o banco ainda não tem a coluna, salva sem ela.
+      const comUnidade = { ...payload, business_unit: tf.business_unit }
       if (editing) {
-        const { error } = await supabase.from('tasks').update(payload).eq('id', editing.id)
+        let { error } = await supabase.from('tasks').update(comUnidade).eq('id', editing.id)
+        if (error && /business_unit/.test(error.message)) ({ error } = await supabase.from('tasks').update(payload).eq('id', editing.id))
         if (error) { toast.error('Erro ao salvar tarefa: ' + error.message); return }
       } else {
-        const { data: created, error } = await supabase.from('tasks').insert({ ...payload, created_by: profile?.id ?? null }).select().single()
+        let { data: created, error } = await supabase.from('tasks').insert({ ...comUnidade, created_by: profile?.id ?? null }).select().single()
+        if (error && /business_unit/.test(error.message)) ({ data: created, error } = await supabase.from('tasks').insert({ ...payload, created_by: profile?.id ?? null }).select().single())
         if (error) { toast.error('Erro ao salvar tarefa: ' + error.message); return }
         // Se veio de "Criar tarefa a partir da intimação", vincula de volta.
         if (tf._intimacaoId && created) {
@@ -743,6 +748,16 @@ export default function Tarefas() {
                   <SelectTrigger className="h-10"><SelectValue>{getPriorityInfo(tf.priority).label}</SelectValue></SelectTrigger>
                   <SelectContent>
                     {PRIORITIES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Unidade</Label>
+                <Select value={tf.business_unit} onValueChange={v => v && setTf(f => ({ ...f, business_unit: v }))}>
+                  <SelectTrigger className="h-10"><SelectValue>{tf.business_unit === 'saas' ? 'Sistema (SaaS)' : 'Advocacia'}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="advocacia">Advocacia</SelectItem>
+                    <SelectItem value="saas">Sistema (SaaS)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

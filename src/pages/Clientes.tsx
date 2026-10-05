@@ -101,6 +101,8 @@ interface Lead {
   cpf_cnpj: string | null
   source: string | null
   status: string
+  business_unit?: string | null
+  lost_reason?: string | null
   potential_value: number | null
   notes: string | null
   responsible: string | null
@@ -152,6 +154,7 @@ interface PipelineStage {
 // ── Constants ──
 const AREAS = ['Família', 'Cível', 'Trabalhista', 'Empresarial', 'Consumidor', 'Sucessões', 'Criminal', 'Outro']
 const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+const LOST_REASONS = ['Preço / honorários', 'Escolheu outro escritório', 'Sem resposta / sumiu', 'Resolveu sozinho', 'Sem causa / sem viabilidade', 'Fora da nossa área', 'Outro']
 const LEAD_SOURCES = ['Indicação', 'Google', 'Instagram', 'WhatsApp', 'Site', 'Evento', 'Outro']
 
 
@@ -1051,6 +1054,7 @@ export default function Clientes() {
     status: 'novo', potential_value: '', notes: '', responsible: '', responsible_ids: [] as string[],
     next_followup: '', drive_folder_id: '', drive_url: '',
     referred_by: '', referral_fee_pct: '', first_contact_at: '', signed_at: '',
+    business_unit: 'advocacia', lost_reason: '',
     type: 'pessoa_fisica', gender: 'Não informado', nationality: 'brasileira', marital_status: 'Não informado',
     profession: '', rg_number: '', rg_issuer: '', cep: '', street: '', address_number: '',
     complement: '', neighborhood: '', city: '', state: '',
@@ -1283,6 +1287,7 @@ export default function Clientes() {
       drive_url: c.drive_url ?? '', drive_folder_id: c.drive_folder_id ?? '', tags: c.tags ?? '', notes: c.notes ?? '',
       status: c.status ?? 'ativo', portal_visible: c.portal_visible ?? false,
       birth_date: c.birth_date ?? '', signed_at: c.signed_at ?? '', first_contact_at: c.first_contact_at ?? '',
+      inactivated_at: (c as any).inactivated_at ?? '', inactive_reason: (c as any).inactive_reason ?? '',
       rep_name: c.rep_name ?? '', rep_cpf: c.rep_cpf ?? '', rep_role: c.rep_role ?? '',
       rep_document_type: c.rep_document_type ?? 'Contrato Social', rep_address: c.rep_address ?? '',
       is_juridico: c.is_juridico ?? true, is_saas: c.is_saas ?? false, is_cortesia: c.is_cortesia ?? false,
@@ -1321,8 +1326,11 @@ export default function Clientes() {
       rep_document_type: cf.rep_document_type || null, rep_address: cf.rep_address || null,
       is_juridico: cf.is_juridico, is_saas: cf.is_saas, is_cortesia: cf.is_cortesia,
     }
+    // Encerramento (data/motivo): se o banco ainda não tem as colunas (migration pendente), salva o resto.
+    const extrasEncerramento = cf.status === 'inativo' ? { inactivated_at: cf.inactivated_at || null, inactive_reason: cf.inactive_reason || null } : {}
     if (editingClient) {
-      const { error } = await supabase.from('clients').update(payload).eq('id', editingClient.id)
+      let { error } = await supabase.from('clients').update({ ...payload, ...extrasEncerramento }).eq('id', editingClient.id)
+      if (error && /inactiv/.test(error.message)) ({ error } = await supabase.from('clients').update(payload).eq('id', editingClient.id))
       if (error) { toast.error('Erro ao salvar cliente: ' + error.message); return }
       if (editingClient.status !== cf.status) {
         logActivity('client', editingClient.id, `Status alterado para "${cf.status}"`)
@@ -1364,6 +1372,7 @@ export default function Clientes() {
       notes: l.notes ?? '', responsible: l.responsible ?? '', responsible_ids: l.responsible_ids ?? [], next_followup: l.next_followup ?? '',
       drive_folder_id: l.drive_folder_id ?? '', drive_url: l.drive_url ?? '',
       referred_by: l.referred_by ?? '', referral_fee_pct: l.referral_fee_pct ? String(l.referral_fee_pct) : '', first_contact_at: l.first_contact_at ?? '', signed_at: l.signed_at ?? '',
+      business_unit: l.business_unit === 'saas' ? 'saas' : 'advocacia', lost_reason: l.lost_reason ?? '',
       type: l.type ?? 'pessoa_fisica', gender: l.gender ?? 'Não informado', nationality: l.nationality ?? 'brasileira',
       marital_status: l.marital_status ?? 'Não informado', profession: l.profession ?? '',
       rg_number: l.rg_number ?? '', rg_issuer: l.rg_issuer ?? '', cep: l.cep ?? '', street: l.street ?? '',
@@ -1402,11 +1411,16 @@ export default function Clientes() {
         rep_document_type: lf.rep_document_type || null, rep_address: lf.rep_address || null,
         tags: lf.tags || null, birth_date: lf.birth_date || null,
       }
-      if (editingLead) {
-        await supabase.from('leads').update(payload).eq('id', editingLead.id)
-      } else {
-        await supabase.from('leads').insert({ ...payload, created_by: profile?.id ?? null })
-      }
+      // Unidade do negócio e motivo da perda. Se o banco ainda não tem a coluna do motivo
+      // (migration pendente), salva o resto normalmente.
+      const extras: Record<string, unknown> = { business_unit: lf.business_unit }
+      if (lf.status === 'perdido') extras.lost_reason = lf.lost_reason || null
+      const gravar = (body: Record<string, unknown>) => editingLead
+        ? supabase.from('leads').update(body).eq('id', editingLead.id)
+        : supabase.from('leads').insert({ ...body, created_by: profile?.id ?? null })
+      let res = await gravar({ ...payload, ...extras })
+      if (res.error && /lost_reason/.test(res.error.message)) res = await gravar({ ...payload, business_unit: lf.business_unit })
+      if (res.error) toast.error('Erro ao salvar lead: ' + res.error.message)
       setLeadDialogOpen(false)
       resetLf()
       loadData()
@@ -2027,6 +2041,32 @@ export default function Clientes() {
                 <Label>Valor potencial (R$)</Label>
                 <Input value={lf.potential_value} onChange={e => setLf(f => ({ ...f, potential_value: e.target.value }))} placeholder="0,00" className="h-10" />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Unidade do negócio</Label>
+                <Select value={lf.business_unit} onValueChange={v => v && setLf(f => ({ ...f, business_unit: v }))}>
+                  <SelectTrigger className="h-10"><SelectValue>{lf.business_unit === 'saas' ? 'Sistema (SaaS)' : 'Advocacia'}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="advocacia">Advocacia</SelectItem>
+                    <SelectItem value="saas">Sistema (SaaS)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">Define em qual funil esse lead conta nas métricas.</p>
+              </div>
+              {lf.status === 'perdido' && (
+                <div className="space-y-2">
+                  <Label>Motivo da perda</Label>
+                  <Select value={lf.lost_reason || '__nenhum__'} onValueChange={v => setLf(f => ({ ...f, lost_reason: v === '__nenhum__' ? '' : (v ?? '') }))}>
+                    <SelectTrigger className="h-10"><SelectValue>{lf.lost_reason || 'Selecione'}</SelectValue></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__nenhum__">Não informado</SelectItem>
+                      {LOST_REASONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             {lf.source === 'Indicação' && (

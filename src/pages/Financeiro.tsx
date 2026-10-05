@@ -68,6 +68,8 @@ interface FinanceRow {
   series_id: string | null
   business_unit: string | null
   refletir_metricas: boolean
+  intragrupo?: boolean
+  cost_type?: string | null
 }
 
 interface ClientOption { id: string; name: string; is_cortesia?: boolean; is_saas?: boolean; is_juridico?: boolean }
@@ -647,6 +649,8 @@ export default function Financeiro() {
     card_fee_percent: '',
     business_unit: 'advocacia' as 'advocacia' | 'saas',
     refletir_metricas: true,
+    intragrupo: false,
+    cost_type: '',
   })
 
   const resetForm = () => {
@@ -657,7 +661,7 @@ export default function Financeiro() {
       impacts_cash: true, nature: 'real', responsible: '', notes: '',
       portal_visible: false, payment_method: '', installments: '1',
       recurrence: 'Única', payment_link: '', card_fee_percent: '',
-      business_unit: 'advocacia', refletir_metricas: true,
+      business_unit: 'advocacia', refletir_metricas: true, intragrupo: false, cost_type: '',
     })
     setEditingId(null)
     setEditingCurrentInstallment(null)
@@ -888,6 +892,10 @@ export default function Financeiro() {
       card_fee_percent: isCardLumpSum && feePercent > 0 ? feePercent : null,
       business_unit: form.business_unit,
       refletir_metricas: form.refletir_metricas,
+      // Campos novos das métricas: só vão no salvamento se o banco já os tem (ou se foram usados agora).
+      ...((rows.some(r => 'intragrupo' in r) || form.intragrupo || form.cost_type)
+        ? { intragrupo: form.intragrupo, cost_type: form.type === 'despesa' ? (form.cost_type || null) : null }
+        : {}),
     }
 
     setSaving(true)
@@ -1052,6 +1060,8 @@ export default function Financeiro() {
       card_fee_percent: row.card_fee_percent != null ? String(row.card_fee_percent) : '',
       business_unit: (row.business_unit as 'advocacia' | 'saas') ?? 'advocacia',
       refletir_metricas: row.refletir_metricas ?? true,
+      intragrupo: row.intragrupo === true,
+      cost_type: row.cost_type ?? '',
     })
     setEditingId(row.id)
     setEditingCurrentInstallment(row.current_installment)
@@ -1583,6 +1593,30 @@ export default function Financeiro() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <label className="flex items-start gap-2 py-2.5 px-3 rounded-lg border cursor-pointer">
+                    <Switch checked={form.intragrupo} onCheckedChange={v => setForm(f => ({ ...f, intragrupo: v }))} />
+                    <div>
+                      <p className="text-sm font-medium">Entre as empresas</p>
+                      <p className="text-xs text-muted-foreground">Movimento entre Advocacia e SaaS (ex.: licença do sistema paga pelo escritório). Aparece em cada empresa, mas sai da visão "Empresa toda" nas métricas para não contar em dobro.</p>
+                    </div>
+                  </label>
+                  {form.type === 'despesa' && (
+                    <div className="space-y-2">
+                      <Label>Tipo de custo</Label>
+                      <Select value={form.cost_type || '__auto__'} onValueChange={v => setForm(f => ({ ...f, cost_type: v === '__auto__' ? '' : (v ?? '') }))}>
+                        <SelectTrigger className="h-10"><SelectValue>{{ fixo: 'Fixo', variavel: 'Variável' }[form.cost_type] ?? 'Automático (pela categoria)'}</SelectValue></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__auto__">Automático (pela categoria)</SelectItem>
+                          <SelectItem value="fixo">Fixo (não muda com o faturamento)</SelectItem>
+                          <SelectItem value="variavel">Variável (cresce com o faturamento)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground">Usado no ponto de equilíbrio e na margem de contribuição.</p>
+                    </div>
+                  )}
                 </div>
 
                 {clients.find(c => c.id === form.client_id)?.is_cortesia && (

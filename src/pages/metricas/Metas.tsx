@@ -15,8 +15,8 @@ import { DollarSign, Target, Plus, Pencil, Trash2, Trophy, NotebookText } from '
 import { fmtBRL, fmtDate } from '@/lib/format'
 import { getAdminProfiles, type ProfileOption } from '@/components/ResponsibleSelect'
 import { toast } from 'sonner'
-import { MONTHS, ChartCard, DetailDialog, useDetail, type DetailRow, useUnidadeFilter, matchUnidadeFinance, KpiCard, DonutWithLegend } from './shared'
-import { HBars, ComboChart } from './kit'
+import { MONTHS, ChartCard, DetailDialog, useDetail, type DetailRow, useUnidadeFilter, KpiCard, DonutWithLegend } from './shared'
+import { HBars, ComboChart, filtraFin, saldoDe } from './kit'
 import { useFinanceRows } from './Financeiro'
 
 const CATEGORIES_RECEITA = ['Honorários Iniciais', 'Mensalidade', 'Acordo', 'Consultoria', 'Êxito', 'Outros']
@@ -697,11 +697,7 @@ export function useMetasData() {
   useEffect(() => { load() }, [])
 
   // Cada meta financeira olha só a unidade dela (empresa = tudo).
-  const rowsDaMeta = (m: Meta) => financeAllRows.filter(r => matchUnidadeFinance(r.business_unit, unidadeDaMeta(m) === 'empresa' ? '' : unidadeDaMeta(m) as 'advocacia' | 'saas'))
-  const saldoDe = (rows: typeof financeAllRows) => rows.reduce((s, r) => {
-    if (!r.paid || r.impacts_cash === false) return s
-    return s + (r.type === 'receita' ? Number(r.value) : -Number(r.value))
-  }, 0)
+  const rowsDaMeta = (m: Meta) => filtraFin(financeAllRows, unidadeDaMeta(m) === 'empresa' ? '' : unidadeDaMeta(m) as 'advocacia' | 'saas')
 
   function computeAtingidoFinanceiro(m: Meta): number {
     const { start, end } = metaPeriodRange(m)
@@ -729,8 +725,8 @@ export function useMetasData() {
     const { start, end } = metaPeriodRange(m)
     const financeRows = rowsDaMeta(m)
     if (m.tipo === 'saldo_minimo') {
-      return financeRows.filter(r => r.paid && r.impacts_cash !== false)
-        .map((r, i) => ({ id: String(i), label: r.description, sublabel: fmtDate(r.date), value: fmtBRL(Number(r.value)) }))
+      return financeRows.filter(r => r.impacts_cash !== false && r.pago > 0)
+        .map((r, i) => ({ id: String(i), label: r.description, sublabel: fmtDate(r.date), value: fmtBRL(Number(r.pago)) }))
     }
     if (m.tipo === 'saldo_manual') {
       return [{ id: '0', label: 'Valor atualizado manualmente', sublabel: 'Edite a meta para atualizar', value: fmtBRL(m.valor_manual ?? 0) }]

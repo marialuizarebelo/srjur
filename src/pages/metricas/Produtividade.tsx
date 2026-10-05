@@ -3,14 +3,14 @@ import { ClipboardList, Bell, Scale, Users, Clock, CheckCircle2, AlertTriangle, 
 import { fmtDate } from '@/lib/format'
 import {
   monthsBack, usePeriod, KpiCard, ChartCard, DonutWithLegend, DetailDialog, useDetail, AttentionPanel, type Attention,
-  previousPeriodRange, trendText, NotesPanel, useResponsavelFilter,
+  previousPeriodRange, trendText, NotesPanel, useResponsavelFilter, useUnidadeFilter, matchUnidadeFinance,
 } from './shared'
 import {
   PAL, ComboChart, HBars, BucketBars, MiniTable, SectionTitle,
-  avg, median, pct, fmtPct, fmtNum, daysBetween, addDays, inRange, todayISO, groupCount, fetchAll,
+  avg, median, pct, fmtPct, fmtNum, daysBetween, addDays, inRange, todayISO, groupCount, fetchAll, fetchAllSafe,
 } from './kit'
 
-interface Task { title: string; type: string | null; status: string; priority: string | null; due_date: string | null; created_at: string; updated_at: string | null; workflow_stage: string | null; responsible_ids: string[] | null }
+interface Task { title: string; type: string | null; status: string; priority: string | null; due_date: string | null; created_at: string; updated_at: string | null; workflow_stage: string | null; responsible_ids: string[] | null; business_unit?: string | null; completed_at?: string | null }
 interface Deadline { title: string; status: string; due_date: string; tipo: string | null; responsible_ids: string[] | null }
 interface ProcessRow { title: string; status: string; responsible_ids: string[] | null }
 
@@ -29,18 +29,22 @@ export default function ProdutividadeTab() {
   const detail = useDetail()
   const respFilter = useResponsavelFilter()
   const profiles = respFilter.profiles
+  const { unidade } = useUnidadeFilter()
 
   useEffect(() => {
     Promise.all([
-      fetchAll<Task>('tasks', 'title, type, status, priority, due_date, created_at, updated_at, workflow_stage, responsible_ids'),
+      fetchAllSafe<Task>('tasks', 'title, type, status, priority, due_date, created_at, updated_at, workflow_stage, responsible_ids', ['business_unit', 'completed_at']),
       fetchAll<Deadline>('deadlines', 'title, status, due_date, tipo, responsible_ids'),
       fetchAll<ProcessRow>('processes', 'title, status, responsible_ids'),
-    ]).then(([t, d, p]) => { setTasksRaw(t); setDeadlinesRaw(d); setProcessesRaw(p); setLoading(false) })
+    ]).then(([t, d, p]) => { setTasksRaw(t.rows); setDeadlinesRaw(d); setProcessesRaw(p); setLoading(false) })
   }, [])
 
-  const tasks = useMemo(() => tasksRaw.filter(t => respFilter.matches(t.responsible_ids)), [tasksRaw, respFilter.responsavelId])
-  const deadlines = useMemo(() => deadlinesRaw.filter(d => respFilter.matches(d.responsible_ids)), [deadlinesRaw, respFilter.responsavelId])
-  const processes = useMemo(() => processesRaw.filter(p => respFilter.matches(p.responsible_ids)), [processesRaw, respFilter.responsavelId])
+  // Tarefas têm unidade (as antigas, sem marcação, contam como Advocacia). Prazos e processos são sempre da Advocacia.
+  const tasks = useMemo(() => tasksRaw.filter(t => respFilter.matches(t.responsible_ids) && matchUnidadeFinance(t.business_unit, unidade)), [tasksRaw, respFilter.responsavelId, unidade])
+  const deadlines = useMemo(() => (unidade === 'saas' ? [] : deadlinesRaw).filter(d => respFilter.matches(d.responsible_ids)), [deadlinesRaw, respFilter.responsavelId, unidade])
+  const processes = useMemo(() => (unidade === 'saas' ? [] : processesRaw).filter(p => respFilter.matches(p.responsible_ids)), [processesRaw, respFilter.responsavelId, unidade])
+  // Quando a tarefa foi concluída: data real (gatilho do banco) ou, nas antigas, a última edição.
+  const concluidaEm = (t: Task) => (t.completed_at ?? t.updated_at ?? t.created_at).slice(0, 10)
 
   const hoje = todayISO()
   const { start, end } = period.range
@@ -53,13 +57,15 @@ export default function ProdutividadeTab() {
   const atrasadas = useMemo(() => pendentes.filter(t => t.due_date && t.due_date < hoje), [pendentes, hoje])
   const comVencNoPeriodo = useMemo(() => tasks.filter(t => t.status !== 'cancelada' && inRange(t.due_date, start, end)), [tasks, start, end])
   const concluidasNoPeriodo = comVencNoPeriodo.filter(t => t.status === 'concluida')
+  const entreguesPeriodo = tasks.filter(t => t.status === 'concluida' && inRange(concluidaEm(t), start, end))
+  const entreguesPrev = tasks.filter(t => t.status === 'concluida' && inRange(concluidaEm(t), prev.start, prev.end))
   const taxaConclusao = pct(concluidasNoPeriodo.length, comVencNoPeriodo.length)
   const comVencPrev = tasks.filter(t => t.status !== 'cancelada' && inRange(t.due_date, prev.start, prev.end))
   const taxaConclusaoPrev = pct(comVencPrev.filter(t => t.status === 'concluida').length, comVencPrev.length)
   const criadasPeriodo = tasks.filter(t => inRange(t.created_at, start, end))
   const criadasPrev = tasks.filter(t => inRange(t.created_at, prev.start, prev.end))
   // Tempo até concluir: aproximado pela última atualização da tarefa já concluída (não há data de conclusão própria).
-  const temposConclusao = tasks.filter(t => t.status === 'concluida' && t.updated_at && inRange(t.updated_at, start, end)).map(t => Math.max(0, daysBetween(t.created_at, t.updated_at!)))
+  const temposConclusao = entreguesPeriodo.map(t => Math.max(0, daysBetween(t.created_at, concluidaEm(t))))
   const idadeBacklog = avg(pendentes.map(t => daysBetween(t.created_at, hoje)))
   const urgentesAtrasadas = atrasadas.filter(t => t.priority === 'urgente' || t.priority === 'alta')
   const proximos14 = pendentes.filter(t => inRange(t.due_date, hoje, addDays(hoje, 14)))
@@ -80,6 +86,7 @@ export default function ProdutividadeTab() {
       month: m.label,
       criadas: tasks.filter(t => inRange(t.created_at, m.start, m.end)).length,
       concluidas: comVenc.filter(t => t.status === 'concluida').length,
+      entregues: tasks.filter(t => t.status === 'concluida' && inRange(concluidaEm(t), m.start, m.end)).length,
       atrasadas: comVenc.filter(t => t.status === 'pendente' && t.due_date! < hoje).length,
       conclusao: comVenc.length ? Math.round(pct(comVenc.filter(t => t.status === 'concluida').length, comVenc.length)) : null,
       cumpridos: deadlines.filter(d => d.status === 'cumprido' && inRange(d.due_date, m.start, m.end)).length,
@@ -154,7 +161,7 @@ export default function ProdutividadeTab() {
 
   if (loading) return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>
 
-  const sp = (k: 'criadas' | 'concluidas' | 'atrasadas') => mensal.map(m => m[k] as number)
+  const sp = (k: 'criadas' | 'entregues' | 'atrasadas') => mensal.map(m => m[k] as number)
 
   return (
     <div className="space-y-4">
@@ -173,12 +180,12 @@ export default function ProdutividadeTab() {
 
       <SectionTitle hint="O que foi entregue no período selecionado.">Entrega no período</SectionTitle>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard title="Taxa de conclusão" hint="Das tarefas com data limite no período, quantas já foram concluídas." value={comVencNoPeriodo.length ? fmtPct(taxaConclusao) : '—'} icon={CheckCircle2} color={taxaConclusao >= 85 ? PAL.green : PAL.amber} spark={sp('concluidas')}
+        <KpiCard title="Taxa de conclusão" hint="Das tarefas com data limite no período, quantas já foram concluídas." value={comVencNoPeriodo.length ? fmtPct(taxaConclusao) : '—'} icon={CheckCircle2} color={taxaConclusao >= 85 ? PAL.green : PAL.amber}
           trend={trendText(taxaConclusao, taxaConclusaoPrev)} onClick={() => openTasks('Tarefas com data no período', comVencNoPeriodo)} />
-        <KpiCard title="Concluídas" hint="Tarefas concluídas entre as que venciam no período." value={concluidasNoPeriodo.length} icon={CheckCircle2} color={PAL.green} onClick={() => openTasks('Tarefas concluídas', concluidasNoPeriodo)} />
+        <KpiCard title="Entregues" hint="Tarefas concluídas dentro do período (pela data em que foram concluídas)." value={entreguesPeriodo.length} icon={CheckCircle2} color={PAL.green} spark={sp('entregues')} trend={trendText(entreguesPeriodo.length, entreguesPrev.length)} onClick={() => openTasks('Tarefas entregues no período', entreguesPeriodo)} />
         <KpiCard title="Criadas" hint="Tarefas criadas no período (entrada de trabalho)." value={criadasPeriodo.length} icon={Inbox} color={PAL.blue} spark={sp('criadas')} trend={trendText(criadasPeriodo.length, criadasPrev.length)} trendTone="neutral" onClick={() => openTasks('Tarefas criadas no período', criadasPeriodo)} />
-        <KpiCard title="Tempo até concluir" hint="Aproximação: dias entre a criação e a última atualização das tarefas concluídas no período (o sistema não guarda a data de conclusão)." value={temposConclusao.length ? `${fmtNum(avg(temposConclusao), 0)} dias` : '—'} icon={Timer} color={PAL.sky}
-          trend={temposConclusao.length ? `mediana ${fmtNum(median(temposConclusao), 0)} dias` : undefined} trendTone="neutral" onClick={() => openTasks('Concluídas no período', tasks.filter(t => t.status === 'concluida' && t.updated_at && inRange(t.updated_at, start, end)))} />
+        <KpiCard title="Tempo até concluir" hint="Dias entre a criação e a conclusão das tarefas entregues no período. Tarefas concluídas antes de existir o registro da data usam a última edição como aproximação." value={temposConclusao.length ? `${fmtNum(avg(temposConclusao), 0)} dias` : '—'} icon={Timer} color={PAL.sky}
+          trend={temposConclusao.length ? `mediana ${fmtNum(median(temposConclusao), 0)} dias` : undefined} trendTone="neutral" onClick={() => openTasks('Entregues no período', entreguesPeriodo)} />
         <KpiCard title="Cumprimento de prazos" hint="Prazos cumpridos ÷ (cumpridos + perdidos) com vencimento no período." value={cumpridos + perdidos ? fmtPct(pct(cumpridos, cumpridos + perdidos)) : '—'} icon={Bell} color={perdidos ? PAL.amber : PAL.green}
           trend={`${cumpridos} cumpridos · ${perdidos} perdidos`} trendTone="neutral" onClick={() => openDeadlines('Prazos do período', prazosPeriodo)} />
       </div>
@@ -187,7 +194,7 @@ export default function ProdutividadeTab() {
         <ChartCard title="Entrada × saída de tarefas (12 meses)" icon={ClipboardList}>
           <ComboChart data={mensal} format={v => String(v)} yFormat={v => String(v)} onPointClick={i => { const m = mensal[i]; openTasks(`Tarefas com data em ${m.month}`, tasks.filter(t => inRange(t.due_date, m._start, m._end))) }} series={[
             { key: 'criadas', name: 'Criadas', color: PAL.blue },
-            { key: 'concluidas', name: 'Concluídas', color: PAL.green },
+            { key: 'entregues', name: 'Entregues', color: PAL.green },
             { key: 'atrasadas', name: 'Atrasadas', color: PAL.red, kind: 'line' },
           ]} />
         </ChartCard>

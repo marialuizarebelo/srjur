@@ -5,19 +5,20 @@ import { fmtBRL, fmtDate } from '@/lib/format'
 import {
   monthsBack, usePeriod, KpiCard, ChartCard, DonutWithLegend,
   DetailDialog, useDetail, AttentionPanel, type Attention, previousPeriodRange, trendText, NotesPanel,
-  useResponsavelFilter, TrendChart,
+  useResponsavelFilter, useUnidadeFilter, matchUnidadeFinance, matchUnidadeCliente, TrendChart,
 } from './shared'
 import {
   PAL, ComboChart, HBars, FunnelBars, BucketBars, MiniTable, StatStrip, SectionTitle,
-  sum, avg, median, pct, fmtPct, fmtNum, daysBetween, addDays, inRange, todayISO, groupCount, useFinanceData, fetchAll,
+  sum, avg, median, pct, fmtPct, fmtNum, daysBetween, addDays, inRange, todayISO, groupCount, useFinanceData, fetchAll, fetchAllSafe, filtraFin,
 } from './kit'
 
 export interface Lead {
   name: string; status: string; potential_value: number | null; created_at: string; updated_at: string | null
   signed_at: string | null; client_id: string | null; next_followup: string | null; source: string | null
   responsible_ids: string[] | null; first_contact_at: string | null; referred_by: string | null; referral_fee_pct: number | null
+  business_unit?: string | null; lost_reason?: string | null; lost_at?: string | null; converted_at?: string | null
 }
-interface ClientRow { id: string; name: string; status: string; created_at: string; responsible_ids: string[] | null; is_cortesia: boolean; is_juridico: boolean }
+interface ClientRow { id: string; name: string; status: string; created_at: string; responsible_ids: string[] | null; is_cortesia: boolean; is_juridico: boolean; is_saas: boolean }
 interface Stage { label: string; value: string; position: number }
 
 const isConvertido = (l: Lead) => l.status === 'convertido' || !!l.client_id
@@ -32,28 +33,29 @@ export default function ComercialTab() {
   const period = usePeriod()
   const detail = useDetail()
   const respFilter = useResponsavelFilter()
-  const { rows: finRows } = useFinanceData()
+  const { unidade } = useUnidadeFilter()
+  const { rows: finRowsAll } = useFinanceData()
+  const finRows = useMemo(() => filtraFin(finRowsAll, unidade), [finRowsAll, unidade])
 
   useEffect(() => {
     Promise.all([
-      fetchAll<Lead>('leads', 'name, status, potential_value, created_at, updated_at, signed_at, client_id, next_followup, source, responsible_ids, first_contact_at, referred_by, referral_fee_pct'),
-      fetchAll<ClientRow>('clients', 'id, name, status, created_at, responsible_ids, is_cortesia, is_juridico'),
+      fetchAllSafe<Lead>('leads', 'name, status, potential_value, created_at, updated_at, signed_at, client_id, next_followup, source, responsible_ids, first_contact_at, referred_by, referral_fee_pct', ['business_unit', 'lost_reason', 'lost_at', 'converted_at']),
+      fetchAll<ClientRow>('clients', 'id, name, status, created_at, responsible_ids, is_cortesia, is_juridico, is_saas'),
       supabase.from('pipeline_stages').select('label, value, position').order('position'),
     ]).then(([l, c, s]) => {
-      setLeadsRaw(l)
+      setLeadsRaw(l.rows)
       setClientsRaw(c)
       setStages((s.data as Stage[]) ?? [])
       setLoading(false)
     })
   }, [])
 
-  // Clientes puramente SaaS (sem questão jurídica) e casos gratuitos/cortesia
-  // não entram no funil comercial jurídico -- são contados em Produto/SaaS
-  // ou simplesmente não contam em métrica nenhuma, respectivamente.
-  const clients = useMemo(() => clientsRaw.filter(c => respFilter.matches(c.responsible_ids) && !c.is_cortesia && c.is_juridico !== false), [clientsRaw, respFilter.responsavelId])
-  const clientesExcluidosIds = useMemo(() => new Set(clientsRaw.filter(c => c.is_cortesia || c.is_juridico === false).map(c => c.id)), [clientsRaw])
+  // Casos gratuitos (cortesia) não entram. Advocacia x SaaS segue a Visão do topo:
+  // o lead vale pela "unidade do negócio" marcada nele (os antigos, sem marcação, contam como Advocacia).
+  const clients = useMemo(() => clientsRaw.filter(c => respFilter.matches(c.responsible_ids) && !c.is_cortesia && matchUnidadeCliente(c, unidade)), [clientsRaw, respFilter.responsavelId, unidade])
+  const clientesCortesiaIds = useMemo(() => new Set(clientsRaw.filter(c => c.is_cortesia).map(c => c.id)), [clientsRaw])
   const clientById = useMemo(() => new Map(clientsRaw.map(c => [c.id, c])), [clientsRaw])
-  const leads = useMemo(() => leadsRaw.filter(l => respFilter.matches(l.responsible_ids) && !(l.client_id && clientesExcluidosIds.has(l.client_id))), [leadsRaw, respFilter.responsavelId, clientesExcluidosIds])
+  const leads = useMemo(() => leadsRaw.filter(l => respFilter.matches(l.responsible_ids) && !(l.client_id && clientesCortesiaIds.has(l.client_id)) && matchUnidadeFinance(l.business_unit, unidade)), [leadsRaw, respFilter.responsavelId, clientesCortesiaIds, unidade])
 
   const trendMonths = useMemo(() => monthsBack(12), [])
   const stagePos = useMemo(() => new Map(stages.map(s => [s.value, s.position])), [stages])
@@ -62,7 +64,7 @@ export default function ComercialTab() {
   const prev = useMemo(() => previousPeriodRange(start, end), [start, end])
 
   // Data em que o lead virou cliente: assinatura > criação do cliente vinculado > última atualização.
-  const dataConversao = (l: Lead) => (l.signed_at ?? (l.client_id ? clientById.get(l.client_id)?.created_at : null) ?? l.updated_at ?? l.created_at).slice(0, 10)
+  const dataConversao = (l: Lead) => (l.signed_at ?? l.converted_at ?? (l.client_id ? clientById.get(l.client_id)?.created_at : null) ?? l.updated_at ?? l.created_at).slice(0, 10)
 
   const leadsNoPeriodo = useMemo(() => leads.filter(l => inRange(l.created_at, start, end)), [leads, start, end])
   const leadsAnterior = useMemo(() => leads.filter(l => inRange(l.created_at, prev.start, prev.end)), [leads, prev])
@@ -274,6 +276,12 @@ export default function ComercialTab() {
 
       <ChartCard title="Receita contratada por mês" icon={Handshake}>
         <TrendChart data={mensal.map(m => ({ month: m.month, contratado: m.contratado }))} formatValue={fmtBRL} series={[{ key: 'contratado', name: 'Contratado', color: PAL.amber }]} />
+      </ChartCard>
+
+      <ChartCard title="Por que perdemos leads (período)" icon={AlertTriangle}>
+        <HBars data={groupCount(perdidosPeriodo, l => l.lost_reason?.trim() || 'Motivo não informado')} format={v => `${v} lead(s)`} color={PAL.red} empty="Nenhum lead perdido no período"
+          onSelect={name => openLeads(`Perdidos — ${name}`, perdidosPeriodo.filter(l => (l.lost_reason?.trim() || 'Motivo não informado') === name))} />
+        <p className="text-[11px] text-muted-foreground mt-3">Preencha o "Motivo da perda" ao mover um lead para Perdido: é isso que mostra onde ajustar preço, abordagem ou público.</p>
       </ChartCard>
 
       <SectionTitle hint="De onde vêm os clientes e quem os conduz.">Origem e equipe</SectionTitle>

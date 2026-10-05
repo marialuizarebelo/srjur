@@ -27,7 +27,7 @@ const TABS = [
   { key: 'financeiro', label: 'Financeiro', icon: DollarSign, controls: ['periodo', 'responsavel'] as Control[], render: () => <FinanceiroTab /> },
   {
     key: 'comercial', label: 'Comercial', icon: Target, controls: ['periodo', 'responsavel'] as Control[], render: () => <ComercialTab />,
-    notice: (u: UnidadeKey) => u === 'saas' ? 'Os leads ainda não são marcados por unidade, então o funil mostra a operação comercial como um todo. A receita do SaaS está nas abas Financeiro e Produto/SaaS.' : null,
+    notice: (u: UnidadeKey) => u ? 'Cada lead vale pela "Unidade do negócio" marcada nele; leads antigos, sem marcação, contam como Advocacia.' : null,
   },
   {
     key: 'juridico', label: 'Jurídico', icon: Scale, controls: ['periodo', 'responsavel'] as Control[], render: () => <JuridicoTab />,
@@ -39,7 +39,7 @@ const TABS = [
   },
   {
     key: 'produtividade', label: 'Produtividade', icon: ClipboardList, controls: ['periodo', 'responsavel'] as Control[], render: () => <ProdutividadeTab />,
-    notice: (u: UnidadeKey) => u ? 'Tarefas e prazos ainda não são marcados por unidade: a carga da equipe é a mesma em qualquer visão.' : null,
+    notice: (u: UnidadeKey) => u ? 'Tarefas têm unidade (as antigas contam como Advocacia). Prazos e processos são sempre da Advocacia.' : null,
   },
   { key: 'metas', label: 'Metas', icon: Trophy, controls: [] as Control[], render: () => <MetasTab /> },
   { key: 'clientes', label: 'Clientes', icon: Users, controls: ['periodo', 'responsavel'] as Control[], render: () => <ClientesTab /> },

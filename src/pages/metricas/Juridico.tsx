@@ -107,7 +107,7 @@ export default function JuridicoTab() {
 
   /* ---------- Honorários ---------- */
   const acordos = useMemo(() => finance.filter(f => f.category === 'Acordo' && f.type === 'receita' && inRange(f.date, start, end)), [finance, start, end])
-  const exitoPrevisto = useMemo(() => finance.filter(f => f.category === 'Êxito' && f.type === 'receita' && !f.paid), [finance])
+  const exitoPrevisto = useMemo(() => finance.filter(f => f.category === 'Êxito' && f.type === 'receita' && f.aberto > 0), [finance])
   const areaDe = (f: { process_id: string | null; client_id: string | null }) => (f.process_id && processMap.get(f.process_id)?.area) || (f.client_id && clientMap.get(f.client_id)?.area) || 'Não classificado'
   const receitaPeriodo = useMemo(() => finance.filter(f => f.type === 'receita' && inRange(f.date, start, end)), [finance, start, end])
   const receitaPorArea = useMemo(() => groupSum(receitaPeriodo, areaDe, f => f.value), [receitaPeriodo, processMap, clientMap])
@@ -238,7 +238,7 @@ export default function JuridicoTab() {
         <KpiCard title="Sem prazo futuro" hint="Processos contenciosos/extrajudiciais ativos sem nenhum prazo pendente à frente — risco de esquecimento." value={semPrazoFuturo.length} icon={ShieldAlert} color={semPrazoFuturo.length ? PAL.amber : PAL.green} trendTone="down-good"
           onClick={() => openProcs('Ativos sem prazo futuro', semPrazoFuturo)} />
         <KpiCard title="Receita por processo ativo" hint="Receita dos últimos 12 meses ÷ processos ativos." value={fmtBRL(receitaMediaPorProcesso)} icon={Banknote} color={PAL.green} sensitive onClick={() => openFin('Receita dos últimos 12 meses', receita12)} />
-        <KpiCard title="Êxito a receber" hint="Receitas da categoria Êxito ainda não pagas." value={fmtBRL(sum(exitoPrevisto.map(f => f.value)))} icon={Trophy} color={PAL.amber} sensitive onClick={() => openFin('Honorários de êxito previstos', exitoPrevisto)} />
+        <KpiCard title="Êxito a receber" hint="Receitas da categoria Êxito ainda não pagas." value={fmtBRL(sum(exitoPrevisto.map(f => f.aberto)))} icon={Trophy} color={PAL.amber} sensitive onClick={() => openFin('Honorários de êxito previstos', exitoPrevisto.map(f => ({ description: f.description, date: f.date, value: f.aberto })))} />
       </div>
 
       <ChartCard title="Entrada, saída e tamanho do acervo (12 meses)" icon={Scale}>
@@ -336,7 +336,7 @@ export default function JuridicoTab() {
         <KpiCard title="Acordos fechados" hint="Quantidade de receitas da categoria Acordo no período." value={acordos.length} icon={Handshake} color={PAL.teal} spark={sp('acordos')}
           trend={fmtBRL(sum(acordos.map(f => f.value)))} trendTone="neutral" onClick={() => openFin('Acordos do período', acordos)} />
         <KpiCard title="Ticket por acordo" hint="Valor médio das receitas de Acordo no período." value={fmtBRL(acordos.length ? sum(acordos.map(f => f.value)) / acordos.length : 0)} icon={Handshake} color={PAL.amber} sensitive onClick={() => openFin('Acordos do período', acordos)} />
-        <KpiCard title="Êxito a receber" hint="Honorários de êxito lançados e ainda não pagos." value={fmtBRL(sum(exitoPrevisto.map(f => f.value)))} icon={Trophy} color={PAL.amber} sensitive onClick={() => openFin('Êxito previsto', exitoPrevisto)} />
+        <KpiCard title="Êxito a receber" hint="Honorários de êxito lançados e ainda não pagos." value={fmtBRL(sum(exitoPrevisto.map(f => f.aberto)))} icon={Trophy} color={PAL.amber} sensitive onClick={() => openFin('Êxito previsto', exitoPrevisto.map(f => ({ description: f.description, date: f.date, value: f.aberto })))} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Receita por área jurídica (período)" icon={Scale}>
