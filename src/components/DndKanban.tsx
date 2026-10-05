@@ -29,7 +29,7 @@ export function KanbanDndContext({ onDropOnColumn, children }: {
 export function DroppableColumn({ id, children, className = '' }: { id: string; children: ReactNode; className?: string }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   return (
-    <div ref={setNodeRef} className={`${className} rounded-xl transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-primary/40' : ''}`}>
+    <div ref={setNodeRef} className={`${className} rounded-2xl transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-primary/40' : ''}`}>
       {children}
     </div>
   )

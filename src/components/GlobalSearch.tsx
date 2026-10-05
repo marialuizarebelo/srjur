@@ -26,7 +26,7 @@ interface SearchResult {
 const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   cliente:   { label: 'Clientes',   icon: Users,        color: 'text-amber-600' },
   processo:  { label: 'Processos',  icon: Scale,        color: 'text-rose-600' },
-  tarefa:    { label: 'Tarefas',    icon: ClipboardList,color: 'text-green-600' },
+  tarefa:    { label: 'Tarefas',    icon: ClipboardList,color: 'text-green-700 dark:text-green-300' },
   prazo:     { label: 'Prazos',     icon: Bell,         color: 'text-purple-600' },
   financeiro:{ label: 'Financeiro', icon: DollarSign,   color: 'text-blue-600' },
   marketing: { label: 'Marketing',  icon: Megaphone,    color: 'text-pink-600' },
@@ -191,7 +191,7 @@ export function GlobalSearch({ open, onOpenChange }: Props) {
                           key={r.id}
                           value={r.id}
                           onSelect={() => handleSelect(r)}
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer"
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-2xl cursor-pointer"
                         >
                           <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 bg-muted`}>
                             <Icon className={`h-3.5 w-3.5 ${r.color}`} />

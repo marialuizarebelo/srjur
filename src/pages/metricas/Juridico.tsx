@@ -131,16 +131,16 @@ export default function JuridicoTab() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        <KpiCard title="Clientes ativos" value={clientesAtivos} icon={Users} color="#3B82F6" onClick={openClientsDetail} />
-        <KpiCard title="Processos ativos" value={processosAtivos} icon={Scale} color="#6366F1" onClick={() => openProcessesDetail('Processos ativos', processosAtivosList)} />
-        <KpiCard title="Novos processos (período)" value={novosProcessos} icon={Scale} color="#22c55e" onClick={() => openProcessesDetail('Novos processos no período', novosProcessosList)} />
-        <KpiCard title="Processos encerrados (período)" value={processosEncerrados} icon={Scale} color="#94a3b8" onClick={() => openProcessesDetail('Processos encerrados no período', processosEncerradosList)} />
-        <KpiCard title="Prazos no período" value={prazosNoPeriodo.length} icon={Bell} color="#F59E0B" onClick={() => openDeadlinesDetail('Prazos no período', prazosNoPeriodo)} />
-        <KpiCard title="Prazos concluídos (período)" value={prazosConcluidos} icon={Bell} color="#22c55e" onClick={() => openDeadlinesDetail('Prazos concluídos no período', prazosNoPeriodo.filter(d => d.status === 'cumprido'))} />
-        <KpiCard title="Prazos atrasados" value={prazosAtrasados} icon={Bell} color="#ef4444" onClick={() => openDeadlinesDetail('Prazos atrasados', prazosAtrasadosList)} />
-        <KpiCard title="Audiências realizadas (período)" value={audienciasRealizadas} icon={Gavel} color="#8B5CF6" onClick={() => openTasksDetail('Audiências realizadas no período', audienciasRealizadasList)} />
-        <KpiCard title="Acordos fechados (período)" value={acordosNoPeriodo.length} icon={Handshake} color="#14B8A6" trend={fmtBRL(valorAcordos)} onClick={() => openFinanceDetail('Acordos fechados no período', acordosNoPeriodo)} />
-        <KpiCard title="Honorários de êxito previstos" value={fmtBRL(honorariosExitoPrevistos)} icon={Trophy} color="#F59E0B" sensitive onClick={() => openFinanceDetail('Honorários de êxito previstos', honorariosExitoList)} />
+        <KpiCard title="Clientes ativos" value={clientesAtivos} icon={Users} color="#6A8FC7" onClick={openClientsDetail} />
+        <KpiCard title="Processos ativos" value={processosAtivos} icon={Scale} color="#7A84C9" onClick={() => openProcessesDetail('Processos ativos', processosAtivosList)} />
+        <KpiCard title="Novos processos (período)" value={novosProcessos} icon={Scale} color="#6E9C7D" onClick={() => openProcessesDetail('Novos processos no período', novosProcessosList)} />
+        <KpiCard title="Processos encerrados (período)" value={processosEncerrados} icon={Scale} color="#8A93AA" onClick={() => openProcessesDetail('Processos encerrados no período', processosEncerradosList)} />
+        <KpiCard title="Prazos no período" value={prazosNoPeriodo.length} icon={Bell} color="#D9A441" onClick={() => openDeadlinesDetail('Prazos no período', prazosNoPeriodo)} />
+        <KpiCard title="Prazos concluídos (período)" value={prazosConcluidos} icon={Bell} color="#6E9C7D" onClick={() => openDeadlinesDetail('Prazos concluídos no período', prazosNoPeriodo.filter(d => d.status === 'cumprido'))} />
+        <KpiCard title="Prazos atrasados" value={prazosAtrasados} icon={Bell} color="#D96C87" onClick={() => openDeadlinesDetail('Prazos atrasados', prazosAtrasadosList)} />
+        <KpiCard title="Audiências realizadas (período)" value={audienciasRealizadas} icon={Gavel} color="#8577C9" onClick={() => openTasksDetail('Audiências realizadas no período', audienciasRealizadasList)} />
+        <KpiCard title="Acordos fechados (período)" value={acordosNoPeriodo.length} icon={Handshake} color="#5FA39A" trend={fmtBRL(valorAcordos)} onClick={() => openFinanceDetail('Acordos fechados no período', acordosNoPeriodo)} />
+        <KpiCard title="Honorários de êxito previstos" value={fmtBRL(honorariosExitoPrevistos)} icon={Trophy} color="#D9A441" sensitive onClick={() => openFinanceDetail('Honorários de êxito previstos', honorariosExitoList)} />
       </div>
 
       <ChartCard title="Receita por área jurídica (período)" icon={Scale}>
@@ -153,7 +153,7 @@ export default function JuridicoTab() {
                 <XAxis type="number" tick={{ fontSize: 10 }} />
                 <YAxis type="category" dataKey="area" tick={{ fontSize: 10 }} width={130} />
                 <RTooltip formatter={(v) => fmtBRL(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                <Bar dataKey="total" name="Receita" fill="#6366F1" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(d: any) => openAreaDetail(d.area)} />
+                <Bar dataKey="total" name="Receita" fill="#7A84C9" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(d: any) => openAreaDetail(d.area)} />
               </BarChart>
             </ResponsiveContainer>
           )}

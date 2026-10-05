@@ -137,16 +137,16 @@ export default function ProdutividadeTab() {
       <AttentionPanel items={attention} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard title="Tarefas pendentes" value={tarefasPendentes} icon={ClipboardList} color="#3B82F6" onClick={() => openTasksDetail('Tarefas pendentes', tasks.filter(t => t.status === 'pendente'))} />
-        <KpiCard title="Tarefas atrasadas" value={tarefasAtrasadas} icon={ClipboardList} color="#ef4444" onClick={() => openTasksDetail('Tarefas atrasadas', tasks.filter(t => t.status === 'pendente' && t.due_date && t.due_date < todayStr))} />
-        <KpiCard title="Prazos pendentes" value={prazosPendentes} icon={Bell} color="#F59E0B" onClick={() => openDeadlinesDetail('Prazos pendentes', deadlines.filter(d => d.status === 'pendente'))} />
-        <KpiCard title="Prazos atrasados" value={prazosAtrasados} icon={Bell} color="#ef4444" onClick={() => openDeadlinesDetail('Prazos atrasados', deadlines.filter(d => d.status === 'pendente' && d.due_date < todayStr))} />
+        <KpiCard title="Tarefas pendentes" value={tarefasPendentes} icon={ClipboardList} color="#6A8FC7" onClick={() => openTasksDetail('Tarefas pendentes', tasks.filter(t => t.status === 'pendente'))} />
+        <KpiCard title="Tarefas atrasadas" value={tarefasAtrasadas} icon={ClipboardList} color="#D96C87" onClick={() => openTasksDetail('Tarefas atrasadas', tasks.filter(t => t.status === 'pendente' && t.due_date && t.due_date < todayStr))} />
+        <KpiCard title="Prazos pendentes" value={prazosPendentes} icon={Bell} color="#D9A441" onClick={() => openDeadlinesDetail('Prazos pendentes', deadlines.filter(d => d.status === 'pendente'))} />
+        <KpiCard title="Prazos atrasados" value={prazosAtrasados} icon={Bell} color="#D96C87" onClick={() => openDeadlinesDetail('Prazos atrasados', deadlines.filter(d => d.status === 'pendente' && d.due_date < todayStr))} />
       </div>
 
       <ChartCard title="Tarefas concluídas x atrasadas por mês" icon={ClipboardList}>
         <TrendChart data={tarefasPorMes} series={[
-          { key: 'concluidas', name: 'Concluídas', color: '#22c55e' },
-          { key: 'atrasadas', name: 'Atrasadas', color: '#ef4444' },
+          { key: 'concluidas', name: 'Concluídas', color: '#6E9C7D' },
+          { key: 'atrasadas', name: 'Atrasadas', color: '#D96C87' },
         ]} />
       </ChartCard>
 
@@ -168,7 +168,7 @@ export default function ProdutividadeTab() {
                   <XAxis dataKey="status" tick={{ fontSize: 9 }} />
                   <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                   <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                  <Bar dataKey="total" name="Processos" fill="#6366F1" radius={[4, 4, 0, 0]} cursor="pointer"
+                  <Bar dataKey="total" name="Processos" fill="#7A84C9" radius={[4, 4, 0, 0]} cursor="pointer"
                     onClick={(d: any) => openProcessStatusDetail(d.statusKey, d.status)} />
                 </BarChart>
               </ResponsiveContainer>
@@ -187,7 +187,7 @@ export default function ProdutividadeTab() {
                 <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={120} />
                 <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                <Bar dataKey="total" name="Pendências" fill="#14B8A6" radius={[0, 4, 4, 0]} cursor="pointer"
+                <Bar dataKey="total" name="Pendências" fill="#5FA39A" radius={[0, 4, 4, 0]} cursor="pointer"
                   onClick={(d: any) => openResponsavelDetail(d.name, d.itens)} />
               </BarChart>
             </ResponsiveContainer>

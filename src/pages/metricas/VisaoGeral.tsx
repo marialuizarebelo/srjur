@@ -109,14 +109,14 @@ export default function VisaoGeralTab() {
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">Panorama geral do escritório neste mês. Veja o detalhe em cada aba.</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        <KpiCard title="Saldo total" value={fmtBRL(saldoTotal)} icon={DollarSign} color="#8B5CF6" sensitive onClick={openSaldoDetail} />
-        <KpiCard title="Receitas (mês)" value={fmtBRL(receitasMes)} icon={TrendingUp} color="#22c55e" sensitive trend={trendText(receitasMes, receitasMesAnterior, 'vs mês anterior')} onClick={openReceitasDetail} />
-        <KpiCard title="Despesas (mês)" value={fmtBRL(despesasMes)} icon={TrendingUp} color="#ef4444" sensitive trend={trendText(despesasMes, despesasMesAnterior, 'vs mês anterior')} onClick={openDespesasDetail} />
-        <KpiCard title="Resultado líquido (mês)" value={fmtBRL(resultadoLiquido)} icon={DollarSign} color={resultadoLiquido >= 0 ? '#22c55e' : '#ef4444'} sensitive trend={trendText(resultadoLiquido, receitasMesAnterior - despesasMesAnterior, 'vs mês anterior')} onClick={openResultadoDetail} />
-        <KpiCard title="Clientes ativos" value={clients.length} icon={Users} color="#3B82F6" onClick={openClientesDetail} />
-        <KpiCard title="Leads ativos" value={leads.length} icon={Target} color="#F59E0B" onClick={openLeadsDetail} />
-        <KpiCard title="Processos ativos" value={processes.length} icon={Scale} color="#6366F1" onClick={openProcessosDetail} />
-        <KpiCard title="Pendências atrasadas" value={tasksAtrasadas.length + deadlinesAtrasados.length} icon={ClipboardList} color="#ef4444" onClick={openPendenciasDetail} />
+        <KpiCard title="Saldo total" value={fmtBRL(saldoTotal)} icon={DollarSign} color="#8577C9" sensitive onClick={openSaldoDetail} />
+        <KpiCard title="Receitas (mês)" value={fmtBRL(receitasMes)} icon={TrendingUp} color="#6E9C7D" sensitive trend={trendText(receitasMes, receitasMesAnterior, 'vs mês anterior')} onClick={openReceitasDetail} />
+        <KpiCard title="Despesas (mês)" value={fmtBRL(despesasMes)} icon={TrendingUp} color="#D96C87" sensitive trend={trendText(despesasMes, despesasMesAnterior, 'vs mês anterior')} onClick={openDespesasDetail} />
+        <KpiCard title="Resultado líquido (mês)" value={fmtBRL(resultadoLiquido)} icon={DollarSign} color={resultadoLiquido >= 0 ? '#6E9C7D' : '#D96C87'} sensitive trend={trendText(resultadoLiquido, receitasMesAnterior - despesasMesAnterior, 'vs mês anterior')} onClick={openResultadoDetail} />
+        <KpiCard title="Clientes ativos" value={clients.length} icon={Users} color="#6A8FC7" onClick={openClientesDetail} />
+        <KpiCard title="Leads ativos" value={leads.length} icon={Target} color="#D9A441" onClick={openLeadsDetail} />
+        <KpiCard title="Processos ativos" value={processes.length} icon={Scale} color="#7A84C9" onClick={openProcessosDetail} />
+        <KpiCard title="Pendências atrasadas" value={tasksAtrasadas.length + deadlinesAtrasados.length} icon={ClipboardList} color="#D96C87" onClick={openPendenciasDetail} />
       </div>
 
       <DetailDialog open={detail.open} onClose={detail.close} title={detail.title} rows={detail.rows} />

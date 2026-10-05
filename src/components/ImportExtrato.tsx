@@ -165,7 +165,7 @@ export function ImportExtrato({ open, onOpenChange, onComplete }: ImportExtratoP
         {step === 'review' && (
           <div className="space-y-4">
             {/* Summary */}
-            <div className="flex flex-wrap items-center gap-4 p-4 rounded-xl bg-muted/50">
+            <div className="flex flex-wrap items-center gap-4 p-4 rounded-2xl bg-[var(--glass-surface)]">
               <div className="text-sm">
                 <span className="font-semibold">{items.length}</span> transações encontradas
               </div>
@@ -176,8 +176,8 @@ export function ImportExtrato({ open, onOpenChange, onComplete }: ImportExtratoP
                 </Badge>
               )}
               <div className="ml-auto flex items-center gap-3 text-sm">
-                <span className="text-green-600 font-medium">+{fmtBRL(totalReceitas)}</span>
-                <span className="text-red-500 font-medium">-{fmtBRL(totalDespesas)}</span>
+                <span className="text-green-700 dark:text-green-300 font-medium">+{fmtBRL(totalReceitas)}</span>
+                <span className="text-red-700 dark:text-red-300 font-medium">-{fmtBRL(totalDespesas)}</span>
               </div>
             </div>
 
@@ -217,8 +217,8 @@ export function ImportExtrato({ open, onOpenChange, onComplete }: ImportExtratoP
                     backgroundColor: item.type === 'receita' ? '#dcfce7' : '#fee2e2',
                   }}>
                     {item.type === 'receita'
-                      ? <ArrowUpCircle className="h-4 w-4 text-green-600" />
-                      : <ArrowDownCircle className="h-4 w-4 text-red-500" />
+                      ? <ArrowUpCircle className="h-4 w-4 text-green-700 dark:text-green-300" />
+                      : <ArrowDownCircle className="h-4 w-4 text-red-700 dark:text-red-300" />
                     }
                   </div>
 
@@ -236,7 +236,7 @@ export function ImportExtrato({ open, onOpenChange, onComplete }: ImportExtratoP
                   </div>
 
                   <p className={`text-sm font-semibold whitespace-nowrap ${
-                    item.type === 'receita' ? 'text-green-600' : 'text-red-500'
+                    item.type === 'receita' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
                   }`}>
                     {item.type === 'receita' ? '+' : '-'}{fmtBRL(item.value)}
                   </p>
@@ -250,7 +250,7 @@ export function ImportExtrato({ open, onOpenChange, onComplete }: ImportExtratoP
         {step === 'done' && (
           <div className="py-12 text-center space-y-4">
             <div className="mx-auto h-16 w-16 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-              <Check className="h-8 w-8 text-green-600" />
+              <Check className="h-8 w-8 text-green-700 dark:text-green-300" />
             </div>
             <p className="font-medium text-lg">Importação concluída!</p>
             <p className="text-sm text-muted-foreground">

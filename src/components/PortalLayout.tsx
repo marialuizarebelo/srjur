@@ -58,7 +58,7 @@ export function PortalLayout({ children, basePath = '/portal', previewMode = fal
           {/* Row 1: brand + actions */}
           <div className="h-16 flex items-center gap-3">
             <div className="flex items-center gap-2.5 shrink-0">
-              <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-sm overflow-hidden shrink-0">
+              <div className="h-9 w-9 rounded-2xl bg-primary flex items-center justify-center text-white font-bold text-sm overflow-hidden shrink-0">
                 {office.logo_url ? <img src={office.logo_url} alt="" className="w-full h-full object-cover" /> : 'SR'}
               </div>
               <div>
@@ -70,14 +70,14 @@ export function PortalLayout({ children, basePath = '/portal', previewMode = fal
             <div className="flex-1" />
 
             <div className="flex items-center gap-2 shrink-0">
-              <button onClick={toggleTheme} className="h-9 w-9 rounded-xl hover:bg-muted flex items-center justify-center transition-colors">
+              <button onClick={toggleTheme} className="h-9 w-9 rounded-2xl hover:bg-muted flex items-center justify-center transition-colors">
                 {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
               </button>
               <div className="h-8 w-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold overflow-hidden">
                 {profile?.photo_url ? <img src={profile.photo_url} alt="" className="w-full h-full object-cover" /> : (profile?.display_name ?? 'C').charAt(0)}
               </div>
               {!previewMode && (
-                <button onClick={signOut} className="h-9 w-9 rounded-xl hover:bg-muted flex items-center justify-center transition-colors text-muted-foreground" title="Sair">
+                <button onClick={signOut} className="h-9 w-9 rounded-2xl hover:bg-muted flex items-center justify-center transition-colors text-muted-foreground" title="Sair">
                   <LogOut className="h-4 w-4" />
                 </button>
               )}

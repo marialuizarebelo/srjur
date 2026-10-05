@@ -44,7 +44,7 @@ const TIPO_OPTIONS: Record<'financeiro' | 'comercial', TipoMeta[]> = {
 }
 const PERIODO_LABELS: Record<Meta['periodo'], string> = { mensal: 'Mensal', semestral: 'Semestral', anual: 'Anual' }
 const PRIORIDADE_LABELS: Record<Meta['prioridade'], string> = { baixa: 'Baixa', media: 'Média', alta: 'Alta' }
-const PRIORIDADE_COLOR: Record<Meta['prioridade'], string> = { baixa: '#94a3b8', media: '#3B82F6', alta: '#ef4444' }
+const PRIORIDADE_COLOR: Record<Meta['prioridade'], string> = { baixa: '#8A93AA', media: '#6A8FC7', alta: '#D96C87' }
 
 function metaPeriodRange(m: Meta) {
   if (m.periodo === 'mensal' && m.mes) {
@@ -73,14 +73,14 @@ function metaStatus(m: Meta, tipo: TipoMeta, atingido: number) {
   const { start, end } = metaPeriodRange(m)
   const today = new Date().toISOString().slice(0, 10)
   const achieved = tipo.direction === 'min' ? atingido >= m.valor_alvo : atingido <= m.valor_alvo
-  if (achieved) return { label: 'Atingida', color: '#22c55e' }
-  if (end < today) return { label: 'Não atingida', color: '#ef4444' }
+  if (achieved) return { label: 'Atingida', color: '#6E9C7D' }
+  if (end < today) return { label: 'Não atingida', color: '#D96C87' }
   const totalDays = Math.max(1, (new Date(end).getTime() - new Date(start).getTime()) / 86400000)
   const elapsedDays = Math.max(0, (new Date(today).getTime() - new Date(start).getTime()) / 86400000)
   const elapsedPct = Math.min(1, elapsedDays / totalDays)
   const progressPct = tipo.direction === 'min' ? atingido / m.valor_alvo : 1 - (m.valor_alvo > 0 ? atingido / m.valor_alvo : 0)
-  if (progressPct < elapsedPct * 0.7) return { label: 'Em risco', color: '#F59E0B' }
-  return { label: 'No caminho', color: '#3B82F6' }
+  if (progressPct < elapsedPct * 0.7) return { label: 'Em risco', color: '#D9A441' }
+  return { label: 'No caminho', color: '#6A8FC7' }
 }
 function daysRemaining(m: Meta): number | null {
   const { end } = metaPeriodRange(m)
@@ -316,7 +316,7 @@ function MetaCard({ m, tipo, atingido, profiles, onEdit, onDelete, onDetails, on
         <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <button onClick={onDetails} className="h-6 w-6 rounded hover:bg-muted flex items-center justify-center" title="Diário e ações"><NotebookText className="h-3 w-3 text-muted-foreground" /></button>
           <button onClick={onEdit} className="h-6 w-6 rounded hover:bg-muted flex items-center justify-center"><Pencil className="h-3 w-3 text-muted-foreground" /></button>
-          <button onClick={onDelete} className="h-6 w-6 rounded hover:bg-muted flex items-center justify-center"><Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-500" /></button>
+          <button onClick={onDelete} className="h-6 w-6 rounded hover:bg-muted flex items-center justify-center"><Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-700 dark:text-red-300" /></button>
         </div>
       </div>
 
@@ -442,7 +442,7 @@ function MetaDetalhesDialog({ open, onClose, meta, onUpdated }: { open: boolean;
                   <div key={a.id} className="flex items-center gap-2 text-xs rounded-lg border px-2.5 py-1.5 group">
                     <input type="checkbox" checked={a.concluida} onChange={() => toggleAcao(a)} className="h-3.5 w-3.5 accent-primary shrink-0" />
                     <span className={`flex-1 ${a.concluida ? 'line-through text-muted-foreground' : ''}`}>{a.texto}</span>
-                    <button onClick={() => removeAcao(a.id)} className="opacity-0 group-hover:opacity-100 shrink-0"><Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-500" /></button>
+                    <button onClick={() => removeAcao(a.id)} className="opacity-0 group-hover:opacity-100 shrink-0"><Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-700 dark:text-red-300" /></button>
                   </div>
                 ))}
                 {acoes.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma ação cadastrada ainda.</p>}
@@ -460,7 +460,7 @@ function MetaDetalhesDialog({ open, onClose, meta, onUpdated }: { open: boolean;
                 {notas.map(n => (
                   <div key={n.id} className="flex items-center justify-between gap-2 text-xs rounded-lg border px-2.5 py-1.5 group">
                     <span><strong>{fmtDate(n.created_at)}</strong> — {n.texto}</span>
-                    <button onClick={() => removeNota(n.id)} className="opacity-0 group-hover:opacity-100 shrink-0"><Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-500" /></button>
+                    <button onClick={() => removeNota(n.id)} className="opacity-0 group-hover:opacity-100 shrink-0"><Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-700 dark:text-red-300" /></button>
                   </div>
                 ))}
                 {notas.length === 0 && <p className="text-xs text-muted-foreground">Nenhum registro ainda.</p>}
@@ -641,7 +641,7 @@ export default function MetasTab() {
     <div className="space-y-4">
       <Card className="p-4">
         <div className="flex items-center gap-2 mb-1">
-          <Trophy className="h-4 w-4 text-amber-500" />
+          <Trophy className="h-4 w-4 text-amber-700 dark:text-amber-300" />
           <h3 className="font-semibold text-sm">Resumo geral</h3>
         </div>
         <p className="text-sm text-muted-foreground">

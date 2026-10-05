@@ -110,18 +110,18 @@ export default function ProdutoSaasTab() {
       <PeriodPicker p={period} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard title="Clientes SaaS ativos" value={clientesAtivos.length} icon={Users} color="#3B82F6"
+        <KpiCard title="Clientes SaaS ativos" value={clientesAtivos.length} icon={Users} color="#6A8FC7"
           trend={somenteSaas.length > 0 ? `${somenteSaas.length} só sistema, sem questão jurídica` : undefined} onClick={openClientesDetail} />
-        <KpiCard title="Receita SaaS (período)" value={fmtBRL(receitaPeriodo)} icon={TrendingUp} color="#22c55e" sensitive
+        <KpiCard title="Receita SaaS (período)" value={fmtBRL(receitaPeriodo)} icon={TrendingUp} color="#6E9C7D" sensitive
           trend={trendText(receitaPeriodo, receitaAnterior)} onClick={openReceitaDetail} />
-        <KpiCard title="Despesas SaaS (período)" value={fmtBRL(despesaPeriodo)} icon={TrendingUp} color="#ef4444" sensitive onClick={openDespesaDetail} />
-        <KpiCard title="MRR aproximado" value={fmtBRL(mrrAproximado)} icon={DollarSign} color="#8B5CF6" sensitive onClick={openMrrDetail} />
+        <KpiCard title="Despesas SaaS (período)" value={fmtBRL(despesaPeriodo)} icon={TrendingUp} color="#D96C87" sensitive onClick={openDespesaDetail} />
+        <KpiCard title="MRR aproximado" value={fmtBRL(mrrAproximado)} icon={DollarSign} color="#8577C9" sensitive onClick={openMrrDetail} />
       </div>
 
       <ChartCard title="Evolução SaaS (12 meses)" icon={Rocket}>
         <TrendChart data={evolution} formatValue={fmtBRL} series={[
-          { key: 'receitas', name: 'Receitas', color: '#22c55e' },
-          { key: 'despesas', name: 'Despesas', color: '#ef4444' },
+          { key: 'receitas', name: 'Receitas', color: '#6E9C7D' },
+          { key: 'despesas', name: 'Despesas', color: '#D96C87' },
         ]} />
       </ChartCard>
 

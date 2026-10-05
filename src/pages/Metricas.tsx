@@ -34,7 +34,7 @@ export default function Metricas() {
         <p className="text-sm text-muted-foreground">Indicadores e planejamento do escritório como um todo</p>
       </div>
 
-      <div className="flex gap-1 bg-muted/40 rounded-xl p-1 flex-wrap w-fit">
+      <div className="flex gap-1 bg-muted/40 rounded-2xl p-1 flex-wrap w-fit">
         {TABS.map(t => {
           const Icon = t.icon
           return (

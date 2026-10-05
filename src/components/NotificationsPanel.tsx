@@ -79,9 +79,9 @@ async function loadNotifs(): Promise<Notif[]> {
 }
 
 const TYPE_CONFIG = {
-  prazo_atrasado: { icon: AlertTriangle, color: 'text-red-500',    bg: 'bg-red-50 dark:bg-red-950/30',     label: 'Prazo atrasado'  },
-  prazo_hoje:     { icon: Clock,         color: 'text-amber-500',  bg: 'bg-amber-50 dark:bg-amber-950/30', label: 'Vence hoje'      },
-  prazo_amanha:   { icon: Clock,         color: 'text-blue-500',   bg: 'bg-blue-50 dark:bg-blue-950/30',   label: 'Vence amanhã'    },
+  prazo_atrasado: { icon: AlertTriangle, color: 'text-red-700 dark:text-red-300',    bg: 'bg-red-50 dark:bg-red-950/30',     label: 'Prazo atrasado'  },
+  prazo_hoje:     { icon: Clock,         color: 'text-amber-700 dark:text-amber-300',  bg: 'bg-amber-50 dark:bg-amber-950/30', label: 'Vence hoje'      },
+  prazo_amanha:   { icon: Clock,         color: 'text-blue-700 dark:text-blue-300',   bg: 'bg-blue-50 dark:bg-blue-950/30',   label: 'Vence amanhã'    },
   tarefa_atrasada:{ icon: ClipboardList, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-950/30',label: 'Tarefa atrasada'},
 }
 
@@ -234,7 +234,7 @@ export function NotificationsPanel() {
 
           {!loading && notifs.length === 0 && (
             <div className="py-10 text-center">
-              <CheckCircle2 className="h-8 w-8 text-green-500 mx-auto mb-2 opacity-60" />
+              <CheckCircle2 className="h-8 w-8 text-green-700 dark:text-green-300 mx-auto mb-2 opacity-60" />
               <p className="text-sm font-medium">Tudo em dia!</p>
               <p className="text-xs text-muted-foreground mt-1">Sem prazos ou tarefas urgentes</p>
             </div>

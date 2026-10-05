@@ -172,29 +172,29 @@ export default function ComercialTab() {
       <AttentionPanel items={attention} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard title="Leads ativos" value={leadsAtivos} icon={Target} color="#3B82F6" onClick={openLeadsAtivosDetail} />
-        <KpiCard title="Leads recebidos (período)" value={leadsNoPeriodo.length} icon={Target} color="#3B82F6" trend={trendText(leadsNoPeriodo.length, leadsPeriodoAnterior.length)} onClick={openLeadsRecebidosDetail} />
-        <KpiCard title="Taxa de conversão" value={`${taxaConversao.toFixed(0)}%`} icon={TrendingUp} color="#22c55e" trend={trendText(taxaConversao, taxaConversaoAnterior)} onClick={openConversaoDetail} />
-        <KpiCard title="Novos clientes (período)" value={clientesNoPeriodo.length} icon={Users} color="#8B5CF6" trend={trendText(clientesNoPeriodo.length, clientesPeriodoAnterior.length)} onClick={openNovosClientesDetail} />
-        <KpiCard title="Ticket médio contratado" value={fmtBRL(ticketMedio)} icon={TrendingUp} color="#F59E0B" sensitive onClick={openTicketMedioDetail} />
+        <KpiCard title="Leads ativos" value={leadsAtivos} icon={Target} color="#6A8FC7" onClick={openLeadsAtivosDetail} />
+        <KpiCard title="Leads recebidos (período)" value={leadsNoPeriodo.length} icon={Target} color="#6A8FC7" trend={trendText(leadsNoPeriodo.length, leadsPeriodoAnterior.length)} onClick={openLeadsRecebidosDetail} />
+        <KpiCard title="Taxa de conversão" value={`${taxaConversao.toFixed(0)}%`} icon={TrendingUp} color="#6E9C7D" trend={trendText(taxaConversao, taxaConversaoAnterior)} onClick={openConversaoDetail} />
+        <KpiCard title="Novos clientes (período)" value={clientesNoPeriodo.length} icon={Users} color="#8577C9" trend={trendText(clientesNoPeriodo.length, clientesPeriodoAnterior.length)} onClick={openNovosClientesDetail} />
+        <KpiCard title="Ticket médio contratado" value={fmtBRL(ticketMedio)} icon={TrendingUp} color="#D9A441" sensitive onClick={openTicketMedioDetail} />
       </div>
 
       <ChartCard title="Pipeline comercial (visão atual)" icon={TrendingUp}>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button onClick={() => openLeadsList('Receita já contratada', leadsContratados)}
-            className="text-left rounded-xl border p-3 hover:bg-muted/50 transition-colors">
+            className="text-left rounded-2xl border p-3 hover:bg-[var(--glass-surface)] transition-colors">
             <p className="text-[11px] text-muted-foreground">Contratada</p>
-            <p className="text-lg font-bold text-green-600">{fmtBRL(receitaContratada)}</p>
+            <p className="text-lg font-bold text-green-700 dark:text-green-300">{fmtBRL(receitaContratada)}</p>
           </button>
           <button onClick={() => openLeadsList('Leads em negociação avançada', leadsAvancados)}
-            className="text-left rounded-xl border p-3 hover:bg-muted/50 transition-colors">
+            className="text-left rounded-2xl border p-3 hover:bg-[var(--glass-surface)] transition-colors">
             <p className="text-[11px] text-muted-foreground">Provável (negociação avançada)</p>
-            <p className="text-lg font-bold text-amber-500">{fmtBRL(receitaProvavel)}</p>
+            <p className="text-lg font-bold text-amber-700 dark:text-amber-300">{fmtBRL(receitaProvavel)}</p>
           </button>
           <button onClick={() => openLeadsList('Todo o pipeline em aberto', leadsPipelineAberto)}
-            className="text-left rounded-xl border p-3 hover:bg-muted/50 transition-colors">
+            className="text-left rounded-2xl border p-3 hover:bg-[var(--glass-surface)] transition-colors">
             <p className="text-[11px] text-muted-foreground">Pipeline total em aberto</p>
-            <p className="text-lg font-bold text-blue-500">{fmtBRL(receitaPipeline)}</p>
+            <p className="text-lg font-bold text-blue-700 dark:text-blue-300">{fmtBRL(receitaPipeline)}</p>
           </button>
         </div>
       </ChartCard>
@@ -209,7 +209,7 @@ export default function ComercialTab() {
                 <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
                 <YAxis type="category" dataKey="stage" tick={{ fontSize: 10 }} width={150} />
                 <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                <Bar dataKey="total" name="Leads" fill="#3B82F6" radius={[0, 4, 4, 0]} cursor="pointer"
+                <Bar dataKey="total" name="Leads" fill="#6A8FC7" radius={[0, 4, 4, 0]} cursor="pointer"
                   onClick={(d: any) => openStageDetail(stagePos.get(d.value) ?? 0, d.stage)} />
               </BarChart>
             </ResponsiveContainer>
@@ -237,8 +237,8 @@ export default function ComercialTab() {
                 <YAxis type="category" dataKey="origem" tick={{ fontSize: 10 }} width={110} />
                 <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="leads" name="Leads" fill="#93c5fd" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(d: any) => openOrigemDetail(d.origem)} />
-                <Bar dataKey="convertidos" name="Convertidos" fill="#3B82F6" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(d: any) => openOrigemDetail(d.origem)} />
+                <Bar dataKey="leads" name="Leads" fill="#9DB9E3" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(d: any) => openOrigemDetail(d.origem)} />
+                <Bar dataKey="convertidos" name="Convertidos" fill="#6A8FC7" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(d: any) => openOrigemDetail(d.origem)} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -247,8 +247,8 @@ export default function ComercialTab() {
 
       <ChartCard title="Novos leads e clientes por mês" icon={Target}>
         <TrendChart data={leadsClientesPorMes} series={[
-          { key: 'leads', name: 'Leads', color: '#3B82F6' },
-          { key: 'clientes', name: 'Clientes', color: '#8B5CF6' },
+          { key: 'leads', name: 'Leads', color: '#6A8FC7' },
+          { key: 'clientes', name: 'Clientes', color: '#8577C9' },
         ]} onPointClick={i => openMonthDetail(trendMonths[i])} />
       </ChartCard>
 

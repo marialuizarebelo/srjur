@@ -22,7 +22,7 @@ import { Filter as FilterIcon } from 'lucide-react'
 export const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 // Paleta mais "estratégica": tons distintos e saturados o bastante pra
 // diferenciar fatias pequenas, sem repetir matiz entre categorias vizinhas.
-export const CATEGORY_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#14B8A6', '#EF4444', '#6366F1', '#84CC16', '#F97316']
+export const CATEGORY_COLORS = ['#8577C9', '#6A8FC7', '#6E9C7D', '#D9A441', '#C4567C', '#5FA39A', '#D96C87', '#7A84C9', '#8FA96A', '#E2654B']
 
 export function monthsBack(n: number) {
   const out: { start: string; end: string; label: string }[] = []
@@ -106,15 +106,18 @@ export function KpiCard({ title, value, icon: Icon, color, sensitive, onClick, t
   trend?: string
 }) {
   return (
-    <Card className={`p-4 relative overflow-hidden border-l-4 ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
-      style={{ borderLeftColor: color, backgroundColor: color + '0a' }} onClick={onClick}>
+    <Card className={`p-4 relative overflow-hidden ${onClick ? 'cursor-pointer hover:brightness-[0.98] transition-[filter]' : ''}`}
+      style={{
+        background: `color-mix(in srgb, ${color} calc(var(--glass-k) * 1%), var(--card-glass))`,
+        border: `1px solid color-mix(in srgb, ${color} var(--glass-edge), var(--glass-rim))`,
+      }} onClick={onClick}>
       <div className="flex items-center gap-2 mb-2">
-        <div className="h-7 w-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: color + '1a' }}>
+        <div className="h-7 w-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: `color-mix(in srgb, ${color} 24%, transparent)` }}>
           <Icon className="h-3.5 w-3.5" style={{ color }} />
         </div>
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
       </div>
-      <p className="text-2xl font-bold text-foreground">
+      <p className="font-display text-2xl sm:text-3xl text-foreground">
         {sensitive ? <Sensitive>{value}</Sensitive> : value}
       </p>
       {trend && <p className="text-[11px] text-muted-foreground mt-1">{trend}</p>}
@@ -148,7 +151,7 @@ export function PieLegendList({ data, colors, formatValue, onSelect }: {
     <div className="space-y-1">
       {data.map((d, i) => (
         <button key={d.name} type="button" onClick={() => onSelect?.(d.name)}
-          className="w-full flex items-center justify-between gap-2 text-xs rounded-lg px-2 py-1.5 hover:bg-muted/50 transition-colors text-left">
+          className="w-full flex items-center justify-between gap-2 text-xs rounded-lg px-2 py-1.5 hover:bg-[var(--glass-surface)] transition-colors text-left">
           <span className="flex items-center gap-2 min-w-0">
             <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: colors[i % colors.length] }} />
             <span className="truncate">{d.name}</span>
@@ -222,13 +225,13 @@ export interface Attention { text: string; level: 'info' | 'warn' | 'danger' }
 export function AttentionPanel({ items }: { items: Attention[] }) {
   if (items.length === 0) return null
   const style: Record<Attention['level'], string> = {
-    danger: 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400',
-    warn: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400',
-    info: 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400',
+    danger: 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-700 dark:text-red-300',
+    warn: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-700 dark:text-amber-300',
+    info: 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-700 dark:text-blue-300',
   }
   return (
     <Card className="p-4 space-y-2">
-      <h3 className="font-semibold text-sm flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-500" />Pontos de atenção</h3>
+      <h3 className="font-semibold text-sm flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-300" />Pontos de atenção</h3>
       <div className="space-y-1.5">
         {items.map((a, i) => <div key={i} className={`text-xs rounded-lg px-3 py-2 border ${style[a.level]}`}>{a.text}</div>)}
       </div>
@@ -319,7 +322,7 @@ export function NotesPanel({ area, months }: { area: string; months: { start: st
             <div key={n.id} className="flex items-center justify-between gap-2 text-xs rounded-lg border px-2.5 py-1.5 group">
               <span><strong>{monthLabel(n.mes)}</strong> — {n.texto}</span>
               <button onClick={() => remove(n.id)} className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                <Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-500" />
+                <Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-700 dark:text-red-300" />
               </button>
             </div>
           ))}

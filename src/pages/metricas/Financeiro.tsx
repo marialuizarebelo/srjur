@@ -188,17 +188,17 @@ export default function FinanceiroTab() {
       <AttentionPanel items={attention} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard title="Saldo total" value={fmtBRL(saldoTotal)} icon={DollarSign} color="#8B5CF6" sensitive onClick={openSaldoDetail} />
-        <KpiCard title="Receitas (período)" value={fmtBRL(receitasPeriodo)} icon={TrendingUp} color="#22c55e" sensitive trend={trendText(receitasPeriodo, receitasAnterior)} onClick={openReceitasDetail} />
-        <KpiCard title="Despesas (período)" value={fmtBRL(despesasPeriodo)} icon={TrendingUp} color="#ef4444" sensitive trend={trendText(despesasPeriodo, despesasAnterior)} onClick={openDespesasDetail} />
-        <KpiCard title="Resultado líquido" value={fmtBRL(resultadoLiquido)} icon={DollarSign} color={resultadoLiquido >= 0 ? '#22c55e' : '#ef4444'} sensitive trend={trendText(resultadoLiquido, receitasAnterior - despesasAnterior)} onClick={openResultadoDetail} />
-        <KpiCard title="Margem líquida" value={`${margemLiquida.toFixed(0)}%`} icon={TrendingUp} color="#3B82F6" onClick={openResultadoDetail} />
+        <KpiCard title="Saldo total" value={fmtBRL(saldoTotal)} icon={DollarSign} color="#8577C9" sensitive onClick={openSaldoDetail} />
+        <KpiCard title="Receitas (período)" value={fmtBRL(receitasPeriodo)} icon={TrendingUp} color="#6E9C7D" sensitive trend={trendText(receitasPeriodo, receitasAnterior)} onClick={openReceitasDetail} />
+        <KpiCard title="Despesas (período)" value={fmtBRL(despesasPeriodo)} icon={TrendingUp} color="#D96C87" sensitive trend={trendText(despesasPeriodo, despesasAnterior)} onClick={openDespesasDetail} />
+        <KpiCard title="Resultado líquido" value={fmtBRL(resultadoLiquido)} icon={DollarSign} color={resultadoLiquido >= 0 ? '#6E9C7D' : '#D96C87'} sensitive trend={trendText(resultadoLiquido, receitasAnterior - despesasAnterior)} onClick={openResultadoDetail} />
+        <KpiCard title="Margem líquida" value={`${margemLiquida.toFixed(0)}%`} icon={TrendingUp} color="#6A8FC7" onClick={openResultadoDetail} />
       </div>
 
       <ChartCard title="Evolução (12 meses)" icon={BarChart3}>
         <TrendChart data={evolution} formatValue={fmtBRL} series={[
-          { key: 'receitas', name: 'Receitas', color: '#22c55e' },
-          { key: 'despesas', name: 'Despesas', color: '#ef4444' },
+          { key: 'receitas', name: 'Receitas', color: '#6E9C7D' },
+          { key: 'despesas', name: 'Despesas', color: '#D96C87' },
         ]} />
       </ChartCard>
 
@@ -230,8 +230,8 @@ export default function FinanceiroTab() {
               <XAxis dataKey="month" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
               <RTooltip formatter={(v) => fmtBRL(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-              <Bar dataKey="aReceber" name="A Receber" fill="#86efac" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="aPagar" name="A Pagar" fill="#fca5a5" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="aReceber" name="A Receber" fill="#8FC7A2" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="aPagar" name="A Pagar" fill="#EDB3C0" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

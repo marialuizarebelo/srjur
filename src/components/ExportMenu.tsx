@@ -29,11 +29,11 @@ export function ExportMenu({ onExcelExport, onPdfExport, label }: ExportMenuProp
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => handle('excel', onExcelExport)}>
-          <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
+          <FileSpreadsheet className="h-4 w-4 mr-2 text-green-700 dark:text-green-300" />
           Excel completo (.xlsx)
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handle('pdf', onPdfExport)}>
-          <FileText className="h-4 w-4 mr-2 text-red-500" />
+          <FileText className="h-4 w-4 mr-2 text-red-700 dark:text-red-300" />
           PDF resumido (.pdf)
         </DropdownMenuItem>
       </DropdownMenuContent>

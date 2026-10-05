@@ -84,7 +84,7 @@ function ScaleSelector({
         {options.map((o, i) => (
           <button key={i} onClick={() => onChange(i)}
             title={o.desc}
-            className={`rounded-xl border px-2 py-2.5 text-center transition-all text-xs font-medium leading-tight
+            className={`rounded-2xl border px-2 py-2.5 text-center transition-all text-xs font-medium leading-tight
               ${value === i
                 ? 'border-primary bg-primary/8 text-primary shadow-sm'
                 : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground'
@@ -288,7 +288,7 @@ export default function Calculadora() {
         </div>
 
         {horas > 0 && vHora > 0 && (
-          <div className="rounded-xl bg-muted/30 px-4 py-3 flex items-center justify-between">
+          <div className="rounded-2xl bg-muted/30 px-4 py-3 flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Custo base ({horas}h × {fmtBRL(vHora)})</span>
             <span className="text-sm font-semibold">{fmtBRL(calc.custoBase)}</span>
           </div>
@@ -318,7 +318,7 @@ export default function Calculadora() {
           )}
         </div>
 
-        <div className="flex items-center gap-3 p-3 rounded-xl border border-border/50">
+        <div className="flex items-center gap-3 p-3 rounded-2xl border border-border/50">
           <Switch checked={temExito} onCheckedChange={setTemExito} />
           <div className="flex-1">
             <Label className="cursor-pointer">Incluir cláusula de êxito</Label>
@@ -340,7 +340,7 @@ export default function Calculadora() {
             rows={2} className="resize-none text-sm" />
         </div>
 
-        <Button className="w-full h-11 rounded-xl text-sm font-medium" onClick={() => setShowResult(true)} disabled={!ready}>
+        <Button className="w-full h-11 rounded-2xl text-sm font-medium" onClick={() => setShowResult(true)} disabled={!ready}>
           Calcular honorários sugeridos
         </Button>
       </div>
@@ -380,7 +380,7 @@ export default function Calculadora() {
           </div>
 
           {temExito && pExito > 0 && (
-            <div className="mx-6 mb-2 mt-0 rounded-xl bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 px-4 py-2.5">
+            <div className="mx-6 mb-2 mt-0 rounded-2xl bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 px-4 py-2.5">
               <p className="text-xs text-violet-700 dark:text-violet-400">
                 + cláusula de êxito: <strong>{pExito}%</strong> sobre o benefício econômico obtido
               </p>
@@ -422,7 +422,7 @@ export default function Calculadora() {
           </div>
 
           {observacoes && (
-            <div className="mx-6 mb-5 rounded-xl bg-muted/30 px-4 py-3">
+            <div className="mx-6 mb-5 rounded-2xl bg-muted/30 px-4 py-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Condições / observações</p>
               <p className="text-xs whitespace-pre-wrap">{observacoes}</p>
             </div>

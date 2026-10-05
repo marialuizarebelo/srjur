@@ -594,7 +594,7 @@ export function ClientFormDialog({
                 parentFolderId={driveRootFolderId}
               />
               {form.drive_folder_id && (
-                <div className="rounded-xl border border-border/60 p-3 mt-2">
+                <div className="rounded-2xl border border-border/60 p-3 mt-2">
                   <DriveFileList folderId={form.drive_folder_id} />
                 </div>
               )}
@@ -616,7 +616,7 @@ export function ClientFormDialog({
           </div>
 
           {isEditing && clientId && (
-            <div className="rounded-xl border border-border/60 bg-muted/20 p-4 flex items-center gap-3">
+            <div className="rounded-2xl border border-border/60 bg-muted/20 p-4 flex items-center gap-3">
               <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
               <div className="flex-1">
                 <p className="text-sm font-medium">Acesso ao portal</p>
@@ -638,7 +638,7 @@ export function ClientFormDialog({
               <p className="text-sm text-muted-foreground">
                 Envie essas credenciais para {form.name.split(' ')[0]}. Recomende trocar a senha no primeiro acesso.
               </p>
-              <div className="rounded-xl bg-muted/40 p-4 space-y-2 font-mono text-xs">
+              <div className="rounded-2xl bg-muted/40 p-4 space-y-2 font-mono text-xs">
                 <p><span className="text-muted-foreground">Link:</span> {window.location.origin}/login</p>
                 <p><span className="text-muted-foreground">E-mail:</span> {form.email}</p>
                 <p><span className="text-muted-foreground">Senha:</span> {generatedPassword}</p>

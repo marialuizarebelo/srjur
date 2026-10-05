@@ -75,7 +75,7 @@ export function ImageUploadCrop({ value, onChange, bucket, shape = 'circle', siz
       <div className="flex items-center gap-4">
         <div
           className={`flex items-center justify-center bg-muted overflow-hidden shrink-0 border border-border/60 ${
-            shape === 'circle' ? 'rounded-full' : 'rounded-xl'
+            shape === 'circle' ? 'rounded-full' : 'rounded-2xl'
           }`}
           style={{ width: size, height: size }}
         >
@@ -86,7 +86,7 @@ export function ImageUploadCrop({ value, onChange, bucket, shape = 'circle', siz
           )}
         </div>
         <div>
-          <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => inputRef.current?.click()} disabled={disabled}>
+          <Button type="button" variant="outline" size="sm" className="rounded-2xl" onClick={() => inputRef.current?.click()} disabled={disabled}>
             <Upload className="h-3.5 w-3.5 mr-1.5" />Enviar imagem
           </Button>
           <p className="text-[11px] text-muted-foreground mt-1.5">JPG ou PNG, você poderá ajustar o enquadramento</p>
@@ -99,7 +99,7 @@ export function ImageUploadCrop({ value, onChange, bucket, shape = 'circle', siz
         <DialogContent className="max-w-[480px] w-[96vw] p-6">
           <DialogHeader><DialogTitle>Ajustar imagem</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-2">
-            <div className="relative w-full h-72 bg-muted rounded-xl overflow-hidden">
+            <div className="relative w-full h-72 bg-muted rounded-2xl overflow-hidden">
               {rawImage && (
                 <Cropper
                   image={rawImage}

@@ -119,8 +119,8 @@ export function DriveFolderPicker({ value, onChange, folderNameSuggestion, paren
 
   if (value.folder_id && value.drive_url) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
-        <FolderOpen className="h-4 w-4 text-amber-500 shrink-0" />
+      <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-muted/20 px-3 py-2">
+        <FolderOpen className="h-4 w-4 text-amber-700 dark:text-amber-300 shrink-0" />
         <a href={value.drive_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline flex-1 truncate flex items-center gap-1">
           Abrir pasta no Drive <ExternalLink className="h-3 w-3" />
         </a>
