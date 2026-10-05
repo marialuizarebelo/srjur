@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
+import { soft } from '@/lib/colors'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -108,22 +110,22 @@ interface StageOption { value: string; label: string; color: string }
 // foi migrada/carregada — depois disso as etapas de verdade vêm do banco e
 // passam a ser editáveis pela usuária (botão "Etapas").
 const DEFAULT_PHASES: StageOption[] = [
-  { value: 'inicial', label: 'Inicial', color: '#8B5CF6' },
-  { value: 'citacao', label: 'Citação', color: '#3B82F6' },
-  { value: 'instrucao', label: 'Instrução', color: '#F59E0B' },
-  { value: 'audiencia', label: 'Audiência', color: '#EC4899' },
-  { value: 'recurso', label: 'Recurso', color: '#F97316' },
-  { value: 'execucao', label: 'Execução', color: '#14B8A6' },
-  { value: 'encerrado', label: 'Encerrado', color: '#6B7280' },
+  { value: 'inicial', label: 'Inicial', color: '#8577C9' },
+  { value: 'citacao', label: 'Citação', color: '#6A8FC7' },
+  { value: 'instrucao', label: 'Instrução', color: '#D9A441' },
+  { value: 'audiencia', label: 'Audiência', color: '#C4567C' },
+  { value: 'recurso', label: 'Recurso', color: '#E2654B' },
+  { value: 'execucao', label: 'Execução', color: '#5FA39A' },
+  { value: 'encerrado', label: 'Encerrado', color: '#6E7A94' },
 ]
 
 const DEFAULT_EXTRAJUDICIAL_PHASES: StageOption[] = [
-  { value: 'notificacao', label: 'Notificação enviada', color: '#8B5CF6' },
-  { value: 'aguardando_resposta', label: 'Aguardando resposta', color: '#3B82F6' },
-  { value: 'negociacao', label: 'Negociação', color: '#F59E0B' },
-  { value: 'acordo', label: 'Acordo fechado', color: '#14B8A6' },
-  { value: 'sem_acordo', label: 'Sem acordo / vai a juízo', color: '#F97316' },
-  { value: 'encerrado', label: 'Encerrado', color: '#6B7280' },
+  { value: 'notificacao', label: 'Notificação enviada', color: '#8577C9' },
+  { value: 'aguardando_resposta', label: 'Aguardando resposta', color: '#6A8FC7' },
+  { value: 'negociacao', label: 'Negociação', color: '#D9A441' },
+  { value: 'acordo', label: 'Acordo fechado', color: '#5FA39A' },
+  { value: 'sem_acordo', label: 'Sem acordo / vai a juízo', color: '#E2654B' },
+  { value: 'encerrado', label: 'Encerrado', color: '#6E7A94' },
 ]
 
 const AREAS = [
@@ -133,10 +135,10 @@ const AREAS = [
 ]
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  em_andamento: { label: 'Em Andamento', color: '#3B82F6' },
-  concluido: { label: 'Concluído', color: '#10B981' },
-  arquivado: { label: 'Arquivado', color: '#6B7280' },
-  suspenso: { label: 'Suspenso', color: '#F59E0B' },
+  em_andamento: { label: 'Em Andamento', color: '#6A8FC7' },
+  concluido: { label: 'Concluído', color: '#6E9C7D' },
+  arquivado: { label: 'Arquivado', color: '#6E7A94' },
+  suspenso: { label: 'Suspenso', color: '#D9A441' },
 }
 
 const ELECTRONIC_SYSTEMS = [
@@ -200,8 +202,8 @@ export default function Processos() {
   async function loadStages() {
     const { data } = await supabase.from('process_stages').select('*').order('position')
     if (!data || data.length === 0) return
-    const j = data.filter((s: any) => s.type === 'judicial').map((s: any) => ({ value: s.value, label: s.name, color: s.color }))
-    const e = data.filter((s: any) => s.type === 'extrajudicial').map((s: any) => ({ value: s.value, label: s.name, color: s.color }))
+    const j = data.filter((s: any) => s.type === 'judicial').map((s: any) => ({ value: s.value, label: s.name, color: soft(s.color) ?? s.color }))
+    const e = data.filter((s: any) => s.type === 'extrajudicial').map((s: any) => ({ value: s.value, label: s.name, color: soft(s.color) ?? s.color }))
     if (j.length > 0) setJudicialStages(j)
     if (e.length > 0) setExtraStages(e)
   }
@@ -702,12 +704,12 @@ export default function Processos() {
       {/* Detail drawer */}
       {detailProcess && (() => {
         const dClient = clients.find(c => c.id === detailProcess.client_id)
-        return (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setDetailProcess(null)} />
-          <div className="relative w-full max-w-xl bg-background shadow-xl flex flex-col">
+        return createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in-0 duration-100" onClick={() => setDetailProcess(null)} />
+          <div className="relative w-full max-w-3xl max-h-[92vh] overflow-hidden rounded-[28px] border border-[var(--glass-border)] bg-popover text-popover-foreground shadow-[0_40px_90px_-30px_rgba(0,0,0,0.65)] flex flex-col animate-in fade-in-0 zoom-in-95 duration-100">
             {/* Header */}
-            <div className="sticky top-0 bg-background border-b p-5 z-10">
+            <div className="shrink-0 bg-popover border-b p-5 z-10">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <h3 className="font-semibold text-lg">{detailProcess.title}</h3>
@@ -733,6 +735,7 @@ export default function Processos() {
               </div>
 
               {/* Compact info bar */}
+              {(detailProcess.number || detailProcess.court || detailProcess.procedural_class || detailProcess.electronic_system) && (
               <div className="mt-3 p-3 rounded-lg bg-muted/40 text-xs space-y-1.5">
                 {detailProcess.number && (
                   <div className="flex items-center gap-1.5">
@@ -758,6 +761,7 @@ export default function Processos() {
                   <div className="text-muted-foreground">Sistema: <span className="text-foreground">{detailProcess.electronic_system}</span></div>
                 )}
               </div>
+              )}
 
               {/* Tabs */}
               <div className="flex items-center gap-1 mt-3 bg-muted/40 rounded-lg p-0.5 w-fit">
@@ -901,7 +905,7 @@ export default function Processos() {
                     entityType="process" entityId={detailProcess.id} createdAt={detailProcess.created_at}
                     externalEntries={updates.map(u => ({
                       id: u.id, text: u.text, author: u.author, created_at: u.created_at,
-                      tag: { label: 'Andamento', color: '#8B5CF6' },
+                      tag: { label: 'Andamento', color: '#8577C9' },
                     }))}
                   />
                 </div>
@@ -1017,8 +1021,8 @@ export default function Processos() {
               </>
             )}
           </div>
-        </div>
-        )
+        </div>,
+        document.body)
       })()}
 
       {/* Header */}
@@ -1091,7 +1095,7 @@ export default function Processos() {
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
           {(['em_andamento', 'concluido', 'arquivado', 'suspenso', 'todos'] as const).map(s => (
-            <Button key={s} variant={statusFilter === s ? 'default' : 'ghost'} size="sm" className="h-8"
+            <Button key={s} variant={statusFilter === s ? 'secondary' : 'ghost'} size="sm" className="h-8"
               onClick={() => setStatusFilter(s)}>
               {s === 'todos' ? 'Todos' : formatLabel(s)}
             </Button>
@@ -1124,11 +1128,11 @@ export default function Processos() {
             </SelectContent>
           </Select>
           <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
-            <Button variant={viewMode === 'kanban' ? 'default' : 'ghost'} size="icon" className="h-8 w-8"
+            <Button variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
               onClick={() => setViewMode('kanban')}>
               <LayoutGrid className="h-3.5 w-3.5" />
             </Button>
-            <Button variant={viewMode === 'list' ? 'default' : 'ghost'} size="icon" className="h-8 w-8"
+            <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
               onClick={() => setViewMode('list')}>
               <List className="h-3.5 w-3.5" />
             </Button>
@@ -1542,11 +1546,11 @@ export default function Processos() {
             <DialogTitle>Gerenciar Etapas</DialogTitle>
           </DialogHeader>
           <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 mt-2">
-            <Button variant={stagesTab === 'judicial' ? 'default' : 'ghost'} size="sm" className="flex-1"
+            <Button variant={stagesTab === 'judicial' ? 'secondary' : 'ghost'} size="sm" className="flex-1"
               onClick={() => { setStagesTab('judicial'); setStageFormOpen(false) }}>
               Judicial
             </Button>
-            <Button variant={stagesTab === 'extrajudicial' ? 'default' : 'ghost'} size="sm" className="flex-1"
+            <Button variant={stagesTab === 'extrajudicial' ? 'secondary' : 'ghost'} size="sm" className="flex-1"
               onClick={() => { setStagesTab('extrajudicial'); setStageFormOpen(false) }}>
               Extrajudicial
             </Button>

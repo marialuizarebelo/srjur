@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { toast } from 'sonner'
+import { useEventColors } from '@/lib/eventColors'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card } from '@/components/ui/card'
@@ -57,29 +58,29 @@ interface ClientOption { id: string; name: string }
 interface ProcessOption { id: string; title: string; number: string | null; client_id: string | null }
 
 const WORKFLOW_STAGES = [
-  { value: 'backlog', label: 'Backlog', color: '#6B7280' },
-  { value: 'a_fazer', label: 'A Fazer', color: '#3B82F6' },
-  { value: 'fazendo', label: 'Fazendo', color: '#F59E0B' },
-  { value: 'aguardando', label: 'Aguardando', color: '#8B5CF6' },
-  { value: 'concluido', label: 'Concluído', color: '#10B981' },
+  { value: 'backlog', label: 'Backlog', color: '#6E7A94' },
+  { value: 'a_fazer', label: 'A Fazer', color: '#6A8FC7' },
+  { value: 'fazendo', label: 'Fazendo', color: '#D9A441' },
+  { value: 'aguardando', label: 'Aguardando', color: '#8577C9' },
+  { value: 'concluido', label: 'Concluído', color: '#6E9C7D' },
 ]
 
 // ── Constants ──
 const TYPES = [
-  { value: 'tarefa', label: 'Tarefa', color: '#3B82F6' },
-  { value: 'compromisso', label: 'Compromisso', color: '#8B5CF6' },
-  { value: 'reuniao', label: 'Reunião', color: '#10B981' },
-  { value: 'audiencia', label: 'Audiência', color: '#EC4899' },
-  { value: 'diligencia', label: 'Diligência', color: '#F97316' },
-  { value: 'interno', label: 'Interno', color: '#6B7280' },
-  { value: 'cliente', label: 'Cliente', color: '#14B8A6' },
+  { value: 'tarefa', label: 'Tarefa', color: '#6A8FC7' },
+  { value: 'compromisso', label: 'Compromisso', color: '#8577C9' },
+  { value: 'reuniao', label: 'Reunião', color: '#6E9C7D' },
+  { value: 'audiencia', label: 'Audiência', color: '#C4567C' },
+  { value: 'diligencia', label: 'Diligência', color: '#E2654B' },
+  { value: 'interno', label: 'Interno', color: '#6E7A94' },
+  { value: 'cliente', label: 'Cliente', color: '#5FA39A' },
 ]
 
 const PRIORITIES = [
-  { value: 'baixa', label: 'Baixa', color: '#6B7280' },
-  { value: 'media', label: 'Média', color: '#3B82F6' },
-  { value: 'alta', label: 'Alta', color: '#F59E0B' },
-  { value: 'urgente', label: 'Urgente', color: '#EF4444' },
+  { value: 'baixa', label: 'Baixa', color: '#6E7A94' },
+  { value: 'media', label: 'Média', color: '#6A8FC7' },
+  { value: 'alta', label: 'Alta', color: '#D9A441' },
+  { value: 'urgente', label: 'Urgente', color: '#D96C87' },
 ]
 
 const RECURRENCES = ['Única', 'Diária', 'Semanal', 'Quinzenal', 'Mensal', 'Trimestral']
@@ -212,6 +213,7 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
 // ── Main ──
 export default function Tarefas() {
   const { profile } = useAuth()
+  const { styleOf, labelOf } = useEventColors()
   const [tasks, setTasks] = useState<Task[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
   const [processes, setProcesses] = useState<ProcessOption[]>([])
@@ -425,11 +427,12 @@ export default function Tarefas() {
     const priorityInfo = getPriorityInfo(task.priority)
     const days = task.due_date ? getDaysDiff(task.due_date) : null
     const isOverdue = days !== null && days < 0 && task.status === 'pendente'
+    const ts = styleOf(task.type)
 
     return (
-      <div className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-lg border transition-colors hover:shadow-sm ${
+      <div className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3.5 rounded-2xl border bg-card shadow-sm transition-[filter] hover:brightness-[0.98] ${
         task.status === 'concluida' ? 'opacity-50' : ''
-      } ${isOverdue ? 'border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20' : ''}`}>
+      }`} style={{ backgroundColor: `color-mix(in srgb, ${isOverdue ? 'var(--nc-red-dot)' : ts.dot} 7%, var(--card))`, borderColor: `color-mix(in srgb, ${isOverdue ? 'var(--nc-red-dot)' : ts.dot} 30%, transparent)` }}>
         <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
           <button onClick={() => toggleComplete(task)} className="shrink-0 mt-0.5 sm:mt-0">
             {task.status === 'concluida'
@@ -438,11 +441,9 @@ export default function Tarefas() {
             }
           </button>
 
-          <div className="h-2 w-2 rounded-full shrink-0 mt-2 sm:mt-0" style={{ backgroundColor: typeInfo.color }} />
-
           <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setViewTask(task)}>
             <div className="flex items-center gap-2 flex-wrap">
-              <p className={`text-sm font-medium truncate ${task.status === 'concluida' ? 'line-through' : ''}`}>
+              <p className={`text-sm font-semibold truncate ${task.status === 'concluida' ? 'line-through' : ''}`}>
                 {task.title}
               </p>
               {task.priority === 'alta' || task.priority === 'urgente' ? (
@@ -452,9 +453,9 @@ export default function Tarefas() {
               ) : null}
             </div>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              <Badge variant="outline" className="text-[9px]" style={{ borderColor: typeInfo.color, color: typeInfo.color }}>
-                {typeInfo.label}
-              </Badge>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: ts.bg, color: ts.text }}>
+                {labelOf(task.type) || typeInfo.label}
+              </span>
               {getClientName(task.client_id) && (
                 <span className="text-[10px] text-muted-foreground">{getClientName(task.client_id)}</span>
               )}
@@ -469,10 +470,10 @@ export default function Tarefas() {
           <ResponsibleAvatars ids={task.responsible_ids} profilesMap={profilesMap} />
 
           {task.due_date && (
-            <span className={`text-xs shrink-0 whitespace-nowrap ${
-              isOverdue ? 'text-red-500 font-semibold' :
-              days === 0 ? 'text-blue-600 font-medium' :
-              'text-muted-foreground'
+            <span className={`text-xs shrink-0 whitespace-nowrap font-semibold px-2.5 py-1 rounded-full ${
+              isOverdue ? 'bg-red-500/15 text-red-700 dark:text-red-300' :
+              days === 0 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' :
+              'text-muted-foreground font-medium'
             }`}>
               {isOverdue ? `${Math.abs(days!)}d atrás` :
                days === 0 ? 'Hoje' :
@@ -532,7 +533,7 @@ export default function Tarefas() {
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
           {(['pendente', 'concluida', 'todas'] as const).map(s => (
-            <Button key={s} variant={statusFilter === s ? 'default' : 'ghost'} size="sm" className="h-8"
+            <Button key={s} variant={statusFilter === s ? 'secondary' : 'ghost'} size="sm" className="h-8"
               onClick={() => setStatusFilter(s)}>
               {s === 'pendente' ? 'Pendentes' : s === 'concluida' ? 'Concluídas' : 'Todas'}
             </Button>
@@ -577,15 +578,15 @@ export default function Tarefas() {
             <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-8" />
           </div>
           <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
-            <Button variant={viewMode === 'board' ? 'default' : 'ghost'} size="icon" className="h-8 w-8"
+            <Button variant={viewMode === 'board' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
               onClick={() => setViewMode('board')}>
               <LayoutGrid className="h-3.5 w-3.5" />
             </Button>
-            <Button variant={viewMode === 'list' ? 'default' : 'ghost'} size="icon" className="h-8 w-8"
+            <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
               onClick={() => setViewMode('list')}>
               <List className="h-3.5 w-3.5" />
             </Button>
-            <Button variant={viewMode === 'execucao' ? 'default' : 'ghost'} size="icon" className="h-8 w-8"
+            <Button variant={viewMode === 'execucao' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
               onClick={() => setViewMode('execucao')} title="Kanban de execução">
               <Columns3 className="h-3.5 w-3.5" />
             </Button>
@@ -598,15 +599,15 @@ export default function Tarefas() {
       {viewMode === 'board' && statusFilter !== 'concluida' && (
         <div className="space-y-6">
           {overdue.length > 0 && (
-            <BoardColumn title="Atrasados" icon={AlertTriangle} tasks={overdue} color="#EF4444" />
+            <BoardColumn title="Atrasados" icon={AlertTriangle} tasks={overdue} color="#D96C87" />
           )}
-          <BoardColumn title="Hoje" icon={Clock} tasks={today} color="#3B82F6" />
-          <BoardColumn title="Próximos 7 dias" icon={Calendar} tasks={thisWeek} color="#8B5CF6" />
+          <BoardColumn title="Hoje" icon={Clock} tasks={today} color="#6A8FC7" />
+          <BoardColumn title="Próximos 7 dias" icon={Calendar} tasks={thisWeek} color="#8577C9" />
           {later.length > 0 && (
-            <BoardColumn title="Depois" icon={ClipboardList} tasks={later} color="#6B7280" />
+            <BoardColumn title="Depois" icon={ClipboardList} tasks={later} color="#6E7A94" />
           )}
           {noDate.length > 0 && (
-            <BoardColumn title="Sem data" icon={Circle} tasks={noDate} color="#9CA3AF" />
+            <BoardColumn title="Sem data" icon={Circle} tasks={noDate} color="#8A93AA" />
           )}
         </div>
       )}
@@ -657,7 +658,7 @@ export default function Tarefas() {
                               <ResponsibleAvatars ids={task.responsible_ids} profilesMap={profilesMap} size="xs" />
                             </div>
                             <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                              <Badge variant="outline" className="text-[9px]" style={{ borderColor: getTypeInfo(task.type).color, color: getTypeInfo(task.type).color }}>
+                              <Badge variant="outline" className="text-[9px] border-transparent" style={{ backgroundColor: styleOf(task.type).bg, color: styleOf(task.type).text }}>
                                 {getTypeInfo(task.type).label}
                               </Badge>
                               {task.priority === 'alta' || task.priority === 'urgente' ? (
