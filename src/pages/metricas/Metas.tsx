@@ -548,7 +548,8 @@ function MetasSection({ area, icon, metas, profiles, computeAtingido, computeDet
 interface LeadLite { name: string; status: string; created_at: string; client_id: string | null; source: string | null }
 interface ClientLite { name: string; created_at: string }
 
-export default function MetasTab() {
+/** `only` mostra só as metas daquela área (usado dentro de Dinheiro e Clientes e Vendas). */
+export default function MetasTab({ only }: { only?: 'financeiro' | 'comercial' }) {
   const { rows: financeRows, loading: loadingFinance } = useFinanceRows()
   const [leads, setLeads] = useState<LeadLite[]>([])
   const [clients, setClients] = useState<ClientLite[]>([])
@@ -639,7 +640,7 @@ export default function MetasTab() {
 
   return (
     <div className="space-y-4">
-      <Card className="p-4">
+      {!only && <Card className="p-4">
         <div className="flex items-center gap-2 mb-1">
           <Trophy className="h-4 w-4 text-amber-700 dark:text-amber-300" />
           <h3 className="font-semibold text-sm">Resumo geral</h3>
@@ -649,10 +650,10 @@ export default function MetasTab() {
             <><strong className="text-foreground">{activeAtingidas.length} de {activeMetas.length}</strong> metas em andamento já atingidas — {metasFinanceiro.length} financeira(s), {metasComercial.length} comercial(is) no total cadastradas.</>
           )}
         </p>
-      </Card>
+      </Card>}
 
-      <MetasSection area="financeiro" icon={DollarSign} metas={metasFinanceiro} profiles={profiles} computeAtingido={computeAtingidoFinanceiro} computeDetailRows={detailRowsFinanceiro} onChanged={load} />
-      <MetasSection area="comercial" icon={Target} metas={metasComercial} profiles={profiles} computeAtingido={computeAtingidoComercial} computeDetailRows={detailRowsComercial} onChanged={load} />
+      {only !== 'comercial' && <MetasSection area="financeiro" icon={DollarSign} metas={metasFinanceiro} profiles={profiles} computeAtingido={computeAtingidoFinanceiro} computeDetailRows={detailRowsFinanceiro} onChanged={load} />}
+      {only !== 'financeiro' && <MetasSection area="comercial" icon={Target} metas={metasComercial} profiles={profiles} computeAtingido={computeAtingidoComercial} computeDetailRows={detailRowsComercial} onChanged={load} />}
     </div>
   )
 }

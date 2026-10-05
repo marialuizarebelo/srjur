@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { Rocket, Users, DollarSign, TrendingUp } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
 import {
-  monthsBack, usePeriod, PeriodPicker, KpiCard, ChartCard, DonutWithLegend, TrendChart,
+  monthsBack, usePeriod, KpiCard, ChartCard, DonutWithLegend, TrendChart,
   DetailDialog, useDetail, previousPeriodRange, trendText,
 } from './shared'
 
@@ -107,15 +107,14 @@ export default function ProdutoSaasTab() {
 
   return (
     <div className="space-y-4">
-      <PeriodPicker p={period} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard title="Clientes SaaS ativos" value={clientesAtivos.length} icon={Users} color="#6A8FC7"
           trend={somenteSaas.length > 0 ? `${somenteSaas.length} só sistema, sem questão jurídica` : undefined} onClick={openClientesDetail} />
-        <KpiCard title="Receita SaaS (período)" value={fmtBRL(receitaPeriodo)} icon={TrendingUp} color="#6E9C7D" sensitive
+        <KpiCard title="Receita SaaS" value={fmtBRL(receitaPeriodo)} icon={TrendingUp} color="#6E9C7D" sensitive
           trend={trendText(receitaPeriodo, receitaAnterior)} onClick={openReceitaDetail} />
-        <KpiCard title="Despesas SaaS (período)" value={fmtBRL(despesaPeriodo)} icon={TrendingUp} color="#D96C87" sensitive onClick={openDespesaDetail} />
-        <KpiCard title="MRR aproximado" value={fmtBRL(mrrAproximado)} icon={DollarSign} color="#8577C9" sensitive onClick={openMrrDetail} />
+        <KpiCard title="Despesas SaaS" value={fmtBRL(despesaPeriodo)} icon={TrendingUp} color="#D96C87" sensitive onClick={openDespesaDetail} />
+        <KpiCard title="MRR aproximado" hint="Receita recorrente do mês atual: soma dos lançamentos de receita SaaS com recorrência (exceto única) no mês corrente." value={fmtBRL(mrrAproximado)} icon={DollarSign} color="#8577C9" sensitive onClick={openMrrDetail} />
       </div>
 
       <ChartCard title="Evolução SaaS (12 meses)" icon={Rocket}>

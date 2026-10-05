@@ -107,7 +107,7 @@ export default function VisaoGeralTab() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Panorama geral do escritório neste mês. Veja o detalhe em cada aba.</p>
+      <p className="text-sm text-muted-foreground">Panorama geral do escritório neste mês. Para ver o detalhe e filtrar por período, use as áreas acima.</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         <KpiCard title="Saldo total" value={fmtBRL(saldoTotal)} icon={DollarSign} color="#8577C9" sensitive onClick={openSaldoDetail} />
         <KpiCard title="Receitas (mês)" value={fmtBRL(receitasMes)} icon={TrendingUp} color="#6E9C7D" sensitive trend={trendText(receitasMes, receitasMesAnterior, 'vs mês anterior')} onClick={openReceitasDetail} />

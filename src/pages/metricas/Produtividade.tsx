@@ -8,7 +8,7 @@ import { fmtDate } from '@/lib/format'
 import {
   monthsBack, KpiCard, ChartCard, DonutWithLegend,
   DetailDialog, useDetail, AttentionPanel, type Attention, type DetailRow,
-  useResponsavelFilter, ResponsavelFilter, TrendChart,
+  useResponsavelFilter, TrendChart,
 } from './shared'
 
 interface Task { title: string; status: string; due_date: string | null; responsible_ids: string[] | null }
@@ -130,9 +130,6 @@ export default function ProdutividadeTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <ResponsavelFilter f={respFilter} />
-      </div>
 
       <AttentionPanel items={attention} />
 

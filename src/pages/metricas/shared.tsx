@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -9,7 +9,7 @@ import {
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select'
-import { AlertTriangle, StickyNote, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, StickyNote, Plus, Trash2, Info } from 'lucide-react'
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
   AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis,
@@ -72,7 +72,7 @@ export function resolvePeriod(key: PeriodKey, customStart: string, customEnd: st
   return { start: customStart || now.toISOString().slice(0, 10), end: customEnd || now.toISOString().slice(0, 10) }
 }
 
-export function usePeriod() {
+function useLocalPeriod() {
   const [periodKey, setPeriodKey] = useState<PeriodKey>('mes_atual')
   const [customStart, setCustomStart] = useState(() => new Date().toISOString().slice(0, 10))
   const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().slice(0, 10))
@@ -80,7 +80,28 @@ export function usePeriod() {
   return { periodKey, setPeriodKey, customStart, setCustomStart, customEnd, setCustomEnd, range }
 }
 
-export function PeriodPicker({ p }: { p: ReturnType<typeof usePeriod> }) {
+/* ---------- Filtros globais (um conjunto só pra toda a área de Métricas) ---------- */
+// O Metricas.tsx cria os filtros uma vez e passa por este contexto; assim as abas não
+// repetem seletores e todas respondem ao mesmo período/responsável/unidade.
+type FiltersCtx = {
+  period: ReturnType<typeof useLocalPeriod>
+  resp: ReturnType<typeof useLocalResponsavel>
+  unidade: ReturnType<typeof useLocalUnidade>
+}
+export const MetricasFiltersContext = createContext<FiltersCtx | null>(null)
+export function useMetricasFiltersState(): FiltersCtx {
+  const period = useLocalPeriod()
+  const resp = useLocalResponsavel()
+  const unidade = useLocalUnidade()
+  return { period, resp, unidade }
+}
+export function usePeriod() {
+  const ctx = useContext(MetricasFiltersContext)
+  const local = useLocalPeriod()
+  return ctx?.period ?? local
+}
+
+export function PeriodPicker({ p }: { p: ReturnType<typeof useLocalPeriod> }) {
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       {PERIOD_OPTIONS.map(o => (
@@ -101,12 +122,14 @@ export function PeriodPicker({ p }: { p: ReturnType<typeof usePeriod> }) {
 }
 
 /* ---------- KPI / Chart cards ---------- */
-export function KpiCard({ title, value, icon: Icon, color, sensitive, onClick, trend }: {
+export function KpiCard({ title, value, icon: Icon, color, sensitive, onClick, trend, hint }: {
   title: string; value: string | number; icon: React.ElementType; color: string; sensitive?: boolean; onClick?: () => void
   trend?: string
+  /** Como o indicador é calculado — aparece ao passar o mouse e no ícone (i). */
+  hint?: string
 }) {
   return (
-    <Card className={`p-4 relative overflow-hidden ${onClick ? 'cursor-pointer hover:brightness-[0.98] transition-[filter]' : ''}`}
+    <Card title={hint} className={`p-4 relative overflow-hidden ${onClick ? 'cursor-pointer hover:brightness-[0.98] transition-[filter]' : ''}`}
       style={{
         background: `color-mix(in srgb, ${color} calc(var(--glass-k) * 1%), var(--card-glass))`,
         border: `1px solid color-mix(in srgb, ${color} var(--glass-edge), var(--glass-rim))`,
@@ -116,6 +139,7 @@ export function KpiCard({ title, value, icon: Icon, color, sensitive, onClick, t
           <Icon className="h-3.5 w-3.5" style={{ color }} />
         </div>
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
+        {hint && <Info className="h-3 w-3 text-muted-foreground/70 shrink-0" aria-label={hint} />}
       </div>
       <p className="font-display text-2xl sm:text-3xl text-foreground">
         {sensitive ? <Sensitive>{value}</Sensitive> : value}
@@ -333,7 +357,7 @@ export function NotesPanel({ area, months }: { area: string; months: { start: st
 }
 
 /* ---------- Filtro por responsável (mesmo controle em todas as abas) ---------- */
-export function useResponsavelFilter() {
+function useLocalResponsavel() {
   const [profiles, setProfiles] = useState<ProfileOption[]>([])
   const [responsavelId, setResponsavelId] = useState('')
   useEffect(() => { getAdminProfiles().then(setProfiles) }, [])
@@ -346,7 +370,13 @@ export function useResponsavelFilter() {
   return { profiles, responsavelId, setResponsavelId, matches }
 }
 
-export function ResponsavelFilter({ f }: { f: ReturnType<typeof useResponsavelFilter> }) {
+export function useResponsavelFilter() {
+  const ctx = useContext(MetricasFiltersContext)
+  const local = useLocalResponsavel()
+  return ctx?.resp ?? local
+}
+
+export function ResponsavelFilter({ f }: { f: ReturnType<typeof useLocalResponsavel> }) {
   return (
     <div className="flex items-center gap-1.5">
       <FilterIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -367,12 +397,17 @@ export function ResponsavelFilter({ f }: { f: ReturnType<typeof useResponsavelFi
 // Nunca esconde nada por padrão ("Todas") -- só ajuda a diferenciar/isolar
 // quando a usuária quiser, sem tirar SaaS da visão geral do financeiro/comercial.
 export type UnidadeKey = '' | 'advocacia' | 'saas'
-export function useUnidadeFilter() {
+function useLocalUnidade() {
   const [unidade, setUnidade] = useState<UnidadeKey>('')
   return { unidade, setUnidade }
 }
 const UNIDADE_LABELS: Record<UnidadeKey, string> = { '': 'Todas as unidades', advocacia: 'Só Advocacia', saas: 'Só SaaS' }
-export function UnidadeFilter({ f }: { f: ReturnType<typeof useUnidadeFilter> }) {
+export function useUnidadeFilter() {
+  const ctx = useContext(MetricasFiltersContext)
+  const local = useLocalUnidade()
+  return ctx?.unidade ?? local
+}
+export function UnidadeFilter({ f }: { f: ReturnType<typeof useLocalUnidade> }) {
   return (
     <div className="flex items-center gap-1.5">
       <Select value={f.unidade || '__todas__'} onValueChange={v => f.setUnidade(v === '__todas__' ? '' : (v as UnidadeKey))}>

@@ -1,17 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
-import { Users, AlertTriangle, Wallet } from 'lucide-react'
+import { Users, AlertTriangle, Wallet, Percent } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
 import {
-  usePeriod, PeriodPicker, KpiCard, ChartCard, DonutWithLegend, DetailDialog, useDetail,
-  previousPeriodRange, trendText, useResponsavelFilter, ResponsavelFilter,
+  KpiCard, ChartCard, DonutWithLegend, DetailDialog, useDetail, useResponsavelFilter,
 } from './shared'
 
 interface ClientRow { id: string; name: string; area: string | null; status: string; created_at: string; responsible_ids: string[] | null; is_cortesia: boolean; is_juridico: boolean }
 interface FinanceLite { client_id: string | null; description: string; value: number; due_date: string | null; paid: boolean; type: string; business_unit: string | null; refletir_metricas: boolean }
 
-export default function ClientesTab() {
-  const period = usePeriod()
+/** section='carteira' (quem são os clientes) ou 'inadimplencia' (quem está devendo). */
+export default function ClientesTab({ section }: { section: 'carteira' | 'inadimplencia' }) {
   const detail = useDetail()
   const respFilter = useResponsavelFilter()
   const [loading, setLoading] = useState(true)
@@ -35,9 +34,6 @@ export default function ClientesTab() {
 
   const todayStr = new Date().toISOString().slice(0, 10)
   const clientesAtivos = clients.filter(c => c.status === 'ativo').length
-  const novosNoPeriodo = clients.filter(c => c.created_at >= period.range.start && c.created_at <= period.range.end + 'T23:59:59')
-  const prevRange = useMemo(() => previousPeriodRange(period.range.start, period.range.end), [period.range])
-  const novosPeriodoAnterior = clients.filter(c => c.created_at >= prevRange.start && c.created_at <= prevRange.end + 'T23:59:59')
 
   const carteiraPorArea = useMemo(() => {
     const map = new Map<string, number>()
@@ -56,6 +52,8 @@ export default function ClientesTab() {
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients])
   const vencidosNaoPagos = useMemo(() => finance.filter(f => f.type === 'receita' && !f.paid && f.due_date && f.due_date < todayStr), [finance, todayStr])
   const valorInadimplente = vencidosNaoPagos.reduce((s, f) => s + Number(f.value), 0)
+  const totalVencido = useMemo(() => finance.filter(f => f.type === 'receita' && f.due_date && f.due_date <= todayStr).reduce((s, f) => s + Number(f.value), 0), [finance, todayStr])
+  const taxaInadimplencia = totalVencido > 0 ? (valorInadimplente / totalVencido) * 100 : 0
   const clientesInadimplentes = useMemo(() => new Set(vencidosNaoPagos.filter(f => f.client_id).map(f => f.client_id)).size, [vencidosNaoPagos])
 
   function openInadimplenciaDetail() {
@@ -67,19 +65,28 @@ export default function ClientesTab() {
 
   if (loading) return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>
 
+  if (section === 'inadimplencia') {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <KpiCard title="Valor em atraso" value={fmtBRL(valorInadimplente)} icon={Wallet} color="#D96C87" sensitive onClick={openInadimplenciaDetail}
+            hint="Soma das receitas com vencimento anterior a hoje que ainda não foram pagas." />
+          <KpiCard title="Taxa de inadimplência" value={`${taxaInadimplencia.toFixed(1)}%`} icon={Percent} color="#D9A441" onClick={openInadimplenciaDetail}
+            hint="Valor em atraso ÷ total de receitas já vencidas (pagas + em atraso). Quanto menor, melhor." />
+          <KpiCard title="Clientes inadimplentes" value={clientesInadimplentes} icon={AlertTriangle} color="#D96C87" onClick={openInadimplenciaDetail}
+            hint="Clientes distintos com pelo menos uma receita vencida e não paga." />
+        </div>
+        <DetailDialog open={detail.open} onClose={detail.close} title={detail.title} rows={detail.rows} />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <PeriodPicker p={period} />
-        <ResponsavelFilter f={respFilter} />
-      </div>
-
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard title="Clientes ativos" value={clientesAtivos} icon={Users} color="#6A8FC7" onClick={() => detail.show('Clientes ativos', clients.filter(c => c.status === 'ativo').map((c, i) => ({ id: String(i), label: c.name, sublabel: c.area ?? undefined })))} />
-        <KpiCard title="Novos clientes (período)" value={novosNoPeriodo.length} icon={Users} color="#6E9C7D" trend={trendText(novosNoPeriodo.length, novosPeriodoAnterior.length)}
-          onClick={() => detail.show('Novos clientes no período', novosNoPeriodo.map((c, i) => ({ id: String(i), label: c.name, sublabel: fmtDate(c.created_at) })))} />
-        <KpiCard title="Clientes inadimplentes" value={clientesInadimplentes} icon={AlertTriangle} color="#D96C87" onClick={openInadimplenciaDetail} />
-        <KpiCard title="Valor em atraso" value={fmtBRL(valorInadimplente)} icon={Wallet} color="#D96C87" sensitive onClick={openInadimplenciaDetail} />
+        <KpiCard title="Clientes ativos" value={clientesAtivos} icon={Users} color="#6A8FC7"
+          hint="Clientes jurídicos com status ativo (exclui casos gratuitos e clientes só de SaaS)."
+          onClick={() => detail.show('Clientes ativos', clients.filter(c => c.status === 'ativo').map((c, i) => ({ id: String(i), label: c.name, sublabel: c.area ?? undefined })))} />
       </div>
 
       <ChartCard title="Carteira de clientes por área" icon={Users}>

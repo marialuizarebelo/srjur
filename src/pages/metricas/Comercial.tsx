@@ -6,9 +6,9 @@ import {
 } from 'recharts'
 import { fmtBRL, fmtDate } from '@/lib/format'
 import {
-  monthsBack, usePeriod, PeriodPicker, KpiCard, ChartCard,
+  monthsBack, usePeriod, KpiCard, ChartCard,
   DetailDialog, useDetail, AttentionPanel, type Attention, previousPeriodRange, trendText, NotesPanel,
-  useResponsavelFilter, ResponsavelFilter, TrendChart,
+  useResponsavelFilter, TrendChart,
 } from './shared'
 
 export interface Lead {
@@ -164,19 +164,15 @@ export default function ComercialTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <PeriodPicker p={period} />
-        <ResponsavelFilter f={respFilter} />
-      </div>
 
       <AttentionPanel items={attention} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard title="Leads ativos" value={leadsAtivos} icon={Target} color="#6A8FC7" onClick={openLeadsAtivosDetail} />
-        <KpiCard title="Leads recebidos (período)" value={leadsNoPeriodo.length} icon={Target} color="#6A8FC7" trend={trendText(leadsNoPeriodo.length, leadsPeriodoAnterior.length)} onClick={openLeadsRecebidosDetail} />
-        <KpiCard title="Taxa de conversão" value={`${taxaConversao.toFixed(0)}%`} icon={TrendingUp} color="#6E9C7D" trend={trendText(taxaConversao, taxaConversaoAnterior)} onClick={openConversaoDetail} />
-        <KpiCard title="Novos clientes (período)" value={clientesNoPeriodo.length} icon={Users} color="#8577C9" trend={trendText(clientesNoPeriodo.length, clientesPeriodoAnterior.length)} onClick={openNovosClientesDetail} />
-        <KpiCard title="Ticket médio contratado" value={fmtBRL(ticketMedio)} icon={TrendingUp} color="#D9A441" sensitive onClick={openTicketMedioDetail} />
+        <KpiCard title="Leads ativos" hint="Leads em andamento hoje (não perdidos nem convertidos)." value={leadsAtivos} icon={Target} color="#6A8FC7" onClick={openLeadsAtivosDetail} />
+        <KpiCard title="Leads recebidos" hint="Leads que entraram no período." value={leadsNoPeriodo.length} icon={Target} color="#6A8FC7" trend={trendText(leadsNoPeriodo.length, leadsPeriodoAnterior.length)} onClick={openLeadsRecebidosDetail} />
+        <KpiCard title="Taxa de conversão" hint="Leads convertidos em cliente ÷ leads recebidos no período." value={`${taxaConversao.toFixed(0)}%`} icon={TrendingUp} color="#6E9C7D" trend={trendText(taxaConversao, taxaConversaoAnterior)} onClick={openConversaoDetail} />
+        <KpiCard title="Novos clientes" hint="Clientes cadastrados no período." value={clientesNoPeriodo.length} icon={Users} color="#8577C9" trend={trendText(clientesNoPeriodo.length, clientesPeriodoAnterior.length)} onClick={openNovosClientesDetail} />
+        <KpiCard title="Ticket médio contratado" hint="Valor potencial médio dos leads que viraram cliente no período (só os que têm valor informado)." value={fmtBRL(ticketMedio)} icon={TrendingUp} color="#D9A441" sensitive onClick={openTicketMedioDetail} />
       </div>
 
       <ChartCard title="Pipeline comercial (visão atual)" icon={TrendingUp}>
