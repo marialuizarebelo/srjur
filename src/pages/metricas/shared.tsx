@@ -15,6 +15,7 @@ import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis,
 } from 'recharts'
 import { Sensitive } from '@/components/Sensitive'
+import { Sparkline } from './kit'
 import { toast } from 'sonner'
 import { getAdminProfiles, type ProfileOption } from '@/components/ResponsibleSelect'
 import { Filter as FilterIcon } from 'lucide-react'
@@ -122,12 +123,18 @@ export function PeriodPicker({ p }: { p: ReturnType<typeof useLocalPeriod> }) {
 }
 
 /* ---------- KPI / Chart cards ---------- */
-export function KpiCard({ title, value, icon: Icon, color, sensitive, onClick, trend, hint }: {
+export function KpiCard({ title, value, icon: Icon, color, sensitive, onClick, trend, hint, spark, trendTone = 'up-good' }: {
   title: string; value: string | number; icon: React.ElementType; color: string; sensitive?: boolean; onClick?: () => void
   trend?: string
   /** Como o indicador é calculado — aparece ao passar o mouse e no ícone (i). */
   hint?: string
+  /** Pontos recentes (ex.: últimos 12 meses) para o mini gráfico de tendência. */
+  spark?: number[]
+  /** Em despesas/inadimplência, cair é bom: 'down-good'. Padrão: subir é bom. */
+  trendTone?: 'up-good' | 'down-good' | 'neutral'
 }) {
+  // Em cartões pequenos os centavos só atrapalham: R$ 22.767,00 -> R$ 22.767
+  const shown = typeof value === 'string' ? value.replace(/,00$/, '') : value
   return (
     <Card title={hint} className={`p-4 relative overflow-hidden ${onClick ? 'cursor-pointer hover:brightness-[0.98] transition-[filter]' : ''}`}
       style={{
@@ -141,10 +148,11 @@ export function KpiCard({ title, value, icon: Icon, color, sensitive, onClick, t
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
         {hint && <Info className="h-3 w-3 text-muted-foreground/70 shrink-0" aria-label={hint} />}
       </div>
-      <p className="font-display text-2xl sm:text-3xl text-foreground">
-        {sensitive ? <Sensitive>{value}</Sensitive> : value}
+      <p className="font-display text-[1.35rem] sm:text-[1.6rem] leading-tight whitespace-nowrap text-foreground">
+        {sensitive ? <Sensitive>{shown}</Sensitive> : shown}
       </p>
-      {trend && <p className="text-[11px] text-muted-foreground mt-1">{trend}</p>}
+      {trend && <p className={`text-[11px] mt-1 font-medium ${trendTone === 'neutral' ? 'text-muted-foreground' : (trend.startsWith('↑') === (trendTone === 'up-good')) ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>{trend}</p>}
+      {spark && <div className="mt-2 -mb-1"><Sparkline data={spark} color={color} /></div>}
     </Card>
   )
 }

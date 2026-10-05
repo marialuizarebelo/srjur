@@ -15,7 +15,8 @@ import { DollarSign, Target, Plus, Pencil, Trash2, Trophy, NotebookText } from '
 import { fmtBRL, fmtDate } from '@/lib/format'
 import { getAdminProfiles, type ProfileOption } from '@/components/ResponsibleSelect'
 import { toast } from 'sonner'
-import { MONTHS, ChartCard, DetailDialog, useDetail, type DetailRow, useUnidadeFilter, matchUnidadeFinance } from './shared'
+import { MONTHS, ChartCard, DetailDialog, useDetail, type DetailRow, useUnidadeFilter, matchUnidadeFinance, KpiCard, DonutWithLegend } from './shared'
+import { HBars, ComboChart } from './kit'
 import { useFinanceRows } from './Financeiro'
 
 const CATEGORIES_RECEITA = ['Honorários Iniciais', 'Mensalidade', 'Acordo', 'Consultoria', 'Êxito', 'Outros']
@@ -73,18 +74,40 @@ function formatByUnit(v: number, unit: TipoMeta['unit']) {
   if (unit === 'percent') return `${v.toFixed(0)}%`
   return String(Math.round(v))
 }
-function metaStatus(m: Meta, tipo: TipoMeta, atingido: number) {
+/** Fração do prazo da meta já decorrida (0 a 1). */
+function elapsedFraction(m: Meta) {
   const { start, end } = metaPeriodRange(m)
   const today = new Date().toISOString().slice(0, 10)
-  const achieved = tipo.direction === 'min' ? atingido >= m.valor_alvo : atingido <= m.valor_alvo
-  if (achieved) return { label: 'Atingida', color: '#6E9C7D' }
-  if (end < today) return { label: 'Não atingida', color: '#D96C87' }
   const totalDays = Math.max(1, (new Date(end).getTime() - new Date(start).getTime()) / 86400000)
   const elapsedDays = Math.max(0, (new Date(today).getTime() - new Date(start).getTime()) / 86400000)
-  const elapsedPct = Math.min(1, elapsedDays / totalDays)
-  const progressPct = tipo.direction === 'min' ? atingido / m.valor_alvo : 1 - (m.valor_alvo > 0 ? atingido / m.valor_alvo : 0)
-  if (progressPct < elapsedPct * 0.7) return { label: 'Em risco', color: '#D9A441' }
-  return { label: 'No caminho', color: '#6A8FC7' }
+  return Math.min(1, elapsedDays / totalDays)
+}
+/**
+ * Projeção de fechamento no ritmo atual. Só vale para metas contadas até hoje (leads/clientes novos):
+ * as financeiras já incluem lançamentos com data futura dentro do período, então extrapolar duplicaria.
+ */
+export function metaProjecao(m: Meta, atingido: number): number | null {
+  if (m.area === 'financeiro' || m.tipo === 'taxa_conversao') return null
+  const f = elapsedFraction(m)
+  if (f <= 0.05 || f >= 1) return null
+  return atingido / f
+}
+export function metaStatus(m: Meta, tipo: TipoMeta, atingido: number) {
+  const { end } = metaPeriodRange(m)
+  const today = new Date().toISOString().slice(0, 10)
+  const encerrada = end < today
+  if (tipo.direction === 'max') {
+    // Teto de gasto: só "cumpre" quando o período fecha dentro do limite.
+    if (atingido > m.valor_alvo) return { key: 'estourou', label: 'Teto estourado', color: '#D96C87' }
+    if (encerrada) return { key: 'atingida', label: 'Dentro do teto', color: '#6E9C7D' }
+    if (m.valor_alvo > 0 && atingido / m.valor_alvo >= 0.9) return { key: 'risco', label: 'Perto do teto', color: '#D9A441' }
+    return { key: 'caminho', label: 'Dentro do teto', color: '#6A8FC7' }
+  }
+  if (atingido >= m.valor_alvo) return { key: 'atingida', label: 'Atingida', color: '#6E9C7D' }
+  if (encerrada) return { key: 'nao', label: 'Não atingida', color: '#D96C87' }
+  const progressPct = m.valor_alvo > 0 ? atingido / m.valor_alvo : 0
+  if (progressPct < elapsedFraction(m) * 0.7) return { key: 'risco', label: 'Em risco', color: '#D9A441' }
+  return { key: 'caminho', label: 'No caminho', color: '#6A8FC7' }
 }
 function daysRemaining(m: Meta): number | null {
   const { end } = metaPeriodRange(m)
@@ -356,6 +379,16 @@ function MetaCard({ m, tipo, atingido, profiles, onEdit, onDelete, onDetails, on
       <div className="h-2 rounded-full bg-muted overflow-hidden">
         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: status.color }} />
       </div>
+      {(() => {
+        const proj = metaProjecao(m, atingido)
+        if (proj == null) return null
+        const ok = tipo.direction === 'min' ? proj >= m.valor_alvo : proj <= m.valor_alvo
+        return (
+          <p className="text-[11px] text-muted-foreground">
+            No ritmo atual fecha em <strong className={ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}>{formatByUnit(proj, tipo.unit)}</strong> ({m.valor_alvo > 0 ? Math.round((proj / m.valor_alvo) * 100) : 0}% da meta)
+          </p>
+        )
+      })()}
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="inline-flex items-center rounded-full text-[10px] px-2 py-0.5 font-medium" style={{ backgroundColor: status.color + '1a', color: status.color }}>
@@ -503,6 +536,67 @@ function MetaDetalhesDialog({ open, onClose, meta, onUpdated }: { open: boolean;
 }
 
 /* ---------- Section ---------- */
+function MetasOverview({ activeMetas, encerradas, statusDe, computeAtingido, tipoDe, detailRowsFor }: {
+  activeMetas: Meta[]; encerradas: Meta[]; statusDe: (m: Meta) => { key: string; label: string; color: string }
+  computeAtingido: (m: Meta) => number; tipoDe: (m: Meta) => TipoMeta; detailRowsFor: (m: Meta) => DetailRow[]
+}) {
+  const detail = useDetail()
+  const contar = (ms: Meta[], key: string) => ms.filter(m => statusDe(m).key === key)
+  const ativas = { atingida: contar(activeMetas, 'atingida'), caminho: contar(activeMetas, 'caminho'), risco: contar(activeMetas, 'risco'), estourou: contar(activeMetas, 'estourou') }
+  const histAtingidas = encerradas.filter(m => statusDe(m).key === 'atingida')
+  const taxaHist = encerradas.length ? Math.round((histAtingidas.length / encerradas.length) * 100) : null
+  const list = (title: string, ms: Meta[]) => detail.show(title, ms.map((m, i) => ({ id: String(i), label: m.label, sublabel: `${metaPeriodLabel(m)} · ${statusDe(m).label}`, value: `${formatByUnit(computeAtingido(m), tipoDe(m).unit)} / ${formatByUnit(m.valor_alvo, tipoDe(m).unit)}` })))
+  const progresso = activeMetas.map(m => {
+    const t = tipoDe(m); const at = computeAtingido(m)
+    const p = m.valor_alvo > 0 ? (at / m.valor_alvo) * 100 : 0
+    return { name: m.label, value: Math.round(p), meta: m, color: statusDe(m).color, sub: metaPeriodLabel(m), unit: t.unit }
+  }).sort((a, b) => b.value - a.value)
+  const porMes = (() => {
+    const mapa = new Map<string, { month: string; atingidas: number; nao: number; ord: string }>()
+    encerradas.forEach(m => {
+      const end = metaPeriodRange(m).end; const k = end.slice(0, 7)
+      const cur = mapa.get(k) ?? { month: `${MONTHS[Number(end.slice(5, 7)) - 1]}/${end.slice(2, 4)}`, atingidas: 0, nao: 0, ord: k }
+      if (statusDe(m).key === 'atingida') cur.atingidas++; else cur.nao++
+      mapa.set(k, cur)
+    })
+    return Array.from(mapa.values()).sort((a, b) => a.ord.localeCompare(b.ord)).slice(-12)
+  })()
+  const porPrioridade = (['alta', 'media', 'baixa'] as const).map(p => ({ name: PRIORIDADE_LABELS[p], value: activeMetas.filter(m => m.prioridade === p).length, color: PRIORIDADE_COLOR[p] })).filter(x => x.value > 0)
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <KpiCard title="Em andamento" hint="Metas cujo período inclui hoje (respeita a Visão escolhida)." value={activeMetas.length} icon={Target} color="#6A8FC7" onClick={() => list('Metas em andamento', activeMetas)} />
+        <KpiCard title="Já atingidas" hint="Metas em andamento que já bateram o alvo." value={ativas.atingida.length} icon={Trophy} color="#6E9C7D" onClick={() => list('Metas já atingidas', ativas.atingida)} />
+        <KpiCard title="No caminho" hint="Progresso compatível com o tempo decorrido." value={ativas.caminho.length} icon={Target} color="#6A8FC7" onClick={() => list('Metas no caminho', ativas.caminho)} />
+        <KpiCard title="Em risco" hint="Progresso abaixo de 70% do que seria esperado pelo tempo decorrido (ou gasto projetado acima do teto)." value={ativas.risco.length} icon={Target} color="#D9A441" onClick={() => list('Metas em risco', ativas.risco)} />
+        <KpiCard title="Tetos estourados" hint="Metas de limite de despesa já ultrapassadas." value={ativas.estourou.length} icon={Target} color="#D96C87" onClick={() => list('Tetos estourados', ativas.estourou)} />
+        <KpiCard title="Histórico de acertos" hint="De todas as metas já encerradas, quantas foram cumpridas." value={taxaHist == null ? '—' : `${taxaHist}%`} icon={Trophy} color="#8577C9"
+          trend={taxaHist == null ? undefined : `${histAtingidas.length} de ${encerradas.length} encerradas`} trendTone="neutral" onClick={() => list('Metas encerradas', encerradas)} />
+      </div>
+      {activeMetas.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ChartCard title="Progresso das metas em andamento" icon={Target}>
+            <HBars data={progresso.map(p => ({ name: p.name, value: p.value, sub: p.sub }))} format={v => `${v}%`} colors={progresso.map(p => p.color)} limit={10}
+              onSelect={name => { const p = progresso.find(x => x.name === name); if (p) detail.show(`O que compõe "${name}"`, detailRowsFor(p.meta)) }} />
+            <p className="text-[11px] text-muted-foreground mt-3">Cor = situação (verde atingida, azul no caminho, amarelo em risco, vermelho estourada). Clique para ver o que compõe o valor.</p>
+          </ChartCard>
+          <ChartCard title="Metas por prioridade" icon={Target}>
+            <DonutWithLegend data={porPrioridade} formatValue={v => String(v)} onSelect={name => list(`Prioridade ${name}`, activeMetas.filter(m => PRIORIDADE_LABELS[m.prioridade] === name))} />
+          </ChartCard>
+        </div>
+      )}
+      {porMes.length > 0 && (
+        <ChartCard title="Metas encerradas: cumpridas × não cumpridas" icon={Trophy}>
+          <ComboChart data={porMes} format={v => String(v)} yFormat={v => String(v)} series={[
+            { key: 'atingidas', name: 'Cumpridas', color: '#6E9C7D', stack: 'm' }, { key: 'nao', name: 'Não cumpridas', color: '#D96C87', stack: 'm' },
+          ]} />
+        </ChartCard>
+      )}
+      <DetailDialog open={detail.open} onClose={detail.close} title={detail.title} rows={detail.rows} />
+    </div>
+  )
+}
+
 function MetasSection({ area, icon, metas, profiles, computeAtingido, computeDetailRows, onChanged }: {
   area: 'financeiro' | 'comercial'; icon: React.ElementType; metas: Meta[]; profiles: ProfileOption[]
   computeAtingido: (m: Meta) => number; computeDetailRows: (m: Meta) => DetailRow[]; onChanged: () => void
@@ -578,7 +672,7 @@ interface LeadLite { name: string; status: string; created_at: string; client_id
 interface ClientLite { name: string; created_at: string }
 
 /** `only` mostra só as metas daquela área (usado dentro de Dinheiro e Clientes e Vendas). */
-export default function MetasTab({ only }: { only?: 'financeiro' | 'comercial' }) {
+export function useMetasData() {
   const { reflectingRows: financeAllRows, loading: loadingFinance } = useFinanceRows()
   const { unidade: visao } = useUnidadeFilter()
   const [leads, setLeads] = useState<LeadLite[]>([])
@@ -664,28 +758,28 @@ export default function MetasTab({ only }: { only?: 'financeiro' | 'comercial' }
   const metasComercial = metas.filter(m => m.area === 'comercial')
 
   const today = new Date().toISOString().slice(0, 10)
-  const activeMetas = metas.filter(m => { const { start, end } = metaPeriodRange(m); return start <= today && today <= end })
-  const activeAtingidas = activeMetas.filter(m => {
-    const tipo = TIPO_OPTIONS[m.area].find(o => o.value === m.tipo)!
-    const atingido = m.area === 'financeiro' ? computeAtingidoFinanceiro(m) : computeAtingidoComercial(m)
-    return tipo.direction === 'min' ? atingido >= m.valor_alvo : atingido <= m.valor_alvo
-  })
+  const visiveis = [...metasFinanceiro, ...metasComercial]
+  const activeMetas = visiveis.filter(m => { const { start, end } = metaPeriodRange(m); return start <= today && today <= end })
+  const encerradas = visiveis.filter(m => metaPeriodRange(m).end < today)
+  const computeAtingido = (m: Meta) => (m.area === 'financeiro' ? computeAtingidoFinanceiro(m) : computeAtingidoComercial(m))
+  const tipoDe = (m: Meta) => TIPO_OPTIONS[m.area].find(o => o.value === m.tipo)!
+  const statusDe = (m: Meta) => metaStatus(m, tipoDe(m), computeAtingido(m))
+  const activeAtingidas = activeMetas.filter(m => statusDe(m).key === 'atingida')
+  return {
+    loading: loading || loadingFinance, metas, profiles, load, visao,
+    metasFinanceiro, metasComercial, visiveis, activeMetas, activeAtingidas, encerradas,
+    computeAtingido, computeDetailRowsFor: (m: Meta) => (m.area === 'financeiro' ? detailRowsFinanceiro(m) : detailRowsComercial(m)), computeAtingidoFinanceiro, computeAtingidoComercial, detailRowsFinanceiro, detailRowsComercial, tipoDe, statusDe,
+  }
+}
 
-  if (loading || loadingFinance) return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>
+export default function MetasTab({ only }: { only?: 'financeiro' | 'comercial' }) {
+  const d = useMetasData()
+  const { loading, profiles, load, metasFinanceiro, metasComercial, activeMetas, encerradas, computeAtingidoFinanceiro, computeAtingidoComercial, detailRowsFinanceiro, detailRowsComercial, computeAtingido, tipoDe, statusDe, computeDetailRowsFor } = d
+  if (loading) return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>
 
   return (
     <div className="space-y-4">
-      {!only && <Card className="p-4">
-        <div className="flex items-center gap-2 mb-1">
-          <Trophy className="h-4 w-4 text-amber-700 dark:text-amber-300" />
-          <h3 className="font-semibold text-sm">Resumo geral</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {activeMetas.length === 0 ? 'Nenhuma meta em andamento no momento.' : (
-            <><strong className="text-foreground">{activeAtingidas.length} de {activeMetas.length}</strong> metas em andamento já atingidas — {metasFinanceiro.length} financeira(s), {metasComercial.length} comercial(is) no total cadastradas.</>
-          )}
-        </p>
-      </Card>}
+      {!only && <MetasOverview activeMetas={activeMetas} encerradas={encerradas} statusDe={statusDe} computeAtingido={computeAtingido} tipoDe={tipoDe} detailRowsFor={computeDetailRowsFor} />}
 
       {only !== 'comercial' && <MetasSection area="financeiro" icon={DollarSign} metas={metasFinanceiro} profiles={profiles} computeAtingido={computeAtingidoFinanceiro} computeDetailRows={detailRowsFinanceiro} onChanged={load} />}
       {only !== 'financeiro' && <MetasSection area="comercial" icon={Target} metas={metasComercial} profiles={profiles} computeAtingido={computeAtingidoComercial} computeDetailRows={detailRowsComercial} onChanged={load} />}

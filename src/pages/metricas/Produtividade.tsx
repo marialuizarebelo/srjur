@@ -1,196 +1,270 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from '@/integrations/supabase/client'
-import { Users, Scale, ClipboardList, Bell } from 'lucide-react'
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
-} from 'recharts'
+import { ClipboardList, Bell, Scale, Users, Clock, CheckCircle2, AlertTriangle, Flame, CalendarClock, Inbox, Timer } from 'lucide-react'
 import { fmtDate } from '@/lib/format'
 import {
-  monthsBack, KpiCard, ChartCard, DonutWithLegend,
-  DetailDialog, useDetail, AttentionPanel, type Attention, type DetailRow,
-  useResponsavelFilter, TrendChart,
+  monthsBack, usePeriod, KpiCard, ChartCard, DonutWithLegend, DetailDialog, useDetail, AttentionPanel, type Attention,
+  previousPeriodRange, trendText, NotesPanel, useResponsavelFilter,
 } from './shared'
+import {
+  PAL, ComboChart, HBars, BucketBars, MiniTable, SectionTitle,
+  avg, median, pct, fmtPct, fmtNum, daysBetween, addDays, inRange, todayISO, groupCount, fetchAll,
+} from './kit'
 
-interface Task { title: string; status: string; due_date: string | null; responsible_ids: string[] | null }
-interface Deadline { title: string; status: string; due_date: string; responsible_ids: string[] | null }
+interface Task { title: string; type: string | null; status: string; priority: string | null; due_date: string | null; created_at: string; updated_at: string | null; workflow_stage: string | null; responsible_ids: string[] | null }
+interface Deadline { title: string; status: string; due_date: string; tipo: string | null; responsible_ids: string[] | null }
 interface ProcessRow { title: string; status: string; responsible_ids: string[] | null }
 
-const PROCESS_STATUS_LABELS: Record<string, string> = {
-  em_andamento: 'Em andamento', concluido: 'Concluído', arquivado: 'Arquivado', suspenso: 'Suspenso',
-}
+const TIPO_TAREFA: Record<string, string> = { tarefa: 'Tarefa', compromisso: 'Compromisso', reuniao: 'Reunião', audiencia: 'Audiência', diligencia: 'Diligência', interno: 'Interno', cliente: 'Cliente' }
+const PRIORIDADE: Record<string, string> = { baixa: 'Baixa', media: 'Média', alta: 'Alta', urgente: 'Urgente' }
+const PRIORIDADE_COR: Record<string, string> = { baixa: PAL.gray, media: PAL.blue, alta: PAL.amber, urgente: PAL.red }
+const PROCESS_STATUS_LABELS: Record<string, string> = { em_andamento: 'Em andamento', concluido: 'Concluído', arquivado: 'Arquivado', suspenso: 'Suspenso' }
+const prettify = (s: string) => s.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase())
 
 export default function ProdutividadeTab() {
   const [tasksRaw, setTasksRaw] = useState<Task[]>([])
   const [deadlinesRaw, setDeadlinesRaw] = useState<Deadline[]>([])
   const [processesRaw, setProcessesRaw] = useState<ProcessRow[]>([])
   const [loading, setLoading] = useState(true)
+  const period = usePeriod()
   const detail = useDetail()
   const respFilter = useResponsavelFilter()
   const profiles = respFilter.profiles
 
   useEffect(() => {
     Promise.all([
-      supabase.from('tasks').select('title, status, due_date, responsible_ids'),
-      supabase.from('deadlines').select('title, status, due_date, responsible_ids'),
-      supabase.from('processes').select('title, status, responsible_ids'),
-    ]).then(([t, d, p]) => {
-      setTasksRaw((t.data as Task[]) ?? [])
-      setDeadlinesRaw((d.data as Deadline[]) ?? [])
-      setProcessesRaw((p.data as ProcessRow[]) ?? [])
-      setLoading(false)
-    })
+      fetchAll<Task>('tasks', 'title, type, status, priority, due_date, created_at, updated_at, workflow_stage, responsible_ids'),
+      fetchAll<Deadline>('deadlines', 'title, status, due_date, tipo, responsible_ids'),
+      fetchAll<ProcessRow>('processes', 'title, status, responsible_ids'),
+    ]).then(([t, d, p]) => { setTasksRaw(t); setDeadlinesRaw(d); setProcessesRaw(p); setLoading(false) })
   }, [])
 
   const tasks = useMemo(() => tasksRaw.filter(t => respFilter.matches(t.responsible_ids)), [tasksRaw, respFilter.responsavelId])
   const deadlines = useMemo(() => deadlinesRaw.filter(d => respFilter.matches(d.responsible_ids)), [deadlinesRaw, respFilter.responsavelId])
   const processes = useMemo(() => processesRaw.filter(p => respFilter.matches(p.responsible_ids)), [processesRaw, respFilter.responsavelId])
 
-  const todayStr = new Date().toISOString().slice(0, 10)
-  const tarefasPendentes = tasks.filter(t => t.status === 'pendente').length
-  const tarefasAtrasadas = tasks.filter(t => t.status === 'pendente' && t.due_date && t.due_date < todayStr).length
-  const prazosPendentes = deadlines.filter(d => d.status === 'pendente').length
-  const prazosAtrasados = deadlines.filter(d => d.status === 'pendente' && d.due_date < todayStr).length
-
+  const hoje = todayISO()
+  const { start, end } = period.range
+  const prev = useMemo(() => previousPeriodRange(start, end), [start, end])
   const trendMonths = useMemo(() => monthsBack(12), [])
-  const tarefasPorMes = useMemo(() => trendMonths.map(m => {
-    const mTasks = tasks.filter(t => t.due_date && t.due_date >= m.start && t.due_date <= m.end)
+  const nome = (id: string) => profiles.find(p => p.id === id)?.display_name ?? 'Sem nome'
+
+  /* ---------- Tarefas ---------- */
+  const pendentes = useMemo(() => tasks.filter(t => t.status === 'pendente'), [tasks])
+  const atrasadas = useMemo(() => pendentes.filter(t => t.due_date && t.due_date < hoje), [pendentes, hoje])
+  const comVencNoPeriodo = useMemo(() => tasks.filter(t => t.status !== 'cancelada' && inRange(t.due_date, start, end)), [tasks, start, end])
+  const concluidasNoPeriodo = comVencNoPeriodo.filter(t => t.status === 'concluida')
+  const taxaConclusao = pct(concluidasNoPeriodo.length, comVencNoPeriodo.length)
+  const comVencPrev = tasks.filter(t => t.status !== 'cancelada' && inRange(t.due_date, prev.start, prev.end))
+  const taxaConclusaoPrev = pct(comVencPrev.filter(t => t.status === 'concluida').length, comVencPrev.length)
+  const criadasPeriodo = tasks.filter(t => inRange(t.created_at, start, end))
+  const criadasPrev = tasks.filter(t => inRange(t.created_at, prev.start, prev.end))
+  // Tempo até concluir: aproximado pela última atualização da tarefa já concluída (não há data de conclusão própria).
+  const temposConclusao = tasks.filter(t => t.status === 'concluida' && t.updated_at && inRange(t.updated_at, start, end)).map(t => Math.max(0, daysBetween(t.created_at, t.updated_at!)))
+  const idadeBacklog = avg(pendentes.map(t => daysBetween(t.created_at, hoje)))
+  const urgentesAtrasadas = atrasadas.filter(t => t.priority === 'urgente' || t.priority === 'alta')
+  const proximos14 = pendentes.filter(t => inRange(t.due_date, hoje, addDays(hoje, 14)))
+
+  /* ---------- Prazos ---------- */
+  const prazosPend = deadlines.filter(d => d.status === 'pendente')
+  const prazosAtras = prazosPend.filter(d => d.due_date < hoje)
+  const prazosProx7 = prazosPend.filter(d => inRange(d.due_date, hoje, addDays(hoje, 7)))
+  const prazosProx14 = prazosPend.filter(d => inRange(d.due_date, hoje, addDays(hoje, 14)))
+  const prazosPeriodo = deadlines.filter(d => inRange(d.due_date, start, end))
+  const cumpridos = prazosPeriodo.filter(d => d.status === 'cumprido').length
+  const perdidos = prazosPeriodo.filter(d => d.status === 'perdido').length
+
+  /* ---------- Séries ---------- */
+  const mensal = useMemo(() => trendMonths.map(m => {
+    const comVenc = tasks.filter(t => t.status !== 'cancelada' && inRange(t.due_date, m.start, m.end))
     return {
       month: m.label,
-      concluidas: mTasks.filter(t => t.status === 'concluida').length,
-      atrasadas: mTasks.filter(t => t.status === 'pendente' && t.due_date! < todayStr).length,
+      criadas: tasks.filter(t => inRange(t.created_at, m.start, m.end)).length,
+      concluidas: comVenc.filter(t => t.status === 'concluida').length,
+      atrasadas: comVenc.filter(t => t.status === 'pendente' && t.due_date! < hoje).length,
+      conclusao: comVenc.length ? Math.round(pct(comVenc.filter(t => t.status === 'concluida').length, comVenc.length)) : null,
+      cumpridos: deadlines.filter(d => d.status === 'cumprido' && inRange(d.due_date, m.start, m.end)).length,
+      perdidos: deadlines.filter(d => d.status === 'perdido' && inRange(d.due_date, m.start, m.end)).length,
+      _start: m.start, _end: m.end,
     }
-  }), [tasks, trendMonths])
+  }), [tasks, deadlines, trendMonths, hoje])
+  const cargaFutura = useMemo(() => Array.from({ length: 14 }, (_, i) => {
+    const dia = addDays(hoje, i)
+    const d = new Date(dia + 'T00:00:00')
+    return {
+      month: i === 0 ? 'Hoje' : `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
+      tarefas: pendentes.filter(t => t.due_date === dia).length,
+      prazos: prazosPend.filter(p => p.due_date === dia).length,
+      _dia: dia,
+    }
+  }), [pendentes, prazosPend, hoje])
+  const agingAtraso = useMemo(() => {
+    const faixas = [
+      { name: '1–3 dias', a: 1, b: 3, color: PAL.amber }, { name: '4–7', a: 4, b: 7, color: PAL.orange },
+      { name: '8–30', a: 8, b: 30, color: PAL.pink }, { name: '30+ dias', a: 31, b: 99999, color: PAL.red },
+    ]
+    return faixas.map(f => { const ts = atrasadas.filter(t => { const d = daysBetween(t.due_date!, hoje); return d >= f.a && d <= f.b }); return { name: f.name, color: f.color, value: ts.length, rows: ts } })
+  }, [atrasadas, hoje])
 
-  const prazosStatus = useMemo(() => ([
+  /* ---------- Distribuições ---------- */
+  const porPrioridade = useMemo(() => ['urgente', 'alta', 'media', 'baixa'].map(p => ({ name: PRIORIDADE[p], key: p, value: pendentes.filter(t => (t.priority ?? 'media') === p).length, color: PRIORIDADE_COR[p] })), [pendentes])
+  const porTipo = useMemo(() => groupCount(pendentes, t => TIPO_TAREFA[t.type ?? ''] ?? 'Tarefa'), [pendentes])
+  const porEtapa = useMemo(() => groupCount(pendentes, t => prettify(t.workflow_stage ?? 'a_fazer')), [pendentes])
+  const prazosStatus = useMemo(() => [
     { name: 'Cumpridos', value: deadlines.filter(d => d.status === 'cumprido').length },
     { name: 'Perdidos', value: deadlines.filter(d => d.status === 'perdido').length },
-    { name: 'Pendentes', value: deadlines.filter(d => d.status === 'pendente').length },
-  ].filter(s => s.value > 0)), [deadlines])
+    { name: 'Pendentes', value: prazosPend.length },
+  ].filter(s => s.value > 0), [deadlines, prazosPend])
+  const processosPorStatus = useMemo(() => groupCount(processes, p => PROCESS_STATUS_LABELS[p.status] ?? p.status), [processes])
 
-  function openPrazoStatusDetail(name: string) {
-    const statusKey = name === 'Cumpridos' ? 'cumprido' : name === 'Perdidos' ? 'perdido' : 'pendente'
-    const list = deadlines.filter(d => d.status === statusKey)
-    detail.show(`Prazos — ${name}`, list.map((d, i) => ({ id: String(i), label: d.title, sublabel: fmtDate(d.due_date) })))
-  }
+  /* ---------- Equipe ---------- */
+  const equipe = useMemo(() => {
+    const ids = new Set<string>()
+    ;[...tasks, ...deadlines, ...processes].forEach(x => (x.responsible_ids ?? []).forEach(id => ids.add(id)))
+    return Array.from(ids).map(id => {
+      const meus = (xs: { responsible_ids: string[] | null }[]) => xs.filter(x => x.responsible_ids?.includes(id))
+      const tp = meus(pendentes) as Task[]; const dp = meus(prazosPend) as Deadline[]
+      const venc = meus(comVencNoPeriodo) as Task[]
+      const proc = (meus(processes) as ProcessRow[]).filter(p => p.status === 'em_andamento')
+      return {
+        id, nome: nome(id), pendentes: tp.length, atrasadas: tp.filter(t => t.due_date && t.due_date < hoje).length,
+        prazos: dp.length, prazosAtras: dp.filter(d => d.due_date < hoje).length,
+        concluidas: venc.filter(t => t.status === 'concluida').length, taxa: pct(venc.filter(t => t.status === 'concluida').length, venc.length),
+        proximos14: tp.filter(t => inRange(t.due_date, hoje, addDays(hoje, 14))).length + dp.filter(d => inRange(d.due_date, hoje, addDays(hoje, 14))).length,
+        processos: proc.length, carga: tp.length + dp.length,
+        _tp: tp, _dp: dp,
+      }
+    }).sort((a, b) => b.carga - a.carga)
+  }, [tasks, deadlines, processes, pendentes, prazosPend, comVencNoPeriodo, profiles, hoje])
+  const cargaMedia = avg(equipe.map(e => e.carga))
 
-  const processosPorStatus = useMemo(() => {
-    const map = new Map<string, number>()
-    processes.forEach(p => map.set(p.status, (map.get(p.status) ?? 0) + 1))
-    return Array.from(map.entries()).map(([status, total]) => ({ status: PROCESS_STATUS_LABELS[status] ?? status, statusKey: status, total }))
-  }, [processes])
-
-  function openProcessStatusDetail(statusKey: string, label: string) {
-    const list = processes.filter(p => p.status === statusKey)
-    detail.show(`Processos — ${label}`, list.map((p, i) => ({ id: String(i), label: p.title })))
-  }
-
-  const cargaPorResponsavel = useMemo(() => {
-    const map = new Map<string, { total: number; itens: DetailRow[] }>()
-    const openTasks = tasks.filter(t => t.status === 'pendente')
-    const openDeadlines = deadlines.filter(d => d.status === 'pendente')
-    for (const t of openTasks) for (const id of t.responsible_ids ?? []) {
-      const cur = map.get(id) ?? { total: 0, itens: [] }
-      cur.total++; cur.itens.push({ id: `t${cur.itens.length}`, label: t.title, sublabel: t.due_date ? `Tarefa · ${fmtDate(t.due_date)}` : 'Tarefa' })
-      map.set(id, cur)
-    }
-    for (const d of openDeadlines) for (const id of d.responsible_ids ?? []) {
-      const cur = map.get(id) ?? { total: 0, itens: [] }
-      cur.total++; cur.itens.push({ id: `d${cur.itens.length}`, label: d.title, sublabel: `Prazo · ${fmtDate(d.due_date)}` })
-      map.set(id, cur)
-    }
-    return Array.from(map.entries())
-      .map(([id, v]) => ({ id, name: profiles.find(p => p.id === id)?.display_name ?? 'Sem nome', total: v.total, itens: v.itens }))
-      .sort((a, b) => b.total - a.total)
-  }, [tasks, deadlines, profiles])
-
-  function openResponsavelDetail(name: string, itens: DetailRow[]) {
-    detail.show(`Pendências — ${name}`, itens)
-  }
+  /* ---------- Detalhes ---------- */
+  const openTasks = (title: string, list: Task[]) => detail.show(title, list.map((t, i) => ({ id: String(i), label: t.title, sublabel: [TIPO_TAREFA[t.type ?? ''], t.due_date ? fmtDate(t.due_date) : null, t.priority ? PRIORIDADE[t.priority] : null].filter(Boolean).join(' · ') })))
+  const openDeadlines = (title: string, list: Deadline[]) => detail.show(title, list.map((d, i) => ({ id: String(i), label: d.title, sublabel: `${fmtDate(d.due_date)}${d.tipo ? ` · ${d.tipo}` : ''}` })))
 
   const attention = useMemo(() => {
     const items: Attention[] = []
-    if (prazosAtrasados > 0) items.push({ text: `${prazosAtrasados} prazo(s) vencido(s) ainda pendente(s).`, level: 'danger' })
-    if (tarefasAtrasadas > 0) items.push({ text: `${tarefasAtrasadas} tarefa(s) atrasada(s).`, level: 'warn' })
-    if (cargaPorResponsavel.length > 1) {
-      const media = cargaPorResponsavel.reduce((s, r) => s + r.total, 0) / cargaPorResponsavel.length
-      const sobrecarregado = cargaPorResponsavel[0]
-      if (sobrecarregado.total > media * 1.8) items.push({ text: `${sobrecarregado.name} concentra bem mais pendências que a média da equipe (${sobrecarregado.total} vs ${media.toFixed(0)}).`, level: 'info' })
-    }
+    if (prazosAtras.length > 0) items.push({ text: `${prazosAtras.length} prazo(s) vencido(s) ainda pendente(s).`, level: 'danger' })
+    if (urgentesAtrasadas.length > 0) items.push({ text: `${urgentesAtrasadas.length} tarefa(s) de prioridade alta/urgente atrasada(s).`, level: 'danger' })
+    if (atrasadas.length > 0) items.push({ text: `${atrasadas.length} tarefa(s) atrasada(s) no total.`, level: 'warn' })
+    if (equipe.length > 1 && equipe[0].carga > cargaMedia * 1.8) items.push({ text: `${equipe[0].nome} concentra bem mais pendências que a média da equipe (${equipe[0].carga} vs ${fmtNum(cargaMedia, 0)}).`, level: 'info' })
+    const picos = cargaFutura.filter(d => d.tarefas + d.prazos >= 6)
+    if (picos.length > 0) items.push({ text: `Pico de trabalho nos próximos 14 dias: ${picos.map(p => `${p.month} (${p.tarefas + p.prazos})`).join(', ')}.`, level: 'info' })
     return items
-  }, [prazosAtrasados, tarefasAtrasadas, cargaPorResponsavel])
-
-  function openTasksDetail(title: string, list: Task[]) {
-    detail.show(title, list.map((t, i) => ({ id: String(i), label: t.title, sublabel: t.due_date ? fmtDate(t.due_date) : undefined })))
-  }
-  function openDeadlinesDetail(title: string, list: Deadline[]) {
-    detail.show(title, list.map((d, i) => ({ id: String(i), label: d.title, sublabel: fmtDate(d.due_date) })))
-  }
+  }, [prazosAtras.length, urgentesAtrasadas.length, atrasadas.length, equipe, cargaMedia, cargaFutura])
 
   if (loading) return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>
 
+  const sp = (k: 'criadas' | 'concluidas' | 'atrasadas') => mensal.map(m => m[k] as number)
+
   return (
     <div className="space-y-4">
-
       <AttentionPanel items={attention} />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard title="Tarefas pendentes" value={tarefasPendentes} icon={ClipboardList} color="#6A8FC7" onClick={() => openTasksDetail('Tarefas pendentes', tasks.filter(t => t.status === 'pendente'))} />
-        <KpiCard title="Tarefas atrasadas" value={tarefasAtrasadas} icon={ClipboardList} color="#D96C87" onClick={() => openTasksDetail('Tarefas atrasadas', tasks.filter(t => t.status === 'pendente' && t.due_date && t.due_date < todayStr))} />
-        <KpiCard title="Prazos pendentes" value={prazosPendentes} icon={Bell} color="#D9A441" onClick={() => openDeadlinesDetail('Prazos pendentes', deadlines.filter(d => d.status === 'pendente'))} />
-        <KpiCard title="Prazos atrasados" value={prazosAtrasados} icon={Bell} color="#D96C87" onClick={() => openDeadlinesDetail('Prazos atrasados', deadlines.filter(d => d.status === 'pendente' && d.due_date < todayStr))} />
+      <SectionTitle hint="Quanto trabalho está aberto hoje e quanto está fora do prazo.">Backlog agora</SectionTitle>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <KpiCard title="Tarefas pendentes" hint="Tarefas e compromissos ainda não concluídos." value={pendentes.length} icon={ClipboardList} color={PAL.blue} onClick={() => openTasks('Tarefas pendentes', pendentes)} />
+        <KpiCard title="Tarefas atrasadas" hint="Pendentes com data limite anterior a hoje." value={atrasadas.length} icon={AlertTriangle} color={atrasadas.length ? PAL.red : PAL.green} trendTone="down-good"
+          trend={pendentes.length ? `${fmtPct(pct(atrasadas.length, pendentes.length))} do backlog` : undefined} onClick={() => openTasks('Tarefas atrasadas', atrasadas)} />
+        <KpiCard title="Prazos pendentes" hint="Prazos processuais ainda não cumpridos." value={prazosPend.length} icon={Bell} color={PAL.amber} trend={`${prazosProx7.length} vencem em 7 dias`} trendTone="neutral" onClick={() => openDeadlines('Prazos pendentes', prazosPend)} />
+        <KpiCard title="Prazos atrasados" hint="Prazos vencidos que continuam pendentes." value={prazosAtras.length} icon={Flame} color={prazosAtras.length ? PAL.red : PAL.green} trendTone="down-good" onClick={() => openDeadlines('Prazos atrasados', prazosAtras)} />
+        <KpiCard title="Alta/urgente atrasadas" hint="Tarefas de prioridade alta ou urgente já vencidas." value={urgentesAtrasadas.length} icon={Flame} color={urgentesAtrasadas.length ? PAL.red : PAL.green} trendTone="down-good" onClick={() => openTasks('Alta/urgente atrasadas', urgentesAtrasadas)} />
+        <KpiCard title="Idade do backlog" hint="Há quantos dias, em média, as tarefas pendentes foram criadas." value={pendentes.length ? `${fmtNum(idadeBacklog, 0)} dias` : '—'} icon={Clock} color={PAL.sky} trendTone="down-good" onClick={() => openTasks('Tarefas pendentes', pendentes)} />
       </div>
 
-      <ChartCard title="Tarefas concluídas x atrasadas por mês" icon={ClipboardList}>
-        <TrendChart data={tarefasPorMes} series={[
-          { key: 'concluidas', name: 'Concluídas', color: '#6E9C7D' },
-          { key: 'atrasadas', name: 'Atrasadas', color: '#D96C87' },
+      <SectionTitle hint="O que foi entregue no período selecionado.">Entrega no período</SectionTitle>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <KpiCard title="Taxa de conclusão" hint="Das tarefas com data limite no período, quantas já foram concluídas." value={comVencNoPeriodo.length ? fmtPct(taxaConclusao) : '—'} icon={CheckCircle2} color={taxaConclusao >= 85 ? PAL.green : PAL.amber} spark={sp('concluidas')}
+          trend={trendText(taxaConclusao, taxaConclusaoPrev)} onClick={() => openTasks('Tarefas com data no período', comVencNoPeriodo)} />
+        <KpiCard title="Concluídas" hint="Tarefas concluídas entre as que venciam no período." value={concluidasNoPeriodo.length} icon={CheckCircle2} color={PAL.green} onClick={() => openTasks('Tarefas concluídas', concluidasNoPeriodo)} />
+        <KpiCard title="Criadas" hint="Tarefas criadas no período (entrada de trabalho)." value={criadasPeriodo.length} icon={Inbox} color={PAL.blue} spark={sp('criadas')} trend={trendText(criadasPeriodo.length, criadasPrev.length)} trendTone="neutral" onClick={() => openTasks('Tarefas criadas no período', criadasPeriodo)} />
+        <KpiCard title="Tempo até concluir" hint="Aproximação: dias entre a criação e a última atualização das tarefas concluídas no período (o sistema não guarda a data de conclusão)." value={temposConclusao.length ? `${fmtNum(avg(temposConclusao), 0)} dias` : '—'} icon={Timer} color={PAL.sky}
+          trend={temposConclusao.length ? `mediana ${fmtNum(median(temposConclusao), 0)} dias` : undefined} trendTone="neutral" onClick={() => openTasks('Concluídas no período', tasks.filter(t => t.status === 'concluida' && t.updated_at && inRange(t.updated_at, start, end)))} />
+        <KpiCard title="Cumprimento de prazos" hint="Prazos cumpridos ÷ (cumpridos + perdidos) com vencimento no período." value={cumpridos + perdidos ? fmtPct(pct(cumpridos, cumpridos + perdidos)) : '—'} icon={Bell} color={perdidos ? PAL.amber : PAL.green}
+          trend={`${cumpridos} cumpridos · ${perdidos} perdidos`} trendTone="neutral" onClick={() => openDeadlines('Prazos do período', prazosPeriodo)} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartCard title="Entrada × saída de tarefas (12 meses)" icon={ClipboardList}>
+          <ComboChart data={mensal} format={v => String(v)} yFormat={v => String(v)} onPointClick={i => { const m = mensal[i]; openTasks(`Tarefas com data em ${m.month}`, tasks.filter(t => inRange(t.due_date, m._start, m._end))) }} series={[
+            { key: 'criadas', name: 'Criadas', color: PAL.blue },
+            { key: 'concluidas', name: 'Concluídas', color: PAL.green },
+            { key: 'atrasadas', name: 'Atrasadas', color: PAL.red, kind: 'line' },
+          ]} />
+        </ChartCard>
+        <ChartCard title="Taxa de conclusão e prazos (12 meses)" icon={Bell}>
+          <ComboChart data={mensal} format={v => String(v)} yFormat={v => String(v)} series={[
+            { key: 'cumpridos', name: 'Prazos cumpridos', color: PAL.teal, stack: 'p' },
+            { key: 'perdidos', name: 'Prazos perdidos', color: PAL.red, stack: 'p' },
+            { key: 'conclusao', name: 'Conclusão de tarefas (%)', color: PAL.purple, kind: 'line', axis: 'right' },
+          ]} />
+        </ChartCard>
+      </div>
+
+      <NotesPanel area="produtividade" months={trendMonths} />
+
+      <SectionTitle hint="O que está por vir e como distribuir o esforço.">Carga futura</SectionTitle>
+      <ChartCard title="Tarefas e prazos nos próximos 14 dias" icon={CalendarClock}>
+        <ComboChart data={cargaFutura} format={v => String(v)} yFormat={v => String(v)} onPointClick={i => { const d = cargaFutura[i]; openTasks(`Itens de ${d.month}`, pendentes.filter(t => t.due_date === d._dia)); }} series={[
+          { key: 'tarefas', name: 'Tarefas', color: PAL.blue, stack: 'c' },
+          { key: 'prazos', name: 'Prazos', color: PAL.amber, stack: 'c' },
         ]} />
+        <p className="text-[11px] text-muted-foreground mt-2">{proximos14.length} tarefa(s) e {prazosProx14.length} prazo(s) nesse período.</p>
       </ChartCard>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ChartCard title="Prazos: cumpridos x perdidos" icon={Bell}>
-          {prazosStatus.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-14">Sem dados</p>
-          ) : (
-            <DonutWithLegend data={prazosStatus} formatValue={v => String(v)} onSelect={openPrazoStatusDetail} />
-          )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartCard title="Idade do atraso (tarefas)" icon={AlertTriangle}>
+          <BucketBars data={agingAtraso.map(a => ({ name: a.name, value: a.value, color: a.color }))} format={v => `${v} tarefa(s)`}
+            onSelect={name => { const f = agingAtraso.find(a => a.name === name); if (f) openTasks(`Atrasadas — ${name}`, f.rows) }} />
+        </ChartCard>
+        <ChartCard title="Pendências por prioridade" icon={Flame}>
+          <BucketBars data={porPrioridade.map(p => ({ name: p.name, value: p.value, color: p.color }))} format={v => `${v} tarefa(s)`}
+            onSelect={name => { const f = porPrioridade.find(p => p.name === name); if (f) openTasks(`Prioridade ${name}`, pendentes.filter(t => (t.priority ?? 'media') === f.key)) }} />
+        </ChartCard>
+        <ChartCard title="Pendências por tipo" icon={ClipboardList}>
+          <HBars data={porTipo} format={v => `${v}`} color={PAL.blue} onSelect={name => openTasks(`Pendentes — ${name}`, pendentes.filter(t => (TIPO_TAREFA[t.type ?? ''] ?? 'Tarefa') === name))} />
+        </ChartCard>
+        <ChartCard title="Pendências por etapa do fluxo" icon={ClipboardList}>
+          <HBars data={porEtapa} format={v => `${v}`} color={PAL.teal} onSelect={name => openTasks(`Etapa — ${name}`, pendentes.filter(t => prettify(t.workflow_stage ?? 'a_fazer') === name))} />
+        </ChartCard>
+      </div>
+
+      <SectionTitle hint="Como o trabalho está distribuído entre as pessoas.">Equipe</SectionTitle>
+      <ChartCard title="Carga e entrega por responsável" icon={Users}>
+        <MiniTable
+          columns={[
+            { key: 'nome', label: 'Responsável' },
+            { key: 'pendentes', label: 'Tarefas', align: 'right' },
+            { key: 'atrasadas', label: 'Atrasadas', align: 'right', render: r => <span className={r.atrasadas ? 'text-red-700 dark:text-red-300 font-semibold' : ''}>{r.atrasadas}</span> },
+            { key: 'prazos', label: 'Prazos', align: 'right' },
+            { key: 'prazosAtras', label: 'Prazos atras.', align: 'right', render: r => <span className={r.prazosAtras ? 'text-red-700 dark:text-red-300 font-semibold' : ''}>{r.prazosAtras}</span> },
+            { key: 'proximos14', label: 'Próx. 14 dias', align: 'right' },
+            { key: 'concluidas', label: 'Concluídas (período)', align: 'right' },
+            { key: 'taxa', label: 'Conclusão', align: 'right', render: r => (r.concluidas || r.pendentes ? fmtPct(r.taxa) : '—') },
+            { key: 'processos', label: 'Processos', align: 'right' },
+          ]}
+          rows={equipe}
+          onRowClick={r => detail.show(`Pendências — ${r.nome}`, [
+            ...r._tp.map((t: Task, i: number) => ({ id: `t${i}`, label: t.title, sublabel: `Tarefa${t.due_date ? ` · ${fmtDate(t.due_date)}` : ''}` })),
+            ...r._dp.map((d: Deadline, i: number) => ({ id: `d${i}`, label: d.title, sublabel: `Prazo · ${fmtDate(d.due_date)}` })),
+          ])} />
+      </ChartCard>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartCard title="Equilíbrio da carga (tarefas + prazos pendentes)" icon={Users}>
+          <HBars data={equipe.map(e => ({ name: e.nome, value: e.carga, sub: e.atrasadas + e.prazosAtras ? `${e.atrasadas + e.prazosAtras} atrasado(s)` : undefined }))} format={v => `${v}`} color={PAL.purple} empty="Nenhuma pendência atribuída"
+            onSelect={name => { const e = equipe.find(x => x.nome === name); if (e) detail.show(`Pendências — ${name}`, [...e._tp.map((t: Task, i: number) => ({ id: `t${i}`, label: t.title, sublabel: `Tarefa${t.due_date ? ` · ${fmtDate(t.due_date)}` : ''}` })), ...e._dp.map((d: Deadline, i: number) => ({ id: `d${i}`, label: d.title, sublabel: `Prazo · ${fmtDate(d.due_date)}` }))]) }} />
+          {equipe.length > 1 && <p className="text-[11px] text-muted-foreground mt-3">Média da equipe: {fmtNum(cargaMedia, 0)} pendência(s) por pessoa.</p>}
+        </ChartCard>
+        <ChartCard title="Processos em andamento por responsável" icon={Scale}>
+          <HBars data={equipe.filter(e => e.processos > 0).map(e => ({ name: e.nome, value: e.processos })).sort((a, b) => b.value - a.value)} format={v => `${v}`} color={PAL.green} empty="Nenhum processo atribuído" />
+        </ChartCard>
+        <ChartCard title="Situação dos prazos (histórico)" icon={Bell}>
+          <DonutWithLegend data={prazosStatus} formatValue={v => String(v)} onSelect={name => openDeadlines(`Prazos — ${name}`, deadlines.filter(d => d.status === (name === 'Cumpridos' ? 'cumprido' : name === 'Perdidos' ? 'perdido' : 'pendente')))} />
         </ChartCard>
         <ChartCard title="Processos por status" icon={Scale}>
-          <div className="h-52">
-            {processosPorStatus.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-14">Sem dados</p>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={processosPorStatus}>
-                  <XAxis dataKey="status" tick={{ fontSize: 9 }} />
-                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                  <Bar dataKey="total" name="Processos" fill="#7A84C9" radius={[4, 4, 0, 0]} cursor="pointer"
-                    onClick={(d: any) => openProcessStatusDetail(d.statusKey, d.status)} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+          <DonutWithLegend data={processosPorStatus} formatValue={v => String(v)} onSelect={name => detail.show(`Processos — ${name}`, processes.filter(p => (PROCESS_STATUS_LABELS[p.status] ?? p.status) === name).map((p, i) => ({ id: String(i), label: p.title })))} />
         </ChartCard>
       </div>
-
-      <ChartCard title="Carga por responsável (pendências abertas)" icon={Users}>
-        <div className="h-56">
-          {cargaPorResponsavel.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-16">Sem pendências atribuídas</p>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={cargaPorResponsavel} layout="vertical" margin={{ left: 24 }}>
-                <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={120} />
-                <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                <Bar dataKey="total" name="Pendências" fill="#5FA39A" radius={[0, 4, 4, 0]} cursor="pointer"
-                  onClick={(d: any) => openResponsavelDetail(d.name, d.itens)} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </ChartCard>
 
       <DetailDialog open={detail.open} onClose={detail.close} title={detail.title} rows={detail.rows} />
     </div>
