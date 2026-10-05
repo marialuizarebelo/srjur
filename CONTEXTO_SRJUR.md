@@ -102,3 +102,27 @@ Não é necessário (nem recomendado) já vir com a solução técnica pronta �
 ---
 
 *Documento gerado em 2026-07-03, a partir do histórico real de correções e decisões tomadas no desenvolvimento do SRJUR.*
+
+---
+
+## 7. Métricas e Metas: o que precisa estar preenchido sempre
+
+Os indicadores só ficam certos se o cadastro estiver completo. A aba **Métricas e Metas › Visão Geral** tem o painel
+**Qualidade dos dados**, que lista o que está faltando, em quais números isso pesa e onde corrigir.
+
+**Duas empresas, uma visão.** O seletor "Visão" (Empresa toda / Advocacia / SaaS) vale para todas as abas.
+Em "Empresa toda" os lançamentos marcados como **Entre as empresas** (ex.: licença do SaaS paga pela Advocacia) saem da conta
+para a mesma receita/despesa não ser contada duas vezes.
+
+| Onde | Sempre preencher | Alimenta |
+|---|---|---|
+| Financeiro | Categoria, Cliente (nas receitas), Vencimento, Unidade (Advocacia/SaaS), Forma de pagamento, Data do pagamento ao quitar; "Entre as empresas" quando for movimento Advocacia ⇄ SaaS; Tipo de custo nas despesas (ou deixar automático) | DRE, fluxo de caixa, inadimplência, MRR, ponto de equilíbrio |
+| Mensalidades | Lançar pelo formulário com recorrência (gera a série) | MRR, churn, retenção do SaaS |
+| Cliente | Área, Origem, Responsável, Unidades de negócio, Cidade/UF; ao encerrar: data e motivo | Carteira, churn, onde estão os clientes |
+| Lead | Origem, Valor potencial, Responsável, Unidade do negócio, Próximo follow-up, Primeiro contato, Data de assinatura; ao perder: motivo | Funil, ciclo de venda, CAC, previsão, perdas |
+| Processo | Área, Data de distribuição, Valor da causa, Tribunal, Instância, Responsável, Cliente | Acervo, duração, receita por área |
+| Prazo | Tipo, Processo, Responsável | Cumprimento, carga, processos sem prazo |
+| Tarefa | Responsável, Data limite, Unidade | Produtividade, carga futura |
+
+Datas de perda, conversão, encerramento e conclusão são preenchidas sozinhas por gatilhos do banco
+(`supabase/migration_metricas_dados.sql`).
