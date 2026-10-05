@@ -65,12 +65,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+      <div className="flex min-h-screen w-full relative">
+        {/* Glows de fundo (profundidade) — atrás de tudo, não capturam clique */}
+        <div aria-hidden className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+          <div className="absolute -top-[180px] -right-[160px] h-[560px] w-[560px] rounded-full blur-[30px] bg-glow-accent" />
+          <div className="absolute -bottom-[200px] -left-[140px] h-[600px] w-[600px] rounded-full blur-[30px] bg-glow-navy" />
+        </div>
         <AppSidebar />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 relative z-[1]">
 
           {/* Topbar */}
-          <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+          <div className="sticky top-0 z-10 bg-background/60 backdrop-blur-xl border-b" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <div className="flex items-center gap-2 px-3 py-2 md:px-6">
             <SidebarTrigger className="shrink-0" />
 
@@ -78,7 +83,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             {/* Desktop: barra de busca central clicável */}
             <button
               onClick={() => setGlobalSearchOpen(true)}
-              className="hidden md:flex flex-1 max-w-sm mx-auto items-center gap-2 h-9 px-3 rounded-xl bg-muted/60 hover:bg-muted transition-colors text-sm text-muted-foreground border border-transparent hover:border-border/50"
+              className="hidden md:flex flex-1 max-w-sm mx-auto items-center gap-2.5 h-10 px-4 rounded-full bg-muted/60 hover:bg-muted transition-colors text-sm text-muted-foreground border border-transparent hover:border-border/50"
             >
               <Search className="h-3.5 w-3.5 shrink-0" />
               <span className="flex-1 text-left">Buscar no sistema...</span>

@@ -13,7 +13,6 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import { UserAvatar } from '@/components/UserAvatar'
 
 // Módulos sempre visíveis independente de restrição (dashboard e as próprias
@@ -91,44 +90,43 @@ export function AppSidebar() {
   }, [])
 
   return (
-    <Sidebar collapsible="icon" className="border-r-0">
+    <Sidebar collapsible="icon" variant="floating" className="border-r-0">
       <SidebarContent
-        className="flex flex-col h-full"
-        style={{ backgroundColor: 'var(--sidebar-background)', color: 'var(--sidebar-foreground)' }}
+        className="flex flex-col h-full rounded-[28px]"
+        style={{
+          background: 'linear-gradient(180deg, rgba(20,33,61,0.96) 0%, rgba(13,24,46,0.98) 100%)',
+          color: 'var(--sidebar-foreground)',
+          border: '1px solid rgba(245,241,230,0.10)',
+          boxShadow: 'inset 0 1px 0 rgba(245,241,230,0.10), 0 2px 6px rgba(0,0,0,0.18), 0 28px 60px -24px rgba(11,21,38,0.65)',
+        }}
       >
-        {/* Brand */}
-        <div className="px-4 py-4">
+        {/* Brand — logo do escritório; sem logo, usa o monograma SRJUR */}
+        <div className="px-5 pt-6 pb-3">
           {!collapsed ? (
-            <div className="flex items-center gap-2.5">
-              <div className="h-9 w-9 rounded-xl bg-[var(--sidebar-primary)] flex items-center justify-center text-white font-bold text-sm overflow-hidden shrink-0">
-                {office.logo_url
-                  ? <img src={office.logo_url} alt="" className="w-full h-full object-cover" />
-                  : 'SR'}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-[var(--sidebar-primary-foreground)]">SRJUR</p>
-                <p className="text-xs text-[var(--sidebar-foreground)] truncate max-w-[140px]">{office.name}</p>
+            <div className="flex items-center gap-3">
+              {office.logo_url
+                ? <div className="h-9 w-9 rounded-xl overflow-hidden shrink-0"><img src={office.logo_url} alt="" className="w-full h-full object-cover" /></div>
+                : <img src="/brand/srjur-monogram-cream.png" alt="SRJUR" className="h-9 w-9 object-contain shrink-0" />}
+              <div className="min-w-0">
+                <p className="font-display text-base text-[var(--sidebar-primary-foreground)] leading-tight">SRJUR</p>
+                <p className="text-[11px] text-[var(--sidebar-foreground)] truncate max-w-[140px]">{office.name}</p>
               </div>
             </div>
           ) : (
-            <div className="h-9 w-9 rounded-xl bg-[var(--sidebar-primary)] flex items-center justify-center text-white font-bold text-sm mx-auto overflow-hidden">
-              {office.logo_url
-                ? <img src={office.logo_url} alt="" className="w-full h-full object-cover" />
-                : 'SR'}
-            </div>
+            office.logo_url
+              ? <div className="h-9 w-9 rounded-xl mx-auto overflow-hidden"><img src={office.logo_url} alt="" className="w-full h-full object-cover" /></div>
+              : <img src="/brand/srjur-monogram-cream.png" alt="SRJUR" className="h-9 w-9 object-contain mx-auto" />
           )}
         </div>
 
-        <Separator className="bg-[var(--sidebar-border)]" />
-
         {/* Nav */}
-        <div className="flex-1 overflow-y-auto py-2">
+        <div className="flex-1 overflow-y-auto no-scrollbar py-1">
           {sections.map(section => {
             const visibleItems = section.items.filter(item => isModuleAllowed(item.url, profile?.allowed_modules))
             if (visibleItems.length === 0) return null
             return (
-            <SidebarGroup key={section.label}>
-              <SidebarGroupLabel className="text-[var(--sidebar-foreground)] opacity-60 text-xs uppercase tracking-wider">
+            <SidebarGroup key={section.label} className="px-2.5 py-1.5">
+              <SidebarGroupLabel className="text-[#7F8BA6] text-[10px] font-bold uppercase tracking-[0.18em] px-3 mb-1">
                 {!collapsed && section.label}
               </SidebarGroupLabel>
               <SidebarGroupContent>
@@ -140,10 +138,10 @@ export function AppSidebar() {
                       <SidebarMenuItem key={item.url}>
                         <SidebarMenuButton
                           isActive={isActive}
-                          className="text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] data-[active=true]:bg-[var(--sidebar-accent)] data-[active=true]:text-[var(--sidebar-accent-foreground)] data-[active=true]:font-semibold"
+                          className="nav-item h-10 px-2.5 gap-2.5 text-[var(--sidebar-foreground)] font-medium hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] data-active:text-[var(--sidebar-accent-foreground)] data-active:font-bold"
                           render={<NavLink to={item.url} />}
                         >
-                          <item.icon className="h-4 w-4" />
+                          <item.icon className="h-[17px] w-[17px] nav-icon" />
                           {!collapsed && <span>{item.title}</span>}
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -156,23 +154,21 @@ export function AppSidebar() {
           })}
         </div>
 
-        <Separator className="bg-[var(--sidebar-border)]" />
-
         {/* Footer */}
-        <div className="p-3 space-y-2">
+        <div className="p-3 pt-2 space-y-2">
           {!collapsed && profile && (
-            <div className="flex items-center gap-2 px-2 py-1">
+            <div className="flex items-center gap-2.5 rounded-2xl px-3 py-2.5" style={{ background: 'linear-gradient(180deg, rgba(245,241,230,0.08), rgba(245,241,230,0.04))', border: '1px solid rgba(245,241,230,0.10)', boxShadow: 'inset 0 1px 0 rgba(245,241,230,0.08)' }}>
               <UserAvatar
                 name={profile.nickname || profile.display_name}
                 photoUrl={profile.photo_url}
                 color="var(--sidebar-primary)"
-                className="h-7 w-7 text-xs"
+                className="h-8 w-8 text-xs"
               />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-white truncate">
+                <p className="text-xs font-bold text-[var(--sidebar-primary-foreground)] truncate">
                   {profile.nickname || profile.display_name}
                 </p>
-                <p className="text-[10px] text-[var(--sidebar-foreground)] truncate">
+                <p className="text-[11px] text-[#6E7A94] truncate">
                   {profile.role_title ?? profile.role}
                 </p>
               </div>
@@ -183,7 +179,7 @@ export function AppSidebar() {
             variant="ghost"
             size="sm"
             onClick={signOut}
-            className="w-full justify-start text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-red-400"
+            className="w-full justify-start rounded-xl text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-red-400"
           >
             <LogOut className="h-4 w-4" />
             {!collapsed && <span className="ml-2">Sair</span>}

@@ -49,7 +49,7 @@ export function ResponsibleSelect({ value, onChange, className }: ResponsibleSel
           <button key={p.id} type="button" onClick={() => toggle(p.id)}
             className="flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-medium border transition-all"
             style={selected
-              ? { backgroundColor: `${p.color ?? '#8B5CF6'}1A`, borderColor: p.color ?? '#8B5CF6', color: p.color ?? '#8B5CF6' }
+              ? { backgroundColor: `${p.color ?? '#8577C9'}1A`, borderColor: p.color ?? '#8577C9', color: p.color ?? '#8577C9' }
               : { borderColor: 'var(--border)', color: 'var(--muted-foreground)' }}>
             {selected && <Check className="h-3 w-3" />}
             {p.display_name ?? 'Sem nome'}
