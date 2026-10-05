@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
+import { soft } from '@/lib/colors'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -159,10 +160,8 @@ function getInitials(name: string) {
 }
 
 function getAvatarColor(name: string) {
-  const colors = ['#EC4899', '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#6366F1', '#14B8A6']
-  let hash = 0
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  return colors[Math.abs(hash) % colors.length]
+  void name
+  return '#26406E'
 }
 
 // ── Cabeçalho de tabela clicável para ordenar (estilo Google Drive) ──
@@ -505,15 +504,15 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
       const extras: ExternalEntry[] = [
         ...(tasks.data ?? []).map(t => ({
           id: `task-${t.id}`, text: `Tarefa: ${t.title}${t.due_date ? ` (${fmtDate(t.due_date)})` : ''}`,
-          created_at: t.created_at, tag: { label: 'Tarefa', color: '#3B82F6' },
+          created_at: t.created_at, tag: { label: 'Tarefa', color: '#6A8FC7' },
         })),
         ...(deadlines.data ?? []).map(d => ({
           id: `deadline-${d.id}`, text: `Prazo: ${d.title} — ${fmtDate(d.due_date)}`,
-          created_at: d.created_at, tag: { label: 'Prazo', color: '#EF4444' },
+          created_at: d.created_at, tag: { label: 'Prazo', color: '#D96C87' },
         })),
         ...(fin.data ?? []).map(f => ({
           id: `fin-${f.id}`, text: `${f.type === 'receita' ? 'Receita' : 'Despesa'}: ${f.description ?? ''} — ${fmtBRL(f.value)}`,
-          created_at: f.created_at, tag: { label: 'Financeiro', color: '#10B981' },
+          created_at: f.created_at, tag: { label: 'Financeiro', color: '#6E9C7D' },
         })),
       ]
       setActivityExtras(extras)
@@ -525,7 +524,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
               ...prev,
               ...((updates ?? []).map(u => ({
                 id: `pu-${u.id}`, text: u.text, author: u.author, created_at: u.created_at,
-                tag: { label: 'Andamento', color: '#8B5CF6' },
+                tag: { label: 'Andamento', color: '#8577C9' },
               }))),
             ])
           })
@@ -859,7 +858,7 @@ function ClientCard({ client, onEdit }: { client: Client; onEdit: () => void }) 
           <p className="text-xs text-muted-foreground truncate">{client.area ?? client.type}</p>
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
             <ResponsibleAvatars ids={client.responsible_ids} profilesMap={profilesMap} size="xs" />
-            <Badge variant={client.status === 'ativo' ? 'default' : 'secondary'} className="text-[10px]">
+            <Badge variant={client.status === 'ativo' ? 'active' : 'secondary'} className="text-[10px]">
               {client.status.toUpperCase()}
             </Badge>
           </div>
@@ -1036,7 +1035,7 @@ export default function Clientes() {
   const [quickPhone, setQuickPhone] = useState('')
   const [quickSaving, setQuickSaving] = useState(false)
   const [newStageLabel, setNewStageLabel] = useState('')
-  const [newStageColor, setNewStageColor] = useState('#8B5CF6')
+  const [newStageColor, setNewStageColor] = useState('#8577C9')
 
   // Client form — persiste no sessionStorage para sobreviver reload do PWA
   const [cf, setCf] = useState<ClientFormData>(() => {
@@ -1080,7 +1079,7 @@ export default function Clientes() {
     ])
     setClients((c as Client[]) ?? [])
     setLeads((l as Lead[]) ?? [])
-    setStages((s as PipelineStage[]) ?? [])
+    setStages(((s as PipelineStage[]) ?? []).map(st => ({ ...st, color: soft(st.color) ?? st.color })))
     setLoading(false)
   }
 
@@ -1677,17 +1676,17 @@ export default function Clientes() {
       {/* Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-          <Button variant={tab === 'crm' ? 'default' : 'ghost'} size="sm" className="h-8"
+          <Button variant={tab === 'crm' ? 'secondary' : 'ghost'} size="sm" className="h-8"
             onClick={() => setTab('crm')}>
             <TrendingUp className="h-3.5 w-3.5 mr-1.5" />CRM
             <Badge variant="secondary" className="ml-1.5 text-[10px]">{totalLeads}</Badge>
           </Button>
-          <Button variant={tab === 'ativos' ? 'default' : 'ghost'} size="sm" className="h-8"
+          <Button variant={tab === 'ativos' ? 'secondary' : 'ghost'} size="sm" className="h-8"
             onClick={() => setTab('ativos')}>
             <UserCheck className="h-3.5 w-3.5 mr-1.5" />Ativos
             <Badge variant="secondary" className="ml-1.5 text-[10px]">{totalAtivos}</Badge>
           </Button>
-          <Button variant={tab === 'encerrados' ? 'default' : 'ghost'} size="sm" className="h-8"
+          <Button variant={tab === 'encerrados' ? 'secondary' : 'ghost'} size="sm" className="h-8"
             onClick={() => setTab('encerrados')}>
             <UserX className="h-3.5 w-3.5 mr-1.5" />Encerrados
           </Button>
@@ -1705,11 +1704,11 @@ export default function Clientes() {
           </div>
           {tab !== 'crm' && (
             <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
-              <Button variant={viewMode === 'cards' ? 'default' : 'ghost'} size="icon" className="h-8 w-8"
+              <Button variant={viewMode === 'cards' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
                 onClick={() => setViewMode('cards')}>
                 <LayoutGrid className="h-3.5 w-3.5" />
               </Button>
-              <Button variant={viewMode === 'table' ? 'default' : 'ghost'} size="icon" className="h-8 w-8"
+              <Button variant={viewMode === 'table' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
                 onClick={() => setViewMode('table')}>
                 <List className="h-3.5 w-3.5" />
               </Button>
@@ -1774,7 +1773,7 @@ export default function Clientes() {
 
       {/* CRM Kanban */}
       {tab === 'crm' && (
-        <div className="rounded-xl bg-muted/50 mb-4 divide-y divide-border/60">
+        <div className="rounded-3xl bg-card border border-[var(--glass-border)] shadow-sm mb-4 divide-y divide-border/60">
           <div className="flex items-center gap-6 p-4 flex-wrap">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground w-full sm:w-auto">Geral (tudo)</span>
             <div>
@@ -1918,7 +1917,7 @@ export default function Clientes() {
                     <TableCell className="text-sm">{c.email ?? '—'}</TableCell>
                     <TableCell className="text-sm">{c.responsible ?? '—'}</TableCell>
                     <TableCell>
-                      <Badge variant={c.status === 'ativo' ? 'default' : 'secondary'} className="text-[10px]">
+                      <Badge variant={c.status === 'ativo' ? 'active' : 'secondary'} className="text-[10px]">
                         {c.status.toUpperCase()}
                       </Badge>
                     </TableCell>
@@ -2378,7 +2377,7 @@ export default function Clientes() {
                   show_in_kanban: true,
                 })
                 setNewStageLabel('')
-                setNewStageColor('#8B5CF6')
+                setNewStageColor('#8577C9')
                 loadData()
               }}>
                 <Plus className="h-3 w-3 mr-1" />Adicionar

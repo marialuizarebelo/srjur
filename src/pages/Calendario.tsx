@@ -19,7 +19,10 @@ import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/D
 import { useDroppable } from '@dnd-kit/core'
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { Badge } from '@/components/ui/badge'
-import { Columns3, CalendarDays } from 'lucide-react'
+import { Columns3, CalendarDays, Palette } from 'lucide-react'
+import { useEventColors, EVENT_TYPES } from '@/lib/eventColors'
+import { NOTION_COLORS, ncStyle } from '@/lib/notionColors'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
 
@@ -28,6 +31,7 @@ type ViewMode = 'mes' | 'semana' | 'dia'
 interface CalEvent {
   id: string
   type: 'tarefa' | 'prazo' | 'compromisso' | 'marketing'
+  subtype?: string // tipo real da tarefa (audiência, reunião...) — define cor e rótulo
   title: string
   date: string
   time?: string | null
@@ -38,11 +42,11 @@ interface CalEvent {
 }
 
 const WORKFLOW_STAGES = [
-  { value: 'backlog', label: 'Backlog', color: '#6B7280' },
-  { value: 'a_fazer', label: 'A Fazer', color: '#3B82F6' },
-  { value: 'fazendo', label: 'Fazendo', color: '#F59E0B' },
-  { value: 'aguardando', label: 'Aguardando', color: '#8B5CF6' },
-  { value: 'concluido', label: 'Concluído', color: '#10B981' },
+  { value: 'backlog', label: 'Backlog', color: '#6E7A94' },
+  { value: 'a_fazer', label: 'A Fazer', color: '#6A8FC7' },
+  { value: 'fazendo', label: 'Fazendo', color: '#D9A441' },
+  { value: 'aguardando', label: 'Aguardando', color: '#8577C9' },
+  { value: 'concluido', label: 'Concluído', color: '#6E9C7D' },
 ]
 
 // Mapeia o status próprio do Marketing (ideia→publicado) para as 5 fases genéricas do kanban combinado
@@ -59,12 +63,6 @@ function stageToMarketingStatus(stage: string): string {
   return 'ideia'
 }
 
-const TYPE_COLOR: Record<string, { bg: string; text: string }> = {
-  tarefa:      { bg: 'bg-slate-100 dark:bg-slate-800',   text: 'text-slate-600 dark:text-slate-300' },
-  prazo:       { bg: 'bg-red-50 dark:bg-red-900/30',     text: 'text-red-600 dark:text-red-400' },
-  compromisso: { bg: 'bg-violet-50 dark:bg-violet-900/30', text: 'text-violet-600 dark:text-violet-400' },
-  marketing:   { bg: 'bg-pink-50 dark:bg-pink-900/30',   text: 'text-pink-600 dark:text-pink-400' },
-}
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 const WEEKDAYS_SHORT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
@@ -83,6 +81,7 @@ function weekStart(d: Date) {
 function daysInMonth(y: number, m: number) { return new Date(y, m+1, 0).getDate() }
 
 export default function Calendario() {
+  const { styleOf, labelOf, colors: evColors, setColor: setEvColor } = useEventColors()
   const navigate = useNavigate()
   const [events, setEvents]   = useState<CalEvent[]>([])
   const [loading, setLoading] = useState(true)
@@ -237,7 +236,7 @@ export default function Calendario() {
     for (const t of tasks??[]) {
       if (!t.due_date) continue
       const isComp = ['compromisso','reuniao','audiencia','diligencia'].includes(t.type)
-      evs.push({ id:`t-${t.id}`, type: isComp ? 'compromisso' : 'tarefa',
+      evs.push({ id:`t-${t.id}`, type: isComp ? 'compromisso' : 'tarefa', subtype: t.type,
         title:t.title, date:t.due_date, time:t.due_time, responsibleIds: t.responsible_ids ?? [],
         status:t.status, workflowStage: t.workflow_stage ?? 'a_fazer',
         processLabel: t.process_id ? pm[t.process_id] : undefined })
@@ -323,14 +322,14 @@ export default function Calendario() {
                 </div>
                 <DroppableColumn id={stage.value} className="space-y-2 min-h-[60px] bg-muted/20 p-2">
                   {stageEvs.map(ev => {
-                    const tc = TYPE_COLOR[ev.type]
+                    const tcs = styleOf(ev.subtype ?? ev.type)
                     return (
                       <DraggableCard key={ev.id} id={ev.id}>
                         <div className="p-2.5 rounded-lg border bg-background hover:shadow-md transition-shadow cursor-pointer"
                           onClick={() => openEditEvent(ev)}>
                           <div className="flex items-center gap-1.5 mb-1">
-                            <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${tc.bg} ${tc.text}`}>
-                              {ev.type === 'tarefa' ? 'Tarefa' : ev.type === 'prazo' ? 'Prazo' : ev.type === 'marketing' ? 'Marketing' : 'Compromisso'}
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: tcs.bg, color: tcs.text }}>
+                              {labelOf(ev.subtype ?? ev.type)}
                             </span>
                             {ev.time && <span className="text-[10px] text-muted-foreground">{ev.time.slice(0,5)}</span>}
                           </div>
@@ -374,30 +373,23 @@ export default function Calendario() {
   // ── Event pill ────────────────────────────────────────────────────────────
   function Pill({ ev, mini = false }: { ev: CalEvent; mini?: boolean }) {
     const singleProfile = ev.responsibleIds.length === 1 ? profilesMap[ev.responsibleIds[0]] : null
-    const tc = TYPE_COLOR[ev.type]
     const isOverdue = ev.type==='prazo' && new Date(ev.date+'T00:00:00') < today && ev.status==='pendente'
     const done = ev.status==='concluida' || ev.status==='cumprido' || ev.status==='publicado'
-
-    const pillStyle = isOverdue
-      ? undefined
-      : singleProfile?.color
-        ? { backgroundColor: `${singleProfile.color}1A`, color: singleProfile.color }
-        : ev.responsibleIds.length > 1
-          ? { backgroundColor: '#8B5CF61A', color: '#8B5CF6' }
-          : undefined
-    const pillClass = isOverdue
-      ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
-      : pillStyle ? '' : `${tc.bg} ${tc.text}`
+    const st = isOverdue ? ncStyle('red') : styleOf(ev.subtype ?? ev.type)
+    const personDot = singleProfile?.color ?? (ev.responsibleIds.length > 1 ? '#8577C9' : null)
 
     return (
       <DraggableCard id={ev.id}>
-        <div className={`rounded-lg px-2 py-0.5 text-[11px] font-medium truncate leading-5 cursor-pointer hover:brightness-95 transition-all
-          ${pillClass} ${done ? 'opacity-40 line-through' : ''}`}
-          style={pillStyle}
+        <div className={`flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[11px] font-semibold leading-5 cursor-pointer hover:brightness-95 transition-all
+          ${done ? 'opacity-40 line-through' : ''}`}
+          style={{ backgroundColor: st.bg, color: st.text, borderColor: `color-mix(in srgb, ${st.dot} 38%, transparent)` }}
           title={ev.title}
           onClick={e => { e.stopPropagation(); openEditEvent(ev) }}>
-          {!mini && ev.time && <span className="mr-1.5 opacity-60 font-normal">{ev.time.slice(0,5)}</span>}
-          {ev.title}
+          <span className="truncate flex-1 min-w-0">
+            {!mini && ev.time && <span className="mr-1.5 opacity-60 font-normal">{ev.time.slice(0,5)}</span>}
+            {ev.title}
+          </span>
+          {personDot && <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: personDot }} />}
         </div>
       </DraggableCard>
     )
@@ -413,8 +405,8 @@ export default function Calendario() {
     return (
       <div ref={setNodeRef}
         onClick={() => { setSelDate(ymd); setView('dia') }}
-        className={`group relative min-h-[100px] p-2 border-r border-b border-border/40 cursor-pointer transition-colors
-          hover:bg-muted/20 last:border-r-0 ${!c.in ? 'bg-muted/10' : ''} ${isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/40' : ''}`}>
+        className={`group relative min-h-[112px] p-2.5 border-r border-b border-[var(--glass-border)] cursor-pointer transition-colors
+          hover:bg-[var(--glass-surface)] [&:nth-child(7n)]:border-r-0 ${!c.in ? 'bg-[var(--glass-surface)]/50' : ''} ${isT ? 'bg-primary/[0.06]' : ''} ${isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/40' : ''}`}>
         <div className="flex items-center justify-between mb-1.5">
           <span className={`text-xs font-semibold h-6 w-6 flex items-center justify-center rounded-full transition-colors
             ${isT ? 'bg-primary text-primary-foreground' : !c.in ? 'text-muted-foreground/30' : 'text-foreground hover:bg-muted'}`}>
@@ -448,17 +440,17 @@ export default function Calendario() {
 
     return (
       <KanbanDndContext onDropOnColumn={(evId, ymd) => rescheduleEvent(evId, ymd)}>
-        <div className="rounded-2xl border border-border/60 overflow-hidden shadow-sm">
+        <div className="rounded-3xl border border-[var(--glass-border)] overflow-hidden bg-card shadow-[0_20px_50px_-30px_rgba(20,33,61,0.25)] dark:shadow-[0_20px_50px_-28px_rgba(0,0,0,0.6)] dark:backdrop-blur-[24px]">
           {/* weekday headers */}
-          <div className="grid grid-cols-7 bg-muted/30">
+          <div className="grid grid-cols-7 border-b border-[var(--glass-border)]">
             {WEEKDAYS_SHORT.map(w => (
-              <div key={w} className="py-3 text-center text-[11px] font-semibold text-muted-foreground tracking-wide">
+              <div key={w} className="py-3.5 text-center text-[11px] font-bold text-muted-foreground uppercase tracking-[0.1em]">
                 {w}
               </div>
             ))}
           </div>
           {/* day cells */}
-          <div className="grid grid-cols-7 bg-background">
+          <div className="grid grid-cols-7">
             {cells.map((c,i) => <MonthDayCell key={i} c={c} />)}
           </div>
         </div>
@@ -557,16 +549,21 @@ export default function Calendario() {
   }
 
   // ── Day view ──────────────────────────────────────────────────────────────
+  function isOverdueEv(ev: CalEvent) {
+    return ev.type==='prazo' && new Date(ev.date+'T00:00:00') < today && ev.status==='pendente'
+  }
+
   function DayView() {
     const evs = (byDate[selDate]??[]).sort((a,b)=>(a.time??'zz').localeCompare(b.time??'zz'))
     const timed = evs.filter(e=>e.time), allDay = evs.filter(e=>!e.time)
 
     function EventRow({ ev }: { ev: CalEvent }) {
       const singleProfile = ev.responsibleIds.length === 1 ? profilesMap[ev.responsibleIds[0]] : null
-      const tc = TYPE_COLOR[ev.type]
+      const tcs = isOverdueEv(ev) ? ncStyle('red') : styleOf(ev.subtype ?? ev.type)
       const isOverdue = ev.type==='prazo' && new Date(ev.date+'T00:00:00') < today && ev.status==='pendente'
       const done = ev.status==='concluida' || ev.status==='cumprido' || ev.status==='publicado'
-      const dotColor = isOverdue ? '#EF4444' : singleProfile?.color ?? (ev.responsibleIds.length > 1 ? '#8B5CF6' : '#9CA3AF')
+      void singleProfile
+      const dotColor = tcs.dot
 
       return (
         <div className={`flex items-start gap-4 p-4 rounded-2xl border border-border/50 transition-colors hover:bg-muted/20 cursor-pointer
@@ -591,8 +588,8 @@ export default function Calendario() {
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isOverdue ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400' : `${tc.bg} ${tc.text}`}`}>
-              {ev.type === 'tarefa' ? 'Tarefa' : ev.type === 'prazo' ? 'Prazo' : 'Compromisso'}
+            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full" style={{ backgroundColor: tcs.bg, color: tcs.text }}>
+              {labelOf(ev.subtype ?? ev.type)}
             </span>
             <ResponsibleAvatars ids={ev.responsibleIds} profilesMap={profilesMap} />
           </div>
@@ -636,7 +633,7 @@ export default function Calendario() {
     for (let d=1; d<=dim; d++) cells.push(d)
 
     return (
-      <div className="rounded-2xl border border-border/60 p-4 bg-card shadow-sm">
+      <div className="rounded-3xl border border-[var(--glass-border)] p-5 bg-card">
         <div className="flex items-center justify-between mb-3">
           <button onClick={() => { const d=new Date(cursor); d.setMonth(d.getMonth()-1); setCursor(d) }}
             className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center transition-colors">
@@ -676,29 +673,25 @@ export default function Calendario() {
   // ── Legend ────────────────────────────────────────────────────────────────
   function Legend() {
     return (
-      <div className="rounded-2xl border border-border/60 p-4 bg-card shadow-sm space-y-4">
+      <div className="rounded-3xl border border-[var(--glass-border)] p-5 bg-card space-y-4">
         <div className="space-y-2">
           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Responsável</p>
           {Object.values(profilesMap).map(p => (
             <div key={p.id} className="flex items-center gap-2.5">
-              <div className="h-2 w-2 rounded-full shrink-0" style={{backgroundColor: p.color ?? '#6B7280'}} />
+              <div className="h-2 w-2 rounded-full shrink-0" style={{backgroundColor: p.color ?? '#6E7A94'}} />
               <span className="text-xs text-foreground">{p.display_name}</span>
             </div>
           ))}
           <div className="flex items-center gap-2.5">
-            <div className="h-2 w-2 rounded-full shrink-0" style={{backgroundColor: '#8B5CF6'}} />
+            <div className="h-2 w-2 rounded-full shrink-0" style={{backgroundColor: '#8577C9'}} />
             <span className="text-xs text-foreground">Escritório (2+)</span>
           </div>
         </div>
         <div className="space-y-2 pt-2 border-t border-border/40">
           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Tipo</p>
-          {[
-            { label: 'Tarefa', cls: 'bg-slate-200 dark:bg-slate-700' },
-            { label: 'Prazo', cls: 'bg-red-200 dark:bg-red-800' },
-            { label: 'Compromisso', cls: 'bg-violet-200 dark:bg-violet-800' },
-          ].map(t => (
-            <div key={t.label} className="flex items-center gap-2.5">
-              <div className={`h-2 w-2 rounded-sm shrink-0 ${t.cls}`} />
+          {EVENT_TYPES.map(t => (
+            <div key={t.key} className="flex items-center gap-2.5">
+              <div className="h-2 w-2 rounded-sm shrink-0" style={{ backgroundColor: styleOf(t.key).dot }} />
               <span className="text-xs text-foreground">{t.label}</span>
             </div>
           ))}
@@ -714,84 +707,95 @@ export default function Calendario() {
     <div className="space-y-5">
 
       {/* ── Top bar ── */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* nav */}
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs" onClick={goToday}>Hoje</Button>
-          <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs" onClick={handleSyncGoogle} disabled={syncing}>
-            {syncing ? <Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1.5" />}
-            {syncing ? 'Sincronizando...' : 'Google Agenda'}
-          </Button>
-          <div className="flex items-center gap-0.5 bg-muted/40 rounded-xl p-0.5">
-            <button onClick={() => nav(-1)} className="h-7 w-7 rounded-lg hover:bg-background flex items-center justify-center transition-colors">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1 rounded-full border border-[var(--glass-border)] bg-[var(--glass-surface)] p-[3px]">
+            <button onClick={() => nav(-1)} className="h-8 w-8 rounded-full hover:bg-[var(--glass-surface)] flex items-center justify-center transition-colors" aria-label="Anterior">
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <button onClick={() => nav(1)} className="h-7 w-7 rounded-lg hover:bg-background flex items-center justify-center transition-colors">
+            <button onClick={() => nav(1)} className="h-8 w-8 rounded-full hover:bg-[var(--glass-surface)] flex items-center justify-center transition-colors" aria-label="Próximo">
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-          <h2 className="text-lg font-semibold capitalize tracking-tight">{navLabel()}</h2>
+          <h2 className="text-[28px] capitalize leading-none min-w-[10ch]">{navLabel()}</h2>
+          <Button variant="secondary" size="sm" onClick={goToday}>Hoje</Button>
+
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-0.5 rounded-full border border-[var(--glass-border)] bg-[var(--glass-surface)] p-[3px]">
+              {(['mes','semana','dia'] as const).map(v => (
+                <button key={v} onClick={() => setView(v)} className={`px-4 h-8 rounded-full text-[13px] font-bold transition-all ${view===v ? 'bg-[var(--glass-surface)] text-foreground shadow-[inset_0_0_0_1px_var(--glass-border)]' : 'text-muted-foreground hover:text-foreground'}`}>
+                  {v==='mes' ? 'Mês' : v==='semana' ? 'Semana' : 'Dia'}
+                </button>
+              ))}
+            </div>
+            {hasSidebar && (
+              <div className="flex items-center gap-0.5 rounded-full border border-[var(--glass-border)] bg-[var(--glass-surface)] p-[3px]">
+                <button onClick={() => setSubView('agenda')} className={`px-4 h-8 rounded-full text-[13px] font-bold transition-all ${subView==='agenda' ? 'bg-[var(--glass-surface)] text-foreground shadow-[inset_0_0_0_1px_var(--glass-border)]' : 'text-muted-foreground hover:text-foreground'} flex items-center gap-1.5`}>
+                  <CalendarDays className="h-3.5 w-3.5" />Agenda
+                </button>
+                <button onClick={() => setSubView('etapas')} className={`px-4 h-8 rounded-full text-[13px] font-bold transition-all ${subView==='etapas' ? 'bg-[var(--glass-surface)] text-foreground shadow-[inset_0_0_0_1px_var(--glass-border)]' : 'text-muted-foreground hover:text-foreground'} flex items-center gap-1.5`}>
+                  <Columns3 className="h-3.5 w-3.5" />Etapas
+                </button>
+              </div>
+            )}
+            <Button variant="outline" size="sm" onClick={handleSyncGoogle} disabled={syncing}>
+              {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              {syncing ? 'Sincronizando...' : 'Google Agenda'}
+            </Button>
+            <Popover>
+              <PopoverTrigger render={<Button variant="outline" size="sm" />}>
+                <Palette className="h-3.5 w-3.5" />Cores
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 gap-4 rounded-2xl p-4">
+                <div>
+                  <p className="text-sm font-bold">Cores por tipo</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Escolha a cor de cada tipo — vale para o calendário e a agenda.</p>
+                </div>
+                {EVENT_TYPES.map(et => (
+                  <div key={et.key} className="space-y-2">
+                    <p className="text-xs font-semibold">{et.label}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {NOTION_COLORS.map(c => (
+                        <button key={c.key} title={c.name} onClick={() => setEvColor(et.key, c.key)}
+                          className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${evColors[et.key] === c.key ? 'border-foreground scale-110' : 'border-transparent'}`}
+                          style={{ backgroundColor: ncStyle(c.key).dot }} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </PopoverContent>
+            </Popover>
+            <PinViewButton isPinned={pinnedView.isPinned} currentValue={view} onPin={v => pinnedView.pin(v as any)} onUnpin={pinnedView.unpin} />
+            {hasSidebar && (
+              <PinViewButton isPinned={pinnedSubView.isPinned} currentValue={subView} onPin={v => pinnedSubView.pin(v as any)} onUnpin={pinnedSubView.unpin} />
+            )}
+          </div>
         </div>
 
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {/* type toggles */}
+        {/* filtros: tipos (com bolinha) + responsável */}
+        <div className="flex flex-wrap items-center gap-2">
           {[
-            { label:'Tarefas',       val:showT, set:setShowT, active:'bg-slate-200 text-slate-700 border-slate-200', inactive:'text-muted-foreground border-border/60' },
-            { label:'Prazos',        val:showP, set:setShowP, active:'bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 border-rose-200 dark:border-rose-800',   inactive:'text-muted-foreground border-border/60' },
-            { label:'Compromissos',  val:showC, set:setShowC, active:'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-300 border-violet-200 dark:border-violet-800', inactive:'text-muted-foreground border-border/60' },
-            { label:'Marketing',     val:showM, set:setShowM, active:'bg-pink-100 dark:bg-pink-900/40 text-pink-600 dark:text-pink-300 border-pink-200 dark:border-pink-800', inactive:'text-muted-foreground border-border/60' },
+            { label:'Tarefas',       val:showT, set:setShowT, dot:styleOf('tarefa').dot },
+            { label:'Prazos',        val:showP, set:setShowP, dot:styleOf('prazo').dot },
+            { label:'Compromissos',  val:showC, set:setShowC, dot:styleOf('compromisso').dot },
+            { label:'Marketing',     val:showM, set:setShowM, dot:styleOf('marketing').dot },
           ].map(f => (
             <button key={f.label} onClick={() => f.set(!f.val)}
-              className={`h-7 px-3 rounded-full text-[11px] font-medium border transition-all ${
-                f.val ? f.active : `bg-transparent hover:border-border ${f.inactive}`
+              className={`inline-flex items-center gap-2 h-9 pl-3 pr-4 rounded-full text-[13px] font-semibold border transition-all ${
+                f.val ? 'bg-[var(--glass-surface)] border-[var(--glass-border)] text-foreground' : 'border-transparent text-muted-foreground/60 hover:text-foreground'
               }`}>
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: f.val ? f.dot : 'transparent', boxShadow: `inset 0 0 0 1.5px ${f.dot}` }} />
               {f.label}
             </button>
           ))}
-
-          {/* responsible filter */}
-          <select value={resp} onChange={e => setResp(e.target.value)}
-            className="h-7 rounded-xl border border-border/60 bg-background px-2.5 text-xs text-muted-foreground focus:outline-none">
-            <option value="todos">Todas</option>
+          <span className="mx-1 h-5 w-px bg-[var(--glass-border)]" />
+          <select value={resp} onChange={e => setResp(e.target.value)} style={{ fontSize: 13 }}
+            className="h-9 rounded-full border border-[var(--glass-border)] bg-[var(--glass-surface)] px-4 font-semibold text-foreground focus:outline-none cursor-pointer">
+            <option value="todos">Todas as responsáveis</option>
             {Object.values(profilesMap).map(p => (
               <option key={p.id} value={p.id}>{p.display_name}</option>
             ))}
           </select>
-
-          {/* view toggle */}
-          <div className="flex items-center bg-muted/40 rounded-xl p-0.5">
-            {(['mes','semana','dia'] as const).map(v => (
-              <button key={v} onClick={() => setView(v)}
-                className={`px-3 h-7 rounded-lg text-xs font-medium transition-all ${
-                  view===v ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}>
-                {v==='mes' ? 'Mês' : v==='semana' ? 'Semana' : 'Dia'}
-              </button>
-            ))}
-          </div>
-
-          {/* agenda / etapas toggle — só em semana e dia */}
-          {hasSidebar && (
-            <div className="flex items-center bg-muted/40 rounded-xl p-0.5">
-              <button onClick={() => setSubView('agenda')}
-                className={`px-3 h-7 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                  subView==='agenda' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}>
-                <CalendarDays className="h-3.5 w-3.5" />Agenda
-              </button>
-              <button onClick={() => setSubView('etapas')}
-                className={`px-3 h-7 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                  subView==='etapas' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}>
-                <Columns3 className="h-3.5 w-3.5" />Etapas
-              </button>
-            </div>
-          )}
-
-          <PinViewButton isPinned={pinnedView.isPinned} currentValue={view} onPin={v => pinnedView.pin(v as any)} onUnpin={pinnedView.unpin} />
-          {hasSidebar && (
-            <PinViewButton isPinned={pinnedSubView.isPinned} currentValue={subView} onPin={v => pinnedSubView.pin(v as any)} onUnpin={pinnedSubView.unpin} />
-          )}
         </div>
       </div>
 
@@ -804,7 +808,7 @@ export default function Calendario() {
             {view === 'mes'    && <MonthView />}
             {view === 'semana' && (subView === 'etapas' ? <StageBoard evs={weekEvents} /> : <WeekView />)}
             {view === 'dia'    && (
-              <div className={subView === 'etapas' ? '' : 'rounded-2xl border border-border/60 bg-card shadow-sm p-6'}>
+              <div className={subView === 'etapas' ? '' : 'rounded-3xl border border-[var(--glass-border)] bg-card p-6'}>
                 {subView === 'agenda' && (
                   <div className="flex items-center justify-between mb-5">
                     <p className="text-base font-semibold capitalize text-foreground">
@@ -833,19 +837,19 @@ export default function Calendario() {
         <div className="flex flex-wrap gap-6 px-1">
           {Object.values(profilesMap).map(p => (
             <div key={p.id} className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full" style={{backgroundColor: p.color ?? '#6B7280'}} />
+              <div className="h-2 w-2 rounded-full" style={{backgroundColor: p.color ?? '#6E7A94'}} />
               <span className="text-xs text-muted-foreground">{p.display_name}</span>
             </div>
           ))}
           <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full" style={{backgroundColor: '#8B5CF6'}} />
+            <div className="h-2 w-2 rounded-full" style={{backgroundColor: '#8577C9'}} />
             <span className="text-xs text-muted-foreground">Escritório (2+)</span>
           </div>
           <span className="text-muted-foreground/30 text-xs">·</span>
-          {[{l:'Tarefa',c:'bg-slate-300'},{l:'Prazo',c:'bg-red-300'},{l:'Compromisso',c:'bg-violet-300'},{l:'Marketing',c:'bg-pink-300'}].map(t=>(
-            <div key={t.l} className="flex items-center gap-2">
-              <div className={`h-2 w-2 rounded-sm ${t.c}`} />
-              <span className="text-xs text-muted-foreground">{t.l}</span>
+          {EVENT_TYPES.map(t => (
+            <div key={t.key} className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-sm" style={{ backgroundColor: styleOf(t.key).dot }} />
+              <span className="text-xs text-muted-foreground">{t.label}</span>
             </div>
           ))}
         </div>

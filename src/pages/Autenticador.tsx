@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { soft } from '@/lib/colors'
 import { generateTOTP, secondsRemaining } from '@/lib/totp'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +25,7 @@ interface System {
   color: string | null
 }
 
-const SYSTEM_COLORS = ['#6B7280','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6']
+const SYSTEM_COLORS = ['#6E7A94','#6A8FC7','#6E9C7D','#D9A441','#D96C87','#8577C9','#C4567C','#5FA39A']
 
 const SUGGESTED = [
   { name: 'eProc Estadual (TJRS)', url: 'https://eproc1g.tjrs.jus.br' },
@@ -105,7 +106,7 @@ export default function Autenticador() {
   function openEdit(s: System) {
     setEditing(s)
     setForm({ name: s.name, url: s.url, username: s.username ?? '', password: s.password ?? '',
-      totp_secret: s.totp_secret ?? '', notes: s.notes ?? '', color: s.color ?? SYSTEM_COLORS[0] })
+      totp_secret: s.totp_secret ?? '', notes: s.notes ?? '', color: soft(s.color) ?? SYSTEM_COLORS[0] })
     setDialogOpen(true)
   }
   async function save() {
@@ -155,8 +156,8 @@ export default function Autenticador() {
           <div key={s.id} className="rounded-2xl border border-border/60 bg-card shadow-sm p-5">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${s.color}1A` }}>
-                  <KeyRound className="h-4 w-4" style={{ color: s.color ?? '#8B5CF6' }} />
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${soft(s.color) ?? '#8577C9'}1A` }}>
+                  <KeyRound className="h-4 w-4" style={{ color: soft(s.color) ?? '#8577C9' }} />
                 </div>
                 <div>
                   <p className="text-sm font-semibold">{s.name}</p>
@@ -226,9 +227,17 @@ export default function Autenticador() {
         ))}
 
         {systems.length === 0 && !loading && (
-          <div className="py-12 text-center text-muted-foreground">
-            <KeyRound className="h-8 w-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Nenhum sistema cadastrado ainda</p>
+          <div className="rounded-3xl border border-[var(--glass-border)] bg-card p-8 sm:p-10 text-center shadow-[0_20px_50px_-30px_var(--glass-drop),inset_0_1px_0_var(--glass-highlight)]">
+            <div className="mx-auto mb-4 h-14 w-14 rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-surface)] flex items-center justify-center">
+              <KeyRound className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <h2 className="text-2xl mb-2">Guarde seus acessos em um só lugar</h2>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
+              Cadastre os sistemas dos tribunais (eProc, PJe, e-SAJ...) e o código de verificação de 6 dígitos aparece aqui, compartilhado com as advogadas do escritório. Escolha um dos atalhos abaixo ou crie o seu.
+            </p>
+            <Button onClick={() => openNew()}>
+              <Plus className="h-4 w-4" />Cadastrar sistema
+            </Button>
           </div>
         )}
       </div>
