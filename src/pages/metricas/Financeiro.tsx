@@ -9,7 +9,7 @@ import { fmtBRL, fmtDate } from '@/lib/format'
 import {
   MONTHS, monthsBack, usePeriod, KpiCard, ChartCard, DonutWithLegend,
   DetailDialog, useDetail, AttentionPanel, type Attention, previousPeriodRange, trendText, NotesPanel,
-  useResponsavelFilter, TrendChart, useUnidadeFilter, } from './shared'
+  useResponsavelFilter, TrendChart, useUnidadeFilter, matchUnidadeFinance, } from './shared'
 
 export interface FinanceRow {
   type: 'receita' | 'despesa'
@@ -43,8 +43,7 @@ export function useFinanceRows() {
     })
   }, [])
   const reflectingRows = useMemo(() => allRows.filter(r => r.refletir_metricas !== false), [allRows])
-  const rows = useMemo(() => reflectingRows.filter(r => r.business_unit !== 'saas'), [reflectingRows])
-  return { rows, reflectingRows, allRows, loading }
+  return { reflectingRows, allRows, loading }
 }
 
 // Vínculo do responsável no financeiro é texto livre (nome digitado à mão,
@@ -68,7 +67,7 @@ export default function FinanceiroTab() {
   const selectedProfileName = respFilter.profiles.find(p => p.id === respFilter.responsavelId)?.display_name
   const rows = useMemo(() => reflectingRows.filter(r =>
     matchesResponsibleText(r.responsible, selectedProfileName) &&
-    (!unidadeFilter.unidade || (unidadeFilter.unidade === 'saas' ? r.business_unit === 'saas' : r.business_unit !== 'saas'))
+    matchUnidadeFinance(r.business_unit, unidadeFilter.unidade)
   ), [reflectingRows, selectedProfileName, unidadeFilter.unidade])
 
   const trendMonths = useMemo(() => monthsBack(12), [])

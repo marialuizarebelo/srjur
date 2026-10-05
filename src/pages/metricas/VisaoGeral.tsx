@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { DollarSign, TrendingUp, Users, Target, Scale, ClipboardList } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
-import { KpiCard, trendText, DetailDialog, useDetail } from './shared'
+import { Sensitive } from '@/components/Sensitive'
+import { KpiCard, trendText, DetailDialog, useDetail, useUnidadeFilter, matchUnidadeFinance, matchUnidadeCliente, UnidadeNotice } from './shared'
+import { Card } from '@/components/ui/card'
 
 interface FinanceLite { type: string; value: number; paid: boolean; impacts_cash: boolean; date: string; description: string; category: string | null; business_unit: string | null; refletir_metricas: boolean }
-interface ClientLite { name: string; status: string }
+interface ClientLite { name: string; status: string; is_juridico: boolean; is_saas: boolean }
 interface LeadLite { name: string; status: string; client_id: string | null; created_at: string }
 interface ProcessLite { title: string; status: string }
 interface TaskLite { title: string; status: string; due_date: string | null }
@@ -14,11 +16,11 @@ interface DeadlineLite { title: string; status: string; due_date: string }
 export default function VisaoGeralTab() {
   const detail = useDetail()
   const [loading, setLoading] = useState(true)
-  const [finAll, setFinAll] = useState<FinanceLite[]>([])
-  const [finMonth, setFinMonth] = useState<FinanceLite[]>([])
-  const [receitasMesAnterior, setReceitasMesAnterior] = useState(0)
-  const [despesasMesAnterior, setDespesasMesAnterior] = useState(0)
-  const [clients, setClients] = useState<ClientLite[]>([])
+  const { unidade } = useUnidadeFilter()
+  const [finAllRaw, setFinAll] = useState<FinanceLite[]>([])
+  const [finMonthRaw, setFinMonth] = useState<FinanceLite[]>([])
+  const [finPrevRaw, setFinPrev] = useState<FinanceLite[]>([])
+  const [clientsRaw, setClients] = useState<ClientLite[]>([])
   const [leads, setLeads] = useState<LeadLite[]>([])
   const [processes, setProcesses] = useState<ProcessLite[]>([])
   const [tasksAtrasadas, setTasksAtrasadas] = useState<TaskLite[]>([])
@@ -39,20 +41,18 @@ export default function VisaoGeralTab() {
       ] = await Promise.all([
         supabase.from('finance').select('type, value, paid, impacts_cash, date, description, category, business_unit, refletir_metricas'),
         supabase.from('finance').select('type, value, impacts_cash, date, description, category, business_unit, refletir_metricas').gte('date', monthStart).lte('date', monthEnd),
-        supabase.from('finance').select('type, value, impacts_cash, business_unit, refletir_metricas').gte('date', prevMonthStart).lte('date', prevMonthEnd),
-        supabase.from('clients').select('name, status').eq('status', 'ativo').eq('is_cortesia', false).neq('is_juridico', false),
+        supabase.from('finance').select('type, value, paid, impacts_cash, date, description, category, business_unit, refletir_metricas').gte('date', prevMonthStart).lte('date', prevMonthEnd),
+        supabase.from('clients').select('name, status, is_juridico, is_saas').eq('status', 'ativo').eq('is_cortesia', false),
         supabase.from('leads').select('name, status, client_id, created_at').not('status', 'in', '(perdido,convertido)').is('client_id', null),
         supabase.from('processes').select('title, status').eq('status', 'em_andamento'),
         supabase.from('tasks').select('title, status, due_date').eq('status', 'pendente').lt('due_date', today),
         supabase.from('deadlines').select('title, status, due_date').eq('status', 'pendente').lt('due_date', today),
       ])
 
-      const advocaciaOnly = (rows: FinanceLite[]) => rows.filter(r => r.business_unit !== 'saas' && r.refletir_metricas !== false)
-      setFinAll(advocaciaOnly((fa as FinanceLite[]) ?? []))
-      setFinMonth(advocaciaOnly((fm as FinanceLite[]) ?? []))
-      const finPrev = advocaciaOnly((fmPrev as FinanceLite[]) ?? [])
-      setReceitasMesAnterior(finPrev.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0))
-      setDespesasMesAnterior(finPrev.filter(r => r.type === 'despesa' && r.impacts_cash !== false).reduce((s, r) => s + Number(r.value), 0))
+      const reflete = (rows: FinanceLite[]) => rows.filter(r => r.refletir_metricas !== false)
+      setFinAll(reflete((fa as FinanceLite[]) ?? []))
+      setFinMonth(reflete((fm as FinanceLite[]) ?? []))
+      setFinPrev(reflete((fmPrev as FinanceLite[]) ?? []))
       setClients((cl as ClientLite[]) ?? [])
       setLeads((ld as LeadLite[]) ?? [])
       setProcesses((pr as ProcessLite[]) ?? [])
@@ -61,6 +61,27 @@ export default function VisaoGeralTab() {
       setLoading(false)
     })()
   }, [])
+
+  const finAll = useMemo(() => finAllRaw.filter(r => matchUnidadeFinance(r.business_unit, unidade)), [finAllRaw, unidade])
+  const finMonth = useMemo(() => finMonthRaw.filter(r => matchUnidadeFinance(r.business_unit, unidade)), [finMonthRaw, unidade])
+  const finPrev = useMemo(() => finPrevRaw.filter(r => matchUnidadeFinance(r.business_unit, unidade)), [finPrevRaw, unidade])
+  const clients = useMemo(() => clientsRaw.filter(c => matchUnidadeCliente(c, unidade)), [clientsRaw, unidade])
+  const receitasMesAnterior = finPrev.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0)
+  const despesasMesAnterior = finPrev.filter(r => r.type === 'despesa' && r.impacts_cash !== false).reduce((s, r) => s + Number(r.value), 0)
+
+  // Comparativo fixo (não depende da Visão escolhida): Advocacia, SaaS e a soma dos dois.
+  const comparativo = useMemo(() => {
+    const calc = (rows: FinanceLite[]) => {
+      const receitas = rows.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0)
+      const despesas = rows.filter(r => r.type === 'despesa' && r.impacts_cash !== false).reduce((s, r) => s + Number(r.value), 0)
+      return { receitas, despesas, resultado: receitas - despesas, margem: receitas > 0 ? ((receitas - despesas) / receitas) * 100 : 0 }
+    }
+    return [
+      { key: 'adv', label: 'Advocacia', ...calc(finMonthRaw.filter(r => r.business_unit !== 'saas')) },
+      { key: 'saas', label: 'SaaS', ...calc(finMonthRaw.filter(r => r.business_unit === 'saas')) },
+      { key: 'emp', label: 'Empresa toda', ...calc(finMonthRaw) },
+    ]
+  }, [finMonthRaw])
 
   const saldoTotal = useMemo(() => finAll.reduce((s, r) => {
     if (!r.paid || r.impacts_cash === false) return s
@@ -107,6 +128,7 @@ export default function VisaoGeralTab() {
 
   return (
     <div className="space-y-4">
+      {unidade === 'saas' && <UnidadeNotice>Leads, processos, tarefas e prazos não são separados por unidade — aparecem iguais em todas as visões. Os valores financeiros e de clientes seguem a visão escolhida.</UnidadeNotice>}
       <p className="text-sm text-muted-foreground">Panorama geral do escritório neste mês. Para ver o detalhe e filtrar por período, use as áreas acima.</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         <KpiCard title="Saldo total" value={fmtBRL(saldoTotal)} icon={DollarSign} color="#8577C9" sensitive onClick={openSaldoDetail} />
@@ -115,9 +137,36 @@ export default function VisaoGeralTab() {
         <KpiCard title="Resultado líquido (mês)" value={fmtBRL(resultadoLiquido)} icon={DollarSign} color={resultadoLiquido >= 0 ? '#6E9C7D' : '#D96C87'} sensitive trend={trendText(resultadoLiquido, receitasMesAnterior - despesasMesAnterior, 'vs mês anterior')} onClick={openResultadoDetail} />
         <KpiCard title="Clientes ativos" value={clients.length} icon={Users} color="#6A8FC7" onClick={openClientesDetail} />
         <KpiCard title="Leads ativos" value={leads.length} icon={Target} color="#D9A441" onClick={openLeadsDetail} />
-        <KpiCard title="Processos ativos" value={processes.length} icon={Scale} color="#7A84C9" onClick={openProcessosDetail} />
+        <KpiCard title="Processos ativos" hint="Processos jurídicos em andamento (só existem na Advocacia)." value={processes.length} icon={Scale} color="#7A84C9" onClick={openProcessosDetail} />
         <KpiCard title="Pendências atrasadas" value={tasksAtrasadas.length + deadlinesAtrasados.length} icon={ClipboardList} color="#D96C87" onClick={openPendenciasDetail} />
       </div>
+
+      <Card className="p-5">
+        <h3 className="font-semibold text-sm mb-1">Advocacia × SaaS × Empresa toda (mês)</h3>
+        <p className="text-xs text-muted-foreground mb-3">Sempre mostra as duas unidades lado a lado e a soma, independente da Visão escolhida acima.</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                <th className="py-1.5 pr-4 font-semibold"></th>
+                {comparativo.map(c => <th key={c.key} className={`py-1.5 px-3 font-semibold text-right ${c.key === 'emp' ? 'text-foreground' : ''}`}>{c.label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {([['Receitas', 'receitas'], ['Despesas', 'despesas'], ['Resultado', 'resultado']] as const).map(([label, k]) => (
+                <tr key={k} className="border-t border-border/60">
+                  <td className="py-2 pr-4 text-muted-foreground">{label}</td>
+                  {comparativo.map(c => <td key={c.key} className={`py-2 px-3 text-right ${c.key === 'emp' ? 'font-semibold' : ''}`}><Sensitive>{fmtBRL(c[k])}</Sensitive></td>)}
+                </tr>
+              ))}
+              <tr className="border-t border-border/60">
+                <td className="py-2 pr-4 text-muted-foreground">Margem</td>
+                {comparativo.map(c => <td key={c.key} className={`py-2 px-3 text-right ${c.key === 'emp' ? 'font-semibold' : ''}`}>{c.margem.toFixed(0)}%</td>)}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       <DetailDialog open={detail.open} onClose={detail.close} title={detail.title} rows={detail.rows} />
     </div>

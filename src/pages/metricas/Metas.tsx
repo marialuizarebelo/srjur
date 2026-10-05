@@ -15,7 +15,7 @@ import { DollarSign, Target, Plus, Pencil, Trash2, Trophy, NotebookText } from '
 import { fmtBRL, fmtDate } from '@/lib/format'
 import { getAdminProfiles, type ProfileOption } from '@/components/ResponsibleSelect'
 import { toast } from 'sonner'
-import { MONTHS, ChartCard, DetailDialog, useDetail, type DetailRow } from './shared'
+import { MONTHS, ChartCard, DetailDialog, useDetail, type DetailRow, useUnidadeFilter, matchUnidadeFinance } from './shared'
 import { useFinanceRows } from './Financeiro'
 
 const CATEGORIES_RECEITA = ['Honorários Iniciais', 'Mensalidade', 'Acordo', 'Consultoria', 'Êxito', 'Outros']
@@ -27,7 +27,11 @@ interface Meta {
   categoria: string | null; origem: string | null; prioridade: 'baixa' | 'media' | 'alta'
   observacoes: string | null; responsavel_id: string | null; meta_pai_id: string | null
   valor_manual: number | null
+  /** Só metas financeiras. Vazio (metas antigas) = Advocacia, que era o único cálculo que existia. */
+  unidade?: 'empresa' | 'advocacia' | 'saas' | null
 }
+const UNIDADE_META_LABELS = { empresa: 'Empresa toda', advocacia: 'Advocacia', saas: 'SaaS' } as const
+const unidadeDaMeta = (m: Meta) => m.unidade ?? 'advocacia'
 type TipoMeta = { value: string; label: string; unit: 'BRL' | 'number' | 'percent'; direction: 'min' | 'max'; extraField?: 'categoria' | 'origem' }
 const TIPO_OPTIONS: Record<'financeiro' | 'comercial', TipoMeta[]> = {
   financeiro: [
@@ -99,6 +103,7 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles, allMe
     label: '', tipo: opts[0].value, valor_alvo: '', periodo: 'mensal' as Meta['periodo'],
     ano: new Date().getFullYear(), mes: new Date().getMonth() + 1, semestre: 1,
     categoria: '', origem: '', prioridade: 'media' as Meta['prioridade'], observacoes: '', responsavel_id: '', metaPaiId: '',
+    unidade: 'empresa' as NonNullable<Meta['unidade']>,
   }
   const [form, setForm] = useState(empty)
   const [saving, setSaving] = useState(false)
@@ -114,6 +119,7 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles, allMe
         periodo: editing.periodo, ano: editing.ano, mes: editing.mes ?? new Date().getMonth() + 1, semestre: editing.semestre ?? 1,
         categoria: editing.categoria ?? '', origem: editing.origem ?? '', prioridade: editing.prioridade ?? 'media',
         observacoes: editing.observacoes ?? '', responsavel_id: editing.responsavel_id ?? '', metaPaiId: editing.meta_pai_id ?? '',
+        unidade: unidadeDaMeta(editing),
       })
     } else {
       setForm({ ...empty, tipo: opts[0].value })
@@ -139,16 +145,26 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles, allMe
       meta_pai_id: form.metaPaiId || null,
       valor_manual: form.tipo === 'saldo_manual' && editing?.tipo === 'saldo_manual' ? editing.valor_manual : null,
     }
+    // Só financeiro tem unidade. Se a coluna ainda não existe no banco, salva sem ela (e avisa).
+    const withUnidade = area === 'financeiro' ? { ...payload, unidade: form.unidade } : payload
+    async function persist(data: Record<string, unknown>) {
+      return editing
+        ? supabase.from('metas').update(data).eq('id', editing.id)
+        : supabase.from('metas').insert(data).select().single()
+    }
+    const first = await persist(withUnidade)
+    let result = first
+    if (first.error && /unidade/i.test(first.error.message) && area === 'financeiro') {
+      result = await persist(payload)
+      if (!result.error) toast.warning('Meta salva, mas a unidade não foi gravada: rode a migration_metas_unidade.sql no Supabase.')
+    }
+    setSaving(false)
+    if (result.error) { toast.error('Erro ao salvar meta: ' + result.error.message); return }
     if (editing) {
-      const { error } = await supabase.from('metas').update(payload).eq('id', editing.id)
-      setSaving(false)
-      if (error) { toast.error('Erro ao salvar meta: ' + error.message); return }
       await supabase.from('meta_notas').insert({ meta_id: editing.id, texto: 'Meta editada.' })
       toast.success('Meta atualizada!')
     } else {
-      const { data: novaMeta, error } = await supabase.from('metas').insert(payload).select().single()
-      setSaving(false)
-      if (error) { toast.error('Erro ao salvar meta: ' + error.message); return }
+      const novaMeta = (result as { data: { id: string } | null }).data
       if (novaMeta) await supabase.from('meta_notas').insert({ meta_id: novaMeta.id, texto: 'Meta criada.' })
       toast.success('Meta criada!')
     }
@@ -165,6 +181,19 @@ function MetaFormDialog({ open, onClose, area, editing, onSaved, profiles, allMe
             <Label>Nome da meta</Label>
             <Input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} placeholder="Ex: Meta de receita do trimestre" />
           </div>
+          {area === 'financeiro' && (
+            <div className="space-y-1.5">
+              <Label>Vale para</Label>
+              <Select value={form.unidade} onValueChange={v => v && setForm(f => ({ ...f, unidade: v as NonNullable<Meta['unidade']> }))}>
+                <SelectTrigger className="h-10"><SelectValue>{UNIDADE_META_LABELS[form.unidade]}</SelectValue></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="empresa">Empresa toda (Advocacia + SaaS)</SelectItem>
+                  <SelectItem value="advocacia">Só Advocacia</SelectItem>
+                  <SelectItem value="saas">Só SaaS</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Tipo</Label>
@@ -311,7 +340,7 @@ function MetaCard({ m, tipo, atingido, profiles, onEdit, onDelete, onDetails, on
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold truncate">{m.label}</p>
-          <p className="text-[11px] text-muted-foreground">{tipo.label}{m.categoria ? ` · ${m.categoria}` : ''}{m.origem ? ` · ${m.origem}` : ''} · {metaPeriodLabel(m)}</p>
+          <p className="text-[11px] text-muted-foreground">{m.area === 'financeiro' ? `${UNIDADE_META_LABELS[unidadeDaMeta(m)]} · ` : ''}{tipo.label}{m.categoria ? ` · ${m.categoria}` : ''}{m.origem ? ` · ${m.origem}` : ''} · {metaPeriodLabel(m)}</p>
         </div>
         <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <button onClick={onDetails} className="h-6 w-6 rounded hover:bg-muted flex items-center justify-center" title="Diário e ações"><NotebookText className="h-3 w-3 text-muted-foreground" /></button>
@@ -550,7 +579,8 @@ interface ClientLite { name: string; created_at: string }
 
 /** `only` mostra só as metas daquela área (usado dentro de Dinheiro e Clientes e Vendas). */
 export default function MetasTab({ only }: { only?: 'financeiro' | 'comercial' }) {
-  const { rows: financeRows, loading: loadingFinance } = useFinanceRows()
+  const { reflectingRows: financeAllRows, loading: loadingFinance } = useFinanceRows()
+  const { unidade: visao } = useUnidadeFilter()
   const [leads, setLeads] = useState<LeadLite[]>([])
   const [clients, setClients] = useState<ClientLite[]>([])
   const [metas, setMetas] = useState<Meta[]>([])
@@ -572,14 +602,17 @@ export default function MetasTab({ only }: { only?: 'financeiro' | 'comercial' }
   }
   useEffect(() => { load() }, [])
 
-  const saldoTotal = financeRows.reduce((s, r) => {
+  // Cada meta financeira olha só a unidade dela (empresa = tudo).
+  const rowsDaMeta = (m: Meta) => financeAllRows.filter(r => matchUnidadeFinance(r.business_unit, unidadeDaMeta(m) === 'empresa' ? '' : unidadeDaMeta(m) as 'advocacia' | 'saas'))
+  const saldoDe = (rows: typeof financeAllRows) => rows.reduce((s, r) => {
     if (!r.paid || r.impacts_cash === false) return s
     return s + (r.type === 'receita' ? Number(r.value) : -Number(r.value))
   }, 0)
 
   function computeAtingidoFinanceiro(m: Meta): number {
     const { start, end } = metaPeriodRange(m)
-    if (m.tipo === 'saldo_minimo') return saldoTotal
+    const financeRows = rowsDaMeta(m)
+    if (m.tipo === 'saldo_minimo') return saldoDe(financeRows)
     if (m.tipo === 'saldo_manual') return m.valor_manual ?? 0
     const inRange = financeRows.filter(r => r.date >= start && r.date <= end && (!m.categoria || r.category === m.categoria))
     if (m.tipo === 'receita_minima') return inRange.filter(r => r.type === 'receita').reduce((s, r) => s + Number(r.value), 0)
@@ -600,6 +633,7 @@ export default function MetasTab({ only }: { only?: 'financeiro' | 'comercial' }
 
   function detailRowsFinanceiro(m: Meta) {
     const { start, end } = metaPeriodRange(m)
+    const financeRows = rowsDaMeta(m)
     if (m.tipo === 'saldo_minimo') {
       return financeRows.filter(r => r.paid && r.impacts_cash !== false)
         .map((r, i) => ({ id: String(i), label: r.description, sublabel: fmtDate(r.date), value: fmtBRL(Number(r.value)) }))
@@ -625,7 +659,8 @@ export default function MetasTab({ only }: { only?: 'financeiro' | 'comercial' }
     }))
   }
 
-  const metasFinanceiro = metas.filter(m => m.area === 'financeiro')
+  // Visão do topo: Empresa toda mostra todas; Advocacia/SaaS mostram as metas daquela unidade.
+  const metasFinanceiro = metas.filter(m => m.area === 'financeiro' && (!visao || unidadeDaMeta(m) === visao))
   const metasComercial = metas.filter(m => m.area === 'comercial')
 
   const today = new Date().toISOString().slice(0, 10)

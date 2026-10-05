@@ -12,12 +12,13 @@ import MetasTab from './metricas/Metas'
 import ClientesTab from './metricas/Clientes'
 import {
   MetricasFiltersContext, useMetricasFiltersState,
-  PeriodPicker, ResponsavelFilter, UnidadeFilter,
+  PeriodPicker, ResponsavelFilter, UnidadeSwitch, UnidadeNotice, type UnidadeKey,
 } from './metricas/shared'
 
 /*
  * Organização por pergunta que o escritório precisa responder:
  *  - Resumo ........ "Como estamos este mês?"
+ * Visão (topo): Empresa toda (Advocacia + SaaS como uma empresa só) · Advocacia · SaaS.
  *  - Dinheiro ...... "Quanto entra, quanto sai, quanto devem?"  (Financeiro, Inadimplência, SaaS, Metas financeiras)
  *  - Clientes e Vendas "Quem são e quantos entram?"             (Vendas, Carteira, Metas comerciais)
  *  - Operação ...... "A equipe está dando conta?"               (Jurídico, Equipe)
@@ -25,8 +26,9 @@ import {
  * Cada indicador mora em um único lugar; o período, o responsável e a unidade são filtros únicos no topo.
  */
 
-type Control = 'periodo' | 'responsavel' | 'unidade'
-type Sub = { key: string; label: string; controls: Control[]; render: () => React.ReactNode }
+type Control = 'periodo' | 'responsavel'
+/** `notice`: aviso exibido quando a Visão escolhida não se aplica (ou não é separável) nesta seção. */
+type Sub = { key: string; label: string; controls: Control[]; render: () => React.ReactNode; notice?: (u: UnidadeKey) => string | null }
 type Area = { key: string; label: string; icon: React.ElementType; question: string; subs: Sub[] }
 
 const AREAS: Area[] = [
@@ -37,16 +39,18 @@ const AREAS: Area[] = [
   {
     key: 'dinheiro', label: 'Dinheiro', icon: DollarSign, question: 'Quanto entra, quanto sai e quanto está em atraso?',
     subs: [
-      { key: 'financeiro', label: 'Financeiro', controls: ['periodo', 'unidade', 'responsavel'], render: () => <FinanceiroTab /> },
+      { key: 'financeiro', label: 'Financeiro', controls: ['periodo', 'responsavel'], render: () => <FinanceiroTab /> },
       { key: 'inadimplencia', label: 'Inadimplência', controls: ['responsavel'], render: () => <ClientesTab section="inadimplencia" /> },
-      { key: 'saas', label: 'Produto SaaS', controls: ['periodo'], render: () => <ProdutoSaasTab /> },
+      { key: 'saas', label: 'Produto SaaS', controls: ['periodo'], render: () => <ProdutoSaasTab />,
+        notice: u => u === 'advocacia' ? 'O SaaS não faz parte da visão Advocacia. Escolha Empresa toda ou SaaS para ver estes números no contexto certo.' : null },
       { key: 'metas', label: 'Metas financeiras', controls: [], render: () => <MetasTab only="financeiro" /> },
     ],
   },
   {
     key: 'clientes', label: 'Clientes e Vendas', icon: Users, question: 'Quantos clientes entram e quem são?',
     subs: [
-      { key: 'vendas', label: 'Vendas', controls: ['periodo', 'responsavel'], render: () => <ComercialTab /> },
+      { key: 'vendas', label: 'Vendas', controls: ['periodo', 'responsavel'], render: () => <ComercialTab />,
+        notice: u => u ? 'Os leads ainda não são marcados por unidade, então o funil mostra o mesmo em qualquer visão. As vendas do SaaS estão em Dinheiro › Produto SaaS.' : null },
       { key: 'carteira', label: 'Carteira', controls: ['responsavel'], render: () => <ClientesTab section="carteira" /> },
       { key: 'metas', label: 'Metas comerciais', controls: [], render: () => <MetasTab only="comercial" /> },
     ],
@@ -54,8 +58,10 @@ const AREAS: Area[] = [
   {
     key: 'operacao', label: 'Operação', icon: Briefcase, question: 'A equipe está dando conta do trabalho?',
     subs: [
-      { key: 'juridico', label: 'Jurídico', controls: ['periodo', 'responsavel'], render: () => <JuridicoTab /> },
-      { key: 'equipe', label: 'Equipe', controls: ['responsavel'], render: () => <ProdutividadeTab /> },
+      { key: 'juridico', label: 'Jurídico', controls: ['periodo', 'responsavel'], render: () => <JuridicoTab />,
+        notice: u => u === 'saas' ? 'Processos, prazos e audiências são da Advocacia e não entram na visão SaaS.' : null },
+      { key: 'equipe', label: 'Equipe', controls: ['responsavel'], render: () => <ProdutividadeTab />,
+        notice: u => u ? 'Tarefas e prazos ainda não são marcados por unidade: a carga da equipe é a mesma em qualquer visão.' : null },
     ],
   },
   {
@@ -75,9 +81,13 @@ export default function Metricas() {
   return (
     <MetricasFiltersContext.Provider value={filters}>
       <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Métricas e Metas</h1>
-          <p className="text-sm text-muted-foreground">{area.question}</p>
+        <div className="flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-semibold">Métricas e Metas</h1>
+            <p className="text-sm text-muted-foreground">{area.question}</p>
+          </div>
+          {/* Dois CNPJs, uma empresa: tudo abaixo respeita esta visão */}
+          <UnidadeSwitch f={filters.unidade} />
         </div>
 
         {/* Áreas */}
@@ -122,10 +132,11 @@ export default function Metricas() {
         {sub.controls.length > 0 && (
           <div className="flex items-center gap-x-4 gap-y-2 flex-wrap rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-surface)] px-3 py-2">
             {sub.controls.includes('periodo') && <PeriodPicker p={filters.period} />}
-            {sub.controls.includes('unidade') && <UnidadeFilter f={filters.unidade} />}
             {sub.controls.includes('responsavel') && <ResponsavelFilter f={filters.resp} />}
           </div>
         )}
+
+        {sub.notice?.(filters.unidade.unidade) && <UnidadeNotice>{sub.notice(filters.unidade.unidade)}</UnidadeNotice>}
 
         {/* key força remontar ao trocar de seção, mantendo os filtros (que vivem no contexto) */}
         <div key={`${area.key}/${sub.key}`}>{sub.render()}</div>

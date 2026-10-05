@@ -401,23 +401,57 @@ function useLocalUnidade() {
   const [unidade, setUnidade] = useState<UnidadeKey>('')
   return { unidade, setUnidade }
 }
-const UNIDADE_LABELS: Record<UnidadeKey, string> = { '': 'Todas as unidades', advocacia: 'Só Advocacia', saas: 'Só SaaS' }
 export function useUnidadeFilter() {
   const ctx = useContext(MetricasFiltersContext)
   const local = useLocalUnidade()
   return ctx?.unidade ?? local
 }
-export function UnidadeFilter({ f }: { f: ReturnType<typeof useLocalUnidade> }) {
+export const UNIDADE_LABELS: Record<UnidadeKey, string> = { '': 'Empresa toda', advocacia: 'Advocacia', saas: 'SaaS' }
+const UNIDADE_HINTS: Record<UnidadeKey, string> = {
+  '': 'Advocacia + SaaS somados, como uma empresa só',
+  advocacia: 'Só a operação jurídica',
+  saas: 'Só o sistema (licenciamento)',
+}
+
+// Regras únicas de "isso pertence a qual unidade" — todas as abas usam estas.
+// Lançamento: business_unit 'saas' é SaaS; qualquer outro valor (ou vazio) é advocacia.
+export function matchUnidadeFinance(businessUnit: string | null | undefined, u: UnidadeKey) {
+  if (!u) return true
+  return u === 'saas' ? businessUnit === 'saas' : businessUnit !== 'saas'
+}
+// Cliente: jurídico (padrão) e/ou SaaS. Na visão da empresa entram os dois.
+export function matchUnidadeCliente(c: { is_juridico?: boolean | null; is_saas?: boolean | null }, u: UnidadeKey) {
+  const juridico = c.is_juridico !== false
+  const saas = c.is_saas === true
+  if (!u) return juridico || saas
+  return u === 'saas' ? saas : juridico
+}
+
+/** Seletor principal da área de Métricas: dois CNPJs, uma empresa. */
+export function UnidadeSwitch({ f }: { f: ReturnType<typeof useLocalUnidade> }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <Select value={f.unidade || '__todas__'} onValueChange={v => f.setUnidade(v === '__todas__' ? '' : (v as UnidadeKey))}>
-        <SelectTrigger className="h-7 text-xs w-40"><SelectValue>{UNIDADE_LABELS[f.unidade]}</SelectValue></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__todas__">Todas as unidades</SelectItem>
-          <SelectItem value="advocacia">Só Advocacia</SelectItem>
-          <SelectItem value="saas">Só SaaS</SelectItem>
-        </SelectContent>
-      </Select>
+    <div className="flex flex-col gap-1">
+      <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">Visão</p>
+      <div className="flex gap-1 bg-muted/40 rounded-2xl p-1 w-fit">
+        {(['', 'advocacia', 'saas'] as UnidadeKey[]).map(k => (
+          <button key={k || 'empresa'} onClick={() => f.setUnidade(k)} title={UNIDADE_HINTS[k]}
+            className={`px-4 py-1.5 rounded-xl text-sm font-semibold transition-colors ${
+              f.unidade === k ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}>
+            {UNIDADE_LABELS[k]}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Aviso quando a seção não tem como separar por unidade (ou só existe numa delas). */
+export function UnidadeNotice({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-surface)] px-3 py-2 text-xs text-muted-foreground">
+      <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+      <span>{children}</span>
     </div>
   )
 }
