@@ -17,9 +17,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icon-192.svg', 'icon-512.svg'],
       manifest: {
-        name: 'SRJUR — Scartezzini & Rebelo',
+        name: 'SRJUR Basic — Gestão jurídica',
         short_name: 'SRJUR',
-        description: 'Sistema de gestão jurídica da Scartezzini & Rebelo Advocacia',
+        description: 'Sistema de gestão para escritórios de advocacia',
         theme_color: '#1a1a1a',
         background_color: '#F2EDE6',
         display: 'standalone',

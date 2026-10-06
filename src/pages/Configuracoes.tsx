@@ -609,7 +609,7 @@ export default function Configuracoes() {
                 <BellOff className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium text-red-600">Permissão negada</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Para ativar, vá nas configurações do celular → Aplicativos → Navegador → Notificações e permita para app.srjur.com.</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Para ativar, vá nas configurações do celular → Aplicativos → Navegador → Notificações e permita para {window.location.hostname}.</p>
                 </div>
               </div>
             )}
@@ -671,11 +671,11 @@ export default function Configuracoes() {
             />
             <div className="space-y-1.5">
               <Label>Nome completo</Label>
-              <Input value={uf.full_name} onChange={e => setUf(f => ({ ...f, full_name: e.target.value }))} placeholder="Ex: Maria Luiza Rebelo" className="h-10" disabled={isLockedProfile} />
+              <Input value={uf.full_name} onChange={e => setUf(f => ({ ...f, full_name: e.target.value }))} placeholder="Ex: Maria da Silva Souza" className="h-10" disabled={isLockedProfile} />
             </div>
             <div className="space-y-1.5">
               <Label>Apelido (como gosta de ser chamada)</Label>
-              <Input value={uf.nickname} onChange={e => setUf(f => ({ ...f, nickname: e.target.value }))} placeholder="Ex: Maria, Malu..." className="h-10" disabled={isLockedProfile} />
+              <Input value={uf.nickname} onChange={e => setUf(f => ({ ...f, nickname: e.target.value }))} placeholder="Ex: Maria, Mari..." className="h-10" disabled={isLockedProfile} />
               <p className="text-[11px] text-muted-foreground">Usado no "Olá," do painel</p>
             </div>
             <div className="space-y-1.5">
