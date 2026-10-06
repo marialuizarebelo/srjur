@@ -12,7 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from '@/components/ui/dialog'
 import { Loader2, X, UserPlus, ChevronDown, Check } from 'lucide-react'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase, tenantHeaders } from '@/integrations/supabase/client'
 import { toast } from 'sonner'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { DriveFileList } from '@/components/DriveFileList'
@@ -207,7 +207,7 @@ export function ClientFormDialog({
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-client-user`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...tenantHeaders() },
         body: JSON.stringify({ email: form.email.trim().toLowerCase(), password, display_name: form.name, client_id: clientId }),
       })
       const json = await res.json()

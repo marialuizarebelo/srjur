@@ -14,7 +14,19 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-tenant-slug',
+}
+
+// Login de suporte do SRJUR (profiles.is_support) vale em todos os escritorios:
+// o escritorio vem do link em que ele esta (cabecalho x-tenant-slug, que o front
+// so manda quando o login e de suporte). Para qualquer outra pessoa o cabecalho
+// e ignorado. Escritorio inexistente = tenant_id null = sem acesso.
+async function applySupportTenant(req: Request, profile: any) {
+  if (!profile?.is_support) return profile
+  const slug = req.headers.get('x-tenant-slug')?.trim().toLowerCase()
+  if (!slug) return profile
+  const { data: t } = await createClient(SUPABASE_URL, SERVICE_ROLE_KEY).from('tenants').select('id').eq('slug', slug).maybeSingle()
+  return { ...profile, tenant_id: t?.id ?? null }
 }
 
 Deno.serve(async (req) => {
@@ -36,8 +48,9 @@ Deno.serve(async (req) => {
     }
 
     // Confere se quem chamou é admin
-    const { data: callerProfile } = await callerClient
-      .from('profiles').select('role, tenant_id').eq('user_id', caller.id).maybeSingle()
+    const { data: callerRow } = await callerClient
+      .from('profiles').select('*').eq('user_id', caller.id).maybeSingle()
+    const callerProfile = await applySupportTenant(req, callerRow)
     if (callerProfile?.role !== 'admin' || !callerProfile.tenant_id) {
       return new Response(JSON.stringify({ error: 'Apenas administradoras podem criar acesso de cliente' }), { status: 403, headers: corsHeaders })
     }

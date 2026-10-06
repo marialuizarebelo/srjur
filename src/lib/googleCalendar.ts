@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client'
+import { supabase, tenantHeaders } from '@/integrations/supabase/client'
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-calendar`
 
@@ -10,7 +10,7 @@ async function authHeader() {
 export async function connectGoogle(ownerType: 'user' | 'office', profileId: string | null) {
   const res = await fetch(`${FUNCTION_URL}/auth-url`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: await authHeader() },
+    headers: { 'Content-Type': 'application/json', Authorization: await authHeader(), ...tenantHeaders() },
     body: JSON.stringify({ owner_type: ownerType, profile_id: profileId, return_to: window.location.href }),
   })
   const json = await res.json()
@@ -21,7 +21,7 @@ export async function connectGoogle(ownerType: 'user' | 'office', profileId: str
 export async function disconnectGoogle(ownerType: 'user' | 'office', profileId: string | null) {
   const res = await fetch(`${FUNCTION_URL}/disconnect`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: await authHeader() },
+    headers: { 'Content-Type': 'application/json', Authorization: await authHeader(), ...tenantHeaders() },
     body: JSON.stringify({ owner_type: ownerType, profile_id: profileId }),
   })
   if (!res.ok) throw new Error('Erro ao desconectar')
@@ -45,7 +45,7 @@ export interface SyncResult {
 export async function syncGoogleCalendar() {
   const res = await fetch(`${FUNCTION_URL}/sync`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: await authHeader() },
+    headers: { 'Content-Type': 'application/json', Authorization: await authHeader(), ...tenantHeaders() },
   })
   const json = await res.json()
   if (!res.ok) throw new Error(json.error ?? 'Erro ao sincronizar')

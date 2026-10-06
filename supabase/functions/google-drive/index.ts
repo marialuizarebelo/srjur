@@ -21,7 +21,7 @@ const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET')!
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-tenant-slug',
 }
 
 const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
@@ -30,12 +30,24 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 }
 
-async function getCallerProfile(authHeader: string) {
+// Login de suporte do SRJUR (profiles.is_support) vale em todos os escritorios:
+// o escritorio vem do link em que ele esta (cabecalho x-tenant-slug, que o front
+// so manda quando o login e de suporte). Para qualquer outra pessoa o cabecalho
+// e ignorado. Escritorio inexistente = tenant_id null = sem acesso.
+async function applySupportTenant(req: Request, profile: any) {
+  if (!profile?.is_support) return profile
+  const slug = req.headers.get('x-tenant-slug')?.trim().toLowerCase()
+  if (!slug) return profile
+  const { data: t } = await adminClient.from('tenants').select('id').eq('slug', slug).maybeSingle()
+  return { ...profile, tenant_id: t?.id ?? null }
+}
+
+async function getCallerProfile(authHeader: string, req: Request) {
   const callerClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { global: { headers: { Authorization: authHeader } } })
   const { data: { user } } = await callerClient.auth.getUser()
   if (!user) return null
   const { data: profile } = await adminClient.from('profiles').select('*').eq('user_id', user.id).maybeSingle()
-  return profile
+  return await applySupportTenant(req, profile)
 }
 
 async function getOfficeConnection(tenantId: string) {
@@ -73,7 +85,7 @@ async function ensureFreshToken(conn: any) {
 
 async function requireAdminAndToken(req: Request) {
   const authHeader = req.headers.get('Authorization') ?? ''
-  const caller = await getCallerProfile(authHeader)
+  const caller = await getCallerProfile(authHeader, req)
   if (caller?.role !== 'admin' || !caller.tenant_id) throw new Error('Apenas administradoras')
 
   // SEMPRE o Drive do escritório de quem está pedindo — nunca o de outro.

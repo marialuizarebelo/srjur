@@ -59,6 +59,13 @@ interface ProfileRow {
   is_support?: boolean | null
 }
 
+interface SupportRow {
+  display_name: string | null
+  role_title: string | null
+  photo_url: string | null
+  color: string | null
+}
+
 const USER_COLORS = ['#EC4899', '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#14B8A6', '#6366F1']
 
 const MAX_ADMIN_USERS = 3
@@ -117,6 +124,10 @@ export default function Configuracoes() {
   const [users, setUsers] = useState<ProfileRow[]>([])
   // O suporte do SRJUR não ocupa vaga das administradoras do escritório.
   const adminCount = users.filter(u => u.role === 'admin' && !u.is_support).length
+  // Suporte do SRJUR (um login só, vale em todos os escritórios): não tem perfil
+  // dentro do escritório, então vem da função office_support_team e aparece
+  // protegido, sem edição.
+  const [supportTeam, setSupportTeam] = useState<SupportRow[]>([])
   const [userDialogOpen, setUserDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<ProfileRow | null>(null)
   const [uf, setUf] = useState({
@@ -160,6 +171,9 @@ export default function Configuracoes() {
       })
     }
     setUsers((us as ProfileRow[]) ?? [])
+    // Em instância sem o 06_suporte_em_todos_os_escritorios.sql a função não existe: ignora o erro.
+    const { data: sup } = await supabase.rpc('office_support_team')
+    setSupportTeam((sup as SupportRow[] | null) ?? [])
     const connMap: Record<string, any> = {}
     for (const c of gc ?? []) {
       const key = c.owner_type === 'office' ? 'office' : `user:${c.profile_id}`
@@ -495,7 +509,27 @@ export default function Configuracoes() {
               </div>
             )
           })}
-          {users.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">Nenhum usuário encontrado</p>}
+          {!users.some(u => u.is_support) && supportTeam.map((s, i) => (
+            <div key={`suporte-${i}`} className="rounded-2xl border border-border/60 bg-card shadow-sm p-4">
+              <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0 overflow-hidden"
+                  style={{ backgroundColor: s.color ?? '#8B5CF6' }}>
+                  {s.photo_url ? <img src={s.photo_url} alt="" className="w-full h-full object-cover" /> : (s.display_name ?? 'S').charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{s.display_name ?? 'Suporte SRJUR'}</p>
+                  <p className="text-xs text-muted-foreground">{s.role_title ?? 'Suporte SRJUR'}</p>
+                </div>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex items-center gap-1">
+                  <Lock className="h-2.5 w-2.5" />Protegido
+                </span>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300">
+                  Suporte
+                </span>
+              </div>
+            </div>
+          ))}
+          {users.length === 0 && supportTeam.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">Nenhum usuário encontrado</p>}
         </div>
       )}
 

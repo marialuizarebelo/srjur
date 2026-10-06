@@ -1,12 +1,11 @@
 -- ============================================================================
 -- SRJUR BASIC -- login de suporte protegido (por escritorio)
 -- ============================================================================
--- Rode UMA VEZ no SQL Editor (pode repetir sem risco). Depois, para colocar o
--- suporte em um escritorio, use a funcao do fim deste arquivo (veja "COMO USAR").
+-- Rode UMA VEZ no SQL Editor (pode repetir sem risco).
 --
 -- O que garante (no BANCO, nao so na tela):
---   - o perfil de suporte de um escritorio NAO pode ser editado, rebaixado,
---     movido de escritorio nem apagado por nenhum usuario do escritorio
+--   - o perfil de suporte NAO pode ser editado, rebaixado, movido de
+--     escritorio nem apagado por nenhum usuario de escritorio de cliente
 --     (nem pelas administradoras, nem pela cliente);
 --   - so o proprio suporte edita o proprio perfil (foto, apelido...), e mesmo
 --     assim nunca muda papel, escritorio nem a marca de "suporte";
@@ -15,19 +14,10 @@
 --   - o dono do projeto (SQL Editor, painel, Edge Functions com service_role)
 --     continua podendo mexer em tudo, porque la nao existe usuario logado.
 --
--- Importante: um login (e-mail) pertence a UM escritorio so. Cada escritorio
--- tem o seu login de suporte, com e-mail proprio.
+-- O login de suporte (app@srjur.com) e UM so e vale em todos os escritorios:
+-- veja o 06_suporte_em_todos_os_escritorios.sql, que deve ser rodado depois
+-- deste. Aqui fica so a protecao do perfil dele.
 --
--- COMO USAR (um escritorio por vez), depois de criar o login em
--- Authentication > Users > Add user (Auto Confirm User) e de o escritorio
--- existir (03_novo_escritorio.sql):
---
---   select public.add_support_to_tenant(
---     'app@srjur.com',
---     (select id from public.tenants where slug = 'slug-do-escritorio')
---   );
---
--- Depois rode o 05_teste_suporte.sql: toda linha deve vir ok = true.
 -- ============================================================================
 
 begin;
@@ -82,43 +72,5 @@ drop trigger if exists trg_protect_support on public.profiles;
 create trigger trg_protect_support
   before insert or update or delete on public.profiles
   for each row execute function public.protect_support_profile();
-
--- ---------------------------------------------------------------------------
--- Coloca um login existente como suporte protegido de um escritorio.
--- Recusa se o login ja pertence a OUTRO escritorio (nunca "rouba").
--- ---------------------------------------------------------------------------
-create or replace function public.add_support_to_tenant(p_email text, p_tenant uuid)
-returns void language plpgsql security definer set search_path = public as $$
-declare
-  v_user  uuid;
-  v_atual uuid;
-begin
-  if not exists (select 1 from public.tenants where id = p_tenant) then
-    raise exception 'Escritorio nao encontrado. Confira o slug.';
-  end if;
-
-  select id into v_user from auth.users where lower(email) = lower(p_email);
-  if v_user is null then
-    raise exception 'Login % nao encontrado. Crie em Authentication > Users > Add user (Auto Confirm User) e rode de novo.', p_email;
-  end if;
-
-  select tenant_id into v_atual from public.profiles where user_id = v_user;
-  if v_atual is not null and v_atual <> p_tenant then
-    raise exception 'O login % ja pertence a outro escritorio. Cada escritorio precisa do seu proprio login de suporte (e-mail diferente). Nada foi alterado.', p_email;
-  end if;
-
-  perform public.assign_user_to_tenant(p_email, p_tenant, 'admin');
-
-  update public.profiles
-     set is_support   = true,
-         display_name = 'Suporte SRJUR',
-         full_name    = 'Suporte SRJUR',
-         nickname     = 'Suporte',
-         role_title   = 'Suporte SRJUR'
-   where user_id = v_user;
-end;
-$$;
-
-revoke all on function public.add_support_to_tenant(text, uuid) from public, anon, authenticated;
 
 commit;

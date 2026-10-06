@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase, setSupportMode } from '@/integrations/supabase/client'
 
 type Role = 'admin' | 'client'
 
@@ -13,6 +13,7 @@ interface Profile {
   photo_url: string | null
   role_title: string | null
   allowed_modules: string[] | null
+  is_support?: boolean | null
 }
 
 interface AuthContextType {
@@ -36,9 +37,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase
       .from('profiles')
-      .select('id, display_name, full_name, nickname, role, photo_url, role_title, allowed_modules')
+      .select('*')
       .eq('user_id', userId)
       .maybeSingle()
+    // Login de suporte: liga o "modo suporte" ANTES de publicar o perfil. As telas
+    // só montam depois do perfil (ver ProtectedRoutes), então toda busca de dados
+    // já sai com o escritório do link. '*' (e não a lista de colunas) pra continuar
+    // funcionando em instância onde a coluna is_support ainda não existe.
+    setSupportMode(!!(data as Profile | null)?.is_support)
     setProfile(data as Profile | null)
   }
 
@@ -64,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Limpa o perfil antes de buscar o novo — nunca deixa o role da sessão
         // anterior "vazar" na tela enquanto o perfil da nova sessão carrega.
         setProfile(null)
+        setSupportMode(false)
         if (s?.user) await fetchProfile(s.user.id)
       }
     })
@@ -78,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut()
+    setSupportMode(false)
     setProfile(null)
   }
 

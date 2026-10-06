@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client'
+import { supabase, tenantHeaders } from '@/integrations/supabase/client'
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-drive`
 
@@ -10,7 +10,7 @@ async function authHeader() {
 async function call(path: string, body?: unknown) {
   const res = await fetch(`${FUNCTION_URL}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: await authHeader() },
+    headers: { 'Content-Type': 'application/json', Authorization: await authHeader(), ...tenantHeaders() },
     body: JSON.stringify(body ?? {}),
   })
   const json = await res.json()

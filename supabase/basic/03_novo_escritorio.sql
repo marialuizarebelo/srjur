@@ -19,7 +19,9 @@
 --   primeiro acesso: Configuracoes > Seguranca > Alterar senha.
 --
 -- PASSO 4 -- dominio do cliente (<slug>.srjur.com). O codigo nao muda: ele usa
---   o endereco em que esta aberto. Sao so 3 configuracoes externas:
+--   o endereco em que esta aberto. Sao so 3 configuracoes externas.
+--   (O suporte SRJUR nao precisa de nada por escritorio: o login unico dele
+--   entra pelo link do cliente - veja 06_suporte_em_todos_os_escritorios.sql.)
 --   a) Vercel > projeto do Basic > Settings > Domains > Add: <slug>.srjur.com
 --      (se o Basic nao for o ambiente "Production" do projeto, escolha
 --      "Git Branch: basic" ao adicionar). A Vercel mostra o valor do CNAME.
