@@ -54,6 +54,9 @@ interface ProfileRow {
   photo_url: string | null
   color: string | null
   allowed_modules: string[] | null
+  // Login de suporte do SRJUR: protegido no banco (supabase/basic/04_suporte_protegido.sql).
+  // Vem undefined em instâncias onde essa migração ainda não rodou.
+  is_support?: boolean | null
 }
 
 const USER_COLORS = ['#EC4899', '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#14B8A6', '#6366F1']
@@ -85,7 +88,7 @@ const TABS = [
 ] as const
 
 export default function Configuracoes() {
-  const { profile, user, session, refreshProfile } = useAuth()
+  const { user, session, refreshProfile } = useAuth()
   const [tab, setTab] = useState<typeof TABS[number]['key']>('escritorio')
   const [notifStatus, setNotifStatus] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('default')
   const [enablingNotif, setEnablingNotif] = useState(false)
@@ -112,6 +115,8 @@ export default function Configuracoes() {
 
   // Users
   const [users, setUsers] = useState<ProfileRow[]>([])
+  // O suporte do SRJUR não ocupa vaga das administradoras do escritório.
+  const adminCount = users.filter(u => u.role === 'admin' && !u.is_support).length
   const [userDialogOpen, setUserDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<ProfileRow | null>(null)
   const [uf, setUf] = useState({
@@ -264,7 +269,7 @@ export default function Configuracoes() {
 
   async function createUser() {
     if (!uf.email.trim() || !uf.password.trim()) { toast.error('Preencha e-mail e senha'); return }
-    if (users.filter(u => u.role === 'admin').length >= MAX_ADMIN_USERS) {
+    if (adminCount >= MAX_ADMIN_USERS) {
       toast.error(`Limite de ${MAX_ADMIN_USERS} usuárias administradoras atingido`); return
     }
     setCreatingUser(true)
@@ -427,11 +432,11 @@ export default function Configuracoes() {
         <div className="space-y-3">
           <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-4 space-y-2">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <p className={`text-xs font-medium ${users.filter(u => u.role === 'admin').length >= MAX_ADMIN_USERS ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
-                {users.filter(u => u.role === 'admin').length}/{MAX_ADMIN_USERS} administradoras
-                {users.filter(u => u.role === 'admin').length >= MAX_ADMIN_USERS && ' — limite atingido'}
+              <p className={`text-xs font-medium ${adminCount >= MAX_ADMIN_USERS ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                {adminCount}/{MAX_ADMIN_USERS} administradoras
+                {adminCount >= MAX_ADMIN_USERS && ' — limite atingido'}
               </p>
-              <Button size="sm" onClick={openNewUser} disabled={users.filter(u => u.role === 'admin').length >= MAX_ADMIN_USERS}>
+              <Button size="sm" onClick={openNewUser} disabled={adminCount >= MAX_ADMIN_USERS}>
                 <Plus className="h-3.5 w-3.5 mr-1.5" />Adicionar usuária
               </Button>
             </div>
@@ -454,7 +459,7 @@ export default function Configuracoes() {
                     </p>
                     <p className="text-xs text-muted-foreground">{u.role_title ?? (u.role === 'admin' ? 'Administradora' : 'Cliente')}</p>
                   </div>
-                  {u.display_name === 'Suporte SRJUR' && (
+                  {u.is_support && (
                     <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex items-center gap-1">
                       <Lock className="h-2.5 w-2.5" />Protegido
                     </span>
@@ -636,10 +641,11 @@ export default function Configuracoes() {
         <DialogContent className="max-w-[440px] w-[96vw] max-h-[90vh] overflow-y-auto p-6">
           <DialogHeader><DialogTitle>{editingUser ? 'Editar usuário' : 'Nova usuária'}</DialogTitle></DialogHeader>
           {(() => {
-            // Perfil "Suporte SRJUR" só pode ser editado por quem está logado
-            // com esse mesmo perfil — pro cliente, o suporte é só protegido
-            // contra exclusão, mas também não editável (nome, foto, acesso etc.).
-            const isLockedProfile = !!editingUser && editingUser.display_name === 'Suporte SRJUR' && profile?.display_name !== 'Suporte SRJUR'
+            // Perfil de suporte (is_support) só pode ser editado pelo próprio
+            // suporte logado — pra todo o resto do escritório ele é protegido
+            // contra edição e exclusão. A trava de verdade é no banco
+            // (trigger protect_support_profile); aqui é só a explicação na tela.
+            const isLockedProfile = !!editingUser?.is_support && editingUser.user_id !== user?.id
             return (
           <div className="space-y-4 pt-2">
             {isLockedProfile && (
@@ -690,7 +696,7 @@ export default function Configuracoes() {
             {editingUser && (
               <div className="space-y-1.5">
                 <Label>Perfil de acesso</Label>
-                <Select value={uf.role} onValueChange={v => setUf(f => ({ ...f, role: v as 'admin' | 'client' }))} disabled={isLockedProfile}>
+                <Select value={uf.role} onValueChange={v => setUf(f => ({ ...f, role: v as 'admin' | 'client' }))} disabled={isLockedProfile || !!editingUser.is_support}>
                   <SelectTrigger className="h-10"><SelectValue>{uf.role === 'admin' ? 'Administradora' : 'Cliente'}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Administradora</SelectItem>
@@ -736,7 +742,7 @@ export default function Configuracoes() {
           <DialogFooter className="pt-4">
             <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
             {editingUser ? (
-              <Button onClick={saveUser} disabled={editingUser.display_name === 'Suporte SRJUR' && profile?.display_name !== 'Suporte SRJUR'}>Salvar</Button>
+              <Button onClick={saveUser} disabled={!!editingUser.is_support && editingUser.user_id !== user?.id}>Salvar</Button>
             ) : (
               <Button onClick={createUser} disabled={creatingUser}>{creatingUser ? 'Criando...' : 'Criar usuária'}</Button>
             )}

@@ -52,10 +52,14 @@ Deno.serve(async (req) => {
       return json({ error: 'A senha precisa ter ao menos 6 caracteres' }, 400)
     }
 
-    // Limite vale POR ESCRITÓRIO (antes contava o banco inteiro).
-    const { count } = await adminClient
-      .from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'admin').eq('tenant_id', tenantId)
-    if ((count ?? 0) >= 3) {
+    // Limite vale POR ESCRITÓRIO (antes contava o banco inteiro). O login de
+    // suporte do SRJUR (is_support) não ocupa vaga. Conta em JS, lendo '*', pra
+    // continuar funcionando mesmo em instância onde a coluna is_support ainda
+    // não existe (04_suporte_protegido.sql não rodado).
+    const { data: admins } = await adminClient
+      .from('profiles').select('*').eq('role', 'admin').eq('tenant_id', tenantId)
+    const count = (admins ?? []).filter((p: { is_support?: boolean | null }) => !p.is_support).length
+    if (count >= 3) {
       return json({ error: 'Limite de 3 usuárias administradoras atingido' }, 400)
     }
 
