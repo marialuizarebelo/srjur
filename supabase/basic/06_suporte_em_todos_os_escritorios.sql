@@ -108,12 +108,15 @@ revoke all on function public.make_support_login(text) from public, anon, authen
 create or replace function public.office_support_team()
 returns table (display_name text, role_title text, photo_url text, color text)
 language sql stable security definer set search_path = public as $$
-  select p.display_name, p.role_title, p.photo_url, p.color
+  -- Uma linha por nome: se houver mais de um login de suporte (ex.: o da Malu e o
+  -- app@srjur.com), a lista do escritorio mostra "Suporte SRJUR" uma vez so.
+  select distinct on (p.display_name)
+         p.display_name, p.role_title, p.photo_url, p.color
   from public.profiles p
   where p.is_support
     and public.is_admin()
     and public.my_tenant_id() is not null
-  order by p.created_at;
+  order by p.display_name, (p.photo_url is null), p.created_at;
 $$;
 
 revoke all on function public.office_support_team() from public, anon;
