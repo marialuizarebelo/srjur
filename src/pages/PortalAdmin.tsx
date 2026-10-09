@@ -26,7 +26,7 @@ interface Process { id: string; title: string; number: string | null; phase: str
 interface ProcessUpdate { id: string; process_id: string; text: string; author: string | null; created_at: string; portal_visible: boolean }
 interface Message { id: string; title: string; body: string; sent_by: string | null; created_at: string; read_at: string | null }
 interface Doc { id: string; title: string; drive_url: string; type: string | null; created_at: string }
-interface Finance { id: string; description: string; value: number; paid: boolean; due_date: string | null; payment_link: string | null }
+interface Finance { id: string; description: string; value: number; portal_value?: number | null; paid: boolean; due_date: string | null; payment_link: string | null }
 interface AgendaItem { id: string; title: string; due_date: string | null; kind: 'tarefa' | 'prazo' }
 interface CommTemplate { id: string; name: string; subject: string | null; body: string }
 
@@ -53,7 +53,7 @@ function applyBasicVars(text: string, client: ClientLite, ctx?: { process?: Proc
   const f = ctx?.finance
   if (f) {
     r = r
-      .replaceAll('{{valor}}', fmtBRL(Number(f.value)))
+      .replaceAll('{{valor}}', fmtBRL(Number(f.portal_value ?? f.value)))
       .replaceAll('{{descricao_financeiro}}', f.description ?? '')
       .replaceAll('{{link_pagamento}}', f.payment_link ?? '')
       .replaceAll('{{vencimento}}', f.due_date ? fmtDate(f.due_date) : '')
@@ -268,7 +268,7 @@ function ClientDetail({ client, onBack }: { client: ClientLite; onBack: () => vo
       supabase.from('processes').select('id,title,number,phase,status,court,electronic_system,access_key').eq('client_id', cid).order('updated_at', { ascending: false }),
       supabase.from('portal_messages').select('*').eq('client_id', cid).order('created_at', { ascending: false }),
       supabase.from('documents').select('*').eq('client_id', cid).order('created_at', { ascending: false }),
-      supabase.from('finance').select('id,description,value,paid,due_date,payment_link').eq('type', 'receita').eq('client_id', cid).order('due_date'),
+      supabase.from('finance').select('id,description,value,portal_value,paid,due_date,payment_link').eq('type', 'receita').eq('client_id', cid).order('due_date'),
       supabase.from('tasks').select('id,title,due_date').eq('client_id', cid).eq('status', 'pendente').order('due_date'),
       supabase.from('deadlines').select('id,title,due_date,process_id').in('process_id',
         (await supabase.from('processes').select('id').eq('client_id', cid)).data?.map(p => p.id) ?? ['00000000-0000-0000-0000-000000000000']
@@ -366,9 +366,9 @@ function ClientDetail({ client, onBack }: { client: ClientLite; onBack: () => vo
   const pendingFinance = finances.filter(f => !f.paid)
   const overdueFinance = pendingFinance.filter(f => f.due_date && f.due_date < new Date().toISOString().slice(0, 10))
   const financeStatusLabel = overdueFinance.length > 0 ? 'Atrasado' : (pendingFinance.length > 0 ? 'Em aberto' : 'Em dia')
-  const paidTotal = finances.filter(f => f.paid).reduce((s, f) => s + Number(f.value), 0)
-  const pendingTotal = pendingFinance.reduce((s, f) => s + Number(f.value), 0)
-  const overdueTotal = overdueFinance.reduce((s, f) => s + Number(f.value), 0)
+  const paidTotal = finances.filter(f => f.paid).reduce((s, f) => s + Number(f.portal_value ?? f.value), 0)
+  const pendingTotal = pendingFinance.reduce((s, f) => s + Number(f.portal_value ?? f.value), 0)
+  const overdueTotal = overdueFinance.reduce((s, f) => s + Number(f.portal_value ?? f.value), 0)
 
   const allUpdates = Object.values(updatesByProcess).flat().sort((a, b) => b.created_at.localeCompare(a.created_at))
 
@@ -645,7 +645,7 @@ function ClientDetail({ client, onBack }: { client: ClientLite; onBack: () => vo
                 {f.due_date && <p className="text-[11px] text-muted-foreground">Vencimento: {fmtDate(f.due_date)}</p>}
               </div>
               <div className="text-right shrink-0">
-                <p className="text-sm font-semibold">{fmtBRL(f.value)}</p>
+                <p className="text-sm font-semibold">{fmtBRL(f.portal_value ?? f.value)}</p>
                 <Badge variant={f.paid ? 'secondary' : 'outline'} className="text-[9px] h-4 mt-0.5">{f.paid ? 'Pago' : 'Pendente'}</Badge>
               </div>
             </Card>
