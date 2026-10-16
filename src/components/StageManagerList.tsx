@@ -12,10 +12,8 @@ import { GripVertical, Palette } from 'lucide-react'
 // usada na cor de preferência do sistema (Configurações), pra dar mais opção
 // sem ficar uma sopa de cores aleatórias.
 export const EXTENDED_STAGE_COLORS = [
-  '#8B5CF6', '#3B82F6', '#F59E0B', '#EC4899', '#F97316',
-  '#14B8A6', '#6B7280', '#EF4444', '#10B981', '#06B6D4',
-  '#C4478A', '#0EA5E9', '#475569', '#84CC16', '#A855F7',
-  '#D946EF', '#FB923C', '#22C55E', '#EAB308', '#64748B',
+  '#E2654B', '#EF8A6E', '#D9A441', '#8FA96A', '#6E9C7D', '#5FA39A', '#5AA5C4',
+  '#6A8FC7', '#8577C9', '#A07BC9', '#C4567C', '#D96C87', '#6E7A94',
 ]
 
 export function StageColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {

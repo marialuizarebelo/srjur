@@ -20,7 +20,7 @@ import { ImageUploadCrop } from '@/components/ImageUploadCrop'
 import { connectGoogle, disconnectGoogle } from '@/lib/googleCalendar'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { subscribeToPush, getNotificationStatus } from '@/hooks/usePushNotifications'
-import { applyThemeColor } from '@/lib/themeColor'
+import { applyThemeColor, ACCENT_THEMES } from '@/lib/themeColor'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 interface OfficeSettings {
@@ -31,16 +31,6 @@ interface OfficeSettings {
   primary_color: string | null
 }
 
-const THEME_COLORS = [
-  { label: 'Rosa (padrão)', value: '#C4478A' },
-  { label: 'Roxo', value: '#8B5CF6' },
-  { label: 'Azul', value: '#3B82F6' },
-  { label: 'Verde', value: '#10B981' },
-  { label: 'Âmbar', value: '#F59E0B' },
-  { label: 'Vermelho', value: '#EF4444' },
-  { label: 'Ciano', value: '#0EA5E9' },
-  { label: 'Grafite', value: '#475569' },
-]
 
 interface ProfileRow {
   id: string
@@ -55,7 +45,7 @@ interface ProfileRow {
   allowed_modules: string[] | null
 }
 
-const USER_COLORS = ['#EC4899', '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#14B8A6', '#6366F1']
+const USER_COLORS = ['#C4567C', '#6A8FC7', '#8577C9', '#6E9C7D', '#D9A441', '#D96C87', '#5FA39A', '#7A84C9']
 
 const MAX_ADMIN_USERS = 3
 
@@ -417,7 +407,7 @@ export default function Configuracoes() {
               <div key={u.id} className="rounded-2xl border border-border/60 bg-card shadow-sm p-4 space-y-3">
                 <div className="flex items-center gap-4">
                   <div className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0 overflow-hidden"
-                    style={{ backgroundColor: u.color ?? '#8B5CF6' }}>
+                    style={{ backgroundColor: u.color ?? '#8577C9' }}>
                     {u.photo_url ? <img src={u.photo_url} alt="" className="w-full h-full object-cover" /> : (u.display_name ?? '?').charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -525,31 +515,19 @@ export default function Configuracoes() {
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              {THEME_COLORS.map(c => (
-                <button
-                  key={c.value}
-                  onClick={() => updateThemeColor(c.value)}
-                  title={c.label}
-                  className={`h-10 w-10 rounded-full transition-all hover:scale-110 ${
-                    officeForm.primary_color?.toLowerCase() === c.value.toLowerCase() || (!officeForm.primary_color && c.value === '#C4478A')
-                      ? 'ring-2 ring-offset-2 ring-offset-card ring-foreground'
-                      : ''
-                  }`}
-                  style={{ backgroundColor: c.value }}
-                />
-              ))}
-              <label
-                className="h-10 w-10 rounded-full border-2 border-dashed border-border flex items-center justify-center cursor-pointer overflow-hidden relative"
-                title="Cor personalizada"
-              >
-                <Palette className="h-4 w-4 text-muted-foreground" />
-                <input
-                  type="color"
-                  value={officeForm.primary_color || '#C4478A'}
-                  onChange={e => updateThemeColor(e.target.value)}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                />
-              </label>
+              {ACCENT_THEMES.map(c => {
+                const selected = (officeForm.primary_color || ACCENT_THEMES[0].value).toLowerCase() === c.value.toLowerCase()
+                  || (c.key === 'coral' && !ACCENT_THEMES.some(x => x.value.toLowerCase() === (officeForm.primary_color || '').toLowerCase()))
+                return (
+                  <button
+                    key={c.key}
+                    onClick={() => updateThemeColor(c.value)}
+                    title={c.label}
+                    className={`h-7 w-7 rounded-full transition-shadow ${selected ? 'ring-2 ring-offset-2 ring-offset-card ring-foreground' : ''}`}
+                    style={{ backgroundColor: c.value }}
+                  />
+                )
+              })}
             </div>
           </div>
 

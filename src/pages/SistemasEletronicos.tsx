@@ -314,7 +314,7 @@ export default function SistemasEletronicos() {
           <h1 className="text-2xl font-semibold">Sistemas Eletrônicos</h1>
           <p className="text-sm text-muted-foreground">
             Intimações via DJEN (Diário de Justiça Eletrônico Nacional)
-            {countNaoLidas > 0 && <span className="text-amber-600 font-medium"> · {countNaoLidas} não lida(s)</span>}
+            {countNaoLidas > 0 && <span className="text-amber-700 dark:text-amber-300 font-semibold"> · {countNaoLidas} não lida(s)</span>}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -333,32 +333,56 @@ export default function SistemasEletronicos() {
         </div>
       </div>
 
-      {configs.length === 0 ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-4 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+      {configs.length === 0 && intimacoes.length === 0 && !loading ? (
+        <div className="rounded-3xl border border-[var(--glass-border)] bg-card p-8 sm:p-12 text-center shadow-[0_20px_50px_-30px_rgba(20,33,61,0.25)] dark:shadow-[0_20px_50px_-28px_rgba(0,0,0,0.6)]">
+          <div className="mx-auto mb-5 h-14 w-14 rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-surface)] flex items-center justify-center">
+            <Scale className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <h2 className="text-2xl mb-2">Receba suas intimações aqui</h2>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto mb-8">
+            Cadastre a OAB das advogadas e o sistema busca no DJEN as intimações e movimentações dos seus processos.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto mb-8 text-left">
+            {[
+              { n: '1', t: 'Cadastre a OAB', d: 'Até 3 advogadas monitoradas.' },
+              { n: '2', t: 'Verifique', d: 'A busca só roda quando você pedir.' },
+              { n: '3', t: 'Trate cada intimação', d: 'Vincule ao processo, crie prazo ou tarefa.' },
+            ].map(s => (
+              <div key={s.n} className="rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-surface)] p-4">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-[var(--accent-light)] mb-3">{s.n}</span>
+                <p className="text-sm font-bold">{s.t}</p>
+                <p className="text-xs text-muted-foreground mt-1">{s.d}</p>
+              </div>
+            ))}
+          </div>
+          <Button size="lg" onClick={() => setConfigOpen(true)}>
+            <Plus className="h-4 w-4" />Cadastrar OAB
+          </Button>
+        </div>
+      ) : configs.length === 0 ? (
+        <div className="rounded-3xl border border-[var(--glass-border)] bg-amber-500/10 p-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-amber-700 dark:text-amber-300 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Nenhuma OAB cadastrada</p>
-            <p className="text-xs text-amber-600/80 dark:text-amber-400/70 mt-0.5">
-              Cadastre o número de OAB das advogadas em "OABs monitoradas" e depois clique em "Verificar novas intimações" para buscar no DJEN.
-            </p>
+            <p className="text-sm font-bold text-amber-700 dark:text-amber-300">Nenhuma OAB cadastrada</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Cadastre a OAB em "OABs monitoradas" para continuar buscando intimações no DJEN.</p>
           </div>
         </div>
       ) : intimacoes.length === 0 && !syncing && (
-        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 flex items-start gap-3">
-          <RefreshCw className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+        <div className="rounded-3xl border border-[var(--glass-border)] bg-primary/10 p-4 flex items-start gap-3">
+          <RefreshCw className="h-5 w-5 text-[var(--accent-light)] shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium">Nenhuma intimação carregada ainda</p>
+            <p className="text-sm font-bold">Nenhuma intimação carregada ainda</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Clique em "Verificar novas intimações" acima para buscar no DJEN. A busca não é automática — só roda quando você pedir.
+              Clique em "Verificar novas intimações" para buscar no DJEN. A busca não é automática — só roda quando você pedir.
             </p>
           </div>
         </div>
       )}
 
       {/* Filters */}
-      <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 w-fit">
+      <div className={`flex items-center gap-0.5 rounded-full border border-[var(--glass-border)] bg-[var(--glass-surface)] p-[3px] w-fit ${configs.length === 0 && intimacoes.length === 0 && !loading ? 'hidden' : ''}`}>
         {(['nao_lidas', 'lidas', 'ignoradas', 'todas'] as const).map(s => (
-          <Button key={s} variant={readFilter === s ? 'default' : 'ghost'} size="sm" className="h-8"
+          <Button key={s} variant={readFilter === s ? 'secondary' : 'ghost'} size="sm" className="h-8 border-transparent"
             onClick={() => setReadFilter(s)}>
             {s === 'nao_lidas' ? 'Não lidas' : s === 'lidas' ? 'Lidas' : s === 'ignoradas' ? 'Ignoradas' : 'Todas'}
           </Button>
@@ -366,7 +390,7 @@ export default function SistemasEletronicos() {
       </div>
 
       {/* List */}
-      <div className="space-y-3">
+      <div className={`space-y-3 ${configs.length === 0 && intimacoes.length === 0 && !loading ? 'hidden' : ''}`}>
         {filtered.length === 0 && !loading && (
           <div className="py-16 text-center text-muted-foreground">
             <Scale className="h-8 w-8 mx-auto mb-2 opacity-30" />
@@ -377,8 +401,8 @@ export default function SistemasEletronicos() {
         {filtered.map(i => {
           const match = findMatchingProcess(i.numero_processo)
           return (
-            <div key={i.id} className={`rounded-2xl border bg-card shadow-sm p-5 space-y-3 transition-colors ${
-              !i.lida && i.status !== 'ignorado' ? 'border-amber-200 dark:border-amber-900' : 'border-border/60'
+            <div key={i.id} className={`rounded-3xl border bg-card p-5 space-y-3 transition-colors shadow-[0_20px_50px_-30px_rgba(20,33,61,0.25)] dark:shadow-[0_20px_50px_-28px_rgba(0,0,0,0.6)] ${
+              !i.lida && i.status !== 'ignorado' ? 'border-amber-500/40' : 'border-[var(--glass-border)]'
             }`}>
               <div className="flex items-start justify-between gap-3">
                 <button onClick={() => toggleLida(i)} className="shrink-0 mt-0.5" title={i.lida ? 'Marcar como não lida' : 'Marcar como lida'}>
@@ -388,10 +412,10 @@ export default function SistemasEletronicos() {
                 </button>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                    <Badge variant="outline" className="text-[10px]">{i.tribunal}</Badge>
-                    <Badge variant="secondary" className="text-[10px]">{i.tipo_comunicacao}</Badge>
-                    {!i.lida && i.status !== 'ignorado' && <Badge className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40">Não lida</Badge>}
-                    {i.status === 'vinculado' && <Badge className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40">Vinculado</Badge>}
+                    <Badge variant="outline">{i.tribunal}</Badge>
+                    <Badge variant="secondary">{i.tipo_comunicacao}</Badge>
+                    {!i.lida && i.status !== 'ignorado' && <Badge variant="pending">Não lida</Badge>}
+                    {i.status === 'vinculado' && <Badge variant="active">Vinculado</Badge>}
                     <span className="text-[11px] text-muted-foreground ml-auto shrink-0">{i.data_disponibilizacao && fmtDate(i.data_disponibilizacao)}</span>
                   </div>
                   <p className="text-sm font-medium text-foreground">
@@ -415,35 +439,35 @@ export default function SistemasEletronicos() {
 
               <div className="flex items-center gap-2 flex-wrap pt-1">
                 {i.status !== 'vinculado' && match && (
-                  <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => openLink(i)}>
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openLink(i)}>
                     <Link2 className="h-3 w-3 mr-1" />Vincular processo
                   </Button>
                 )}
                 {i.status !== 'vinculado' && !match && i.numero_processo && (
-                  <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => openProcesso(i)}>
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openProcesso(i)}>
                     <FilePlus2 className="h-3 w-3 mr-1" />Criar processo
                   </Button>
                 )}
-                <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => openPrazo(i)}>
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openPrazo(i)}>
                   <Plus className="h-3 w-3 mr-1" />Criar prazo
                 </Button>
-                <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => openTarefa(i)}>
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openTarefa(i)}>
                   <Plus className="h-3 w-3 mr-1" />Criar tarefa
                 </Button>
                 {i.link && (
                   <a href={i.link} target="_blank" rel="noreferrer">
-                    <Button size="sm" variant="ghost" className="h-7 text-xs rounded-lg">
+                    <Button size="sm" variant="ghost" className="h-8 text-xs">
                       <ExternalLink className="h-3 w-3 mr-1" />Ver no DJE
                     </Button>
                   </a>
                 )}
                 {!i.lida && (
-                  <Button size="sm" variant="ghost" className="h-7 text-xs rounded-lg" onClick={() => toggleLida(i)}>
+                  <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => toggleLida(i)}>
                     <Check className="h-3 w-3 mr-1" />Marcar como lida
                   </Button>
                 )}
                 {i.status !== 'ignorado' && (
-                  <Button size="sm" variant="ghost" className="h-7 text-xs rounded-lg text-muted-foreground ml-auto" onClick={() => ignoreIntimacao(i)}>
+                  <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground ml-auto" onClick={() => ignoreIntimacao(i)}>
                     <EyeOff className="h-3 w-3 mr-1" />Ignorar
                   </Button>
                 )}

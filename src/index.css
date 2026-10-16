@@ -1,5 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
+
+/* Fonte de destaque (títulos e números grandes). Trocar --font-display se a licença web não for liberada. */
+@font-face { font-family: "AV Estiana"; src: url("/fonts/AVEstiana-Regular.otf") format("opentype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "AV Estiana"; src: url("/fonts/AVEstiana-Medium.otf") format("opentype"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "AV Estiana"; src: url("/fonts/AVEstiana-Bold.otf") format("opentype"); font-weight: 700; font-style: normal; font-display: swap; }
 
 /* Tailwind v4 por padrão compila "dark:" como @media (prefers-color-scheme:
    dark) — ou seja, ignora completamente o botão de tema do sistema e só
@@ -10,8 +15,207 @@
    eu declarei manualmente em .dark{} aqui embaixo funcionavam. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Paleta do Tailwind remapeada para as cores de status do DS v2: toda tag/badge
+   que usa green/amber/red/blue/violet... passa a usar verde/âmbar/rosa/lilás do DS. */
+@theme {
+  /* Sombras em camadas (contato + queda difusa + reflexo no topo) em vez das sombras cinzas padrão. */
+  --shadow-xs: 0 1px 2px var(--glass-contact);
+  --shadow-sm: 0 1px 2px var(--glass-contact), 0 14px 30px -22px var(--glass-drop), inset 0 1px 0 var(--glass-highlight);
+  --shadow-md: 0 1px 2px var(--glass-contact), 0 18px 38px -22px var(--glass-drop), inset 0 1px 0 var(--glass-highlight);
+  --shadow-lg: 0 2px 4px var(--glass-contact), 0 26px 50px -24px var(--glass-drop), inset 0 1px 0 var(--glass-highlight);
+  --radius-2xl: 1.5rem;
+  --color-green-50: #f3f7f5;
+  --color-green-100: #e8efea;
+  --color-green-200: #d1dfd5;
+  --color-green-300: #8FC7A2;
+  --color-green-400: #8bb097;
+  --color-green-500: #6E9C7D;
+  --color-green-600: #5b826e;
+  --color-green-700: #43625c;
+  --color-green-800: #334c4f;
+  --color-green-900: #243743;
+  --color-green-950: #1a2a3c;
+  --color-emerald-50: #f3f7f5;
+  --color-emerald-100: #e8efea;
+  --color-emerald-200: #d1dfd5;
+  --color-emerald-300: #8FC7A2;
+  --color-emerald-400: #8bb097;
+  --color-emerald-500: #6E9C7D;
+  --color-emerald-600: #5b826e;
+  --color-emerald-700: #43625c;
+  --color-emerald-800: #334c4f;
+  --color-emerald-900: #243743;
+  --color-emerald-950: #1a2a3c;
+  --color-teal-50: #f3f7f5;
+  --color-teal-100: #e8efea;
+  --color-teal-200: #d1dfd5;
+  --color-teal-300: #8FC7A2;
+  --color-teal-400: #8bb097;
+  --color-teal-500: #6E9C7D;
+  --color-teal-600: #5b826e;
+  --color-teal-700: #43625c;
+  --color-teal-800: #334c4f;
+  --color-teal-900: #243743;
+  --color-teal-950: #1a2a3c;
+  --color-lime-50: #f3f7f5;
+  --color-lime-100: #e8efea;
+  --color-lime-200: #d1dfd5;
+  --color-lime-300: #8FC7A2;
+  --color-lime-400: #8bb097;
+  --color-lime-500: #6E9C7D;
+  --color-lime-600: #5b826e;
+  --color-lime-700: #43625c;
+  --color-lime-800: #334c4f;
+  --color-lime-900: #243743;
+  --color-lime-950: #1a2a3c;
+  --color-cyan-50: #f3f7f5;
+  --color-cyan-100: #e8efea;
+  --color-cyan-200: #d1dfd5;
+  --color-cyan-300: #8FC7A2;
+  --color-cyan-400: #8bb097;
+  --color-cyan-500: #6E9C7D;
+  --color-cyan-600: #5b826e;
+  --color-cyan-700: #43625c;
+  --color-cyan-800: #334c4f;
+  --color-cyan-900: #243743;
+  --color-cyan-950: #1a2a3c;
+  --color-amber-50: #fcf8f0;
+  --color-amber-100: #f9f0e1;
+  --color-amber-200: #f3e2c2;
+  --color-amber-300: #E8C275;
+  --color-amber-400: #e1b667;
+  --color-amber-500: #D9A441;
+  --color-amber-600: #b1893e;
+  --color-amber-700: #7e663b;
+  --color-amber-800: #5c4f38;
+  --color-amber-900: #3b3936;
+  --color-amber-950: #272b35;
+  --color-yellow-50: #fcf8f0;
+  --color-yellow-100: #f9f0e1;
+  --color-yellow-200: #f3e2c2;
+  --color-yellow-300: #E8C275;
+  --color-yellow-400: #e1b667;
+  --color-yellow-500: #D9A441;
+  --color-yellow-600: #b1893e;
+  --color-yellow-700: #7e663b;
+  --color-yellow-800: #5c4f38;
+  --color-yellow-900: #3b3936;
+  --color-yellow-950: #272b35;
+  --color-orange-50: #fcf8f0;
+  --color-orange-100: #f9f0e1;
+  --color-orange-200: #f3e2c2;
+  --color-orange-300: #E8C275;
+  --color-orange-400: #e1b667;
+  --color-orange-500: #D9A441;
+  --color-orange-600: #b1893e;
+  --color-orange-700: #7e663b;
+  --color-orange-800: #5c4f38;
+  --color-orange-900: #3b3936;
+  --color-orange-950: #272b35;
+  --color-red-50: #fcf3f5;
+  --color-red-100: #f9e7ec;
+  --color-red-200: #f3d0d9;
+  --color-red-300: #E794A9;
+  --color-red-400: #e1899f;
+  --color-red-500: #D96C87;
+  --color-red-600: #b15c76;
+  --color-red-700: #7e4861;
+  --color-red-800: #5c3a53;
+  --color-red-900: #3b2d45;
+  --color-red-950: #27253d;
+  --color-rose-50: #fcf3f5;
+  --color-rose-100: #f9e7ec;
+  --color-rose-200: #f3d0d9;
+  --color-rose-300: #E794A9;
+  --color-rose-400: #e1899f;
+  --color-rose-500: #D96C87;
+  --color-rose-600: #b15c76;
+  --color-rose-700: #7e4861;
+  --color-rose-800: #5c3a53;
+  --color-rose-900: #3b2d45;
+  --color-rose-950: #27253d;
+  --color-pink-50: #fcf3f5;
+  --color-pink-100: #f9e7ec;
+  --color-pink-200: #f3d0d9;
+  --color-pink-300: #E794A9;
+  --color-pink-400: #e1899f;
+  --color-pink-500: #D96C87;
+  --color-pink-600: #b15c76;
+  --color-pink-700: #7e4861;
+  --color-pink-800: #5c3a53;
+  --color-pink-900: #3b2d45;
+  --color-pink-950: #27253d;
+  --color-fuchsia-50: #fcf3f5;
+  --color-fuchsia-100: #f9e7ec;
+  --color-fuchsia-200: #f3d0d9;
+  --color-fuchsia-300: #E794A9;
+  --color-fuchsia-400: #e1899f;
+  --color-fuchsia-500: #D96C87;
+  --color-fuchsia-600: #b15c76;
+  --color-fuchsia-700: #7e4861;
+  --color-fuchsia-800: #5c3a53;
+  --color-fuchsia-900: #3b2d45;
+  --color-fuchsia-950: #27253d;
+  --color-blue-50: #f5f4fb;
+  --color-blue-100: #ebe9f6;
+  --color-blue-200: #d8d3ee;
+  --color-blue-300: #B0A5E8;
+  --color-blue-400: #9d92d4;
+  --color-blue-500: #8577C9;
+  --color-blue-600: #6d65ab;
+  --color-blue-700: #504e86;
+  --color-blue-800: #3c3e6c;
+  --color-blue-900: #292f54;
+  --color-blue-950: #1d2645;
+  --color-sky-50: #f5f4fb;
+  --color-sky-100: #ebe9f6;
+  --color-sky-200: #d8d3ee;
+  --color-sky-300: #B0A5E8;
+  --color-sky-400: #9d92d4;
+  --color-sky-500: #8577C9;
+  --color-sky-600: #6d65ab;
+  --color-sky-700: #504e86;
+  --color-sky-800: #3c3e6c;
+  --color-sky-900: #292f54;
+  --color-sky-950: #1d2645;
+  --color-indigo-50: #f5f4fb;
+  --color-indigo-100: #ebe9f6;
+  --color-indigo-200: #d8d3ee;
+  --color-indigo-300: #B0A5E8;
+  --color-indigo-400: #9d92d4;
+  --color-indigo-500: #8577C9;
+  --color-indigo-600: #6d65ab;
+  --color-indigo-700: #504e86;
+  --color-indigo-800: #3c3e6c;
+  --color-indigo-900: #292f54;
+  --color-indigo-950: #1d2645;
+  --color-violet-50: #f5f4fb;
+  --color-violet-100: #ebe9f6;
+  --color-violet-200: #d8d3ee;
+  --color-violet-300: #B0A5E8;
+  --color-violet-400: #9d92d4;
+  --color-violet-500: #8577C9;
+  --color-violet-600: #6d65ab;
+  --color-violet-700: #504e86;
+  --color-violet-800: #3c3e6c;
+  --color-violet-900: #292f54;
+  --color-violet-950: #1d2645;
+  --color-purple-50: #f5f4fb;
+  --color-purple-100: #ebe9f6;
+  --color-purple-200: #d8d3ee;
+  --color-purple-300: #B0A5E8;
+  --color-purple-400: #9d92d4;
+  --color-purple-500: #8577C9;
+  --color-purple-600: #6d65ab;
+  --color-purple-700: #504e86;
+  --color-purple-800: #3c3e6c;
+  --color-purple-900: #292f54;
+  --color-purple-950: #1d2645;
+}
+
 @theme inline {
-  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "AV Estiana", Georgia, serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -50,104 +254,125 @@
 }
 
 :root {
-  /* raio mais contido, estilo SaaS maduro (era 0.875rem — ficava infantil/bolha) */
-  --radius: 0.5rem;
+  --radius: 0.875rem;
 
-  /* Identidade SRJUR: modo claro = fundo creme quente + texto grafite-azulado,
-     igual ao contraste usado nos sites (srjur.com, Rotina Segura, escritório) —
-     lá o creme é o texto sobre navy; aqui é o inverso, mesma paleta. */
-  --background: #F2EDE6;
-  --foreground: #1E2A3F;
+  /* SRJUR Design System v2 — tema claro: fundo creme, texto navy.
+     A sidebar é SEMPRE navy (regra do manual), mesmo no tema claro.
+     O acento (--primary) é coral por padrão; cada escritório pode trocar
+     pela cor própria (applyThemeColor sobrescreve --primary). */
+  --background: #F7F3E9;
+  --foreground: #14213D;
 
-  /* cards num off-white levemente mais claro que o fundo, não branco puro */
-  --card: #FAF7F2;
-  --card-foreground: #1E2A3F;
-  --popover: #FAF7F2;
-  --popover-foreground: #1E2A3F;
+  --card: #FDFBF6;
+  --card-foreground: #14213D;
+  --popover: #FDFBF6;
+  --popover-foreground: #14213D;
 
-  /* primária: dourado/âmbar da identidade dos sites (era rosa/magenta do Lovable) */
-  --primary: #A9762F;
+  --primary: #E2654B;
   --primary-foreground: #ffffff;
 
-  /* secundários e muds em tom creme mais escuro */
-  --secondary: #E8E1D8;
-  --secondary-foreground: #2d2d2d;
-  --muted: #EAE4DC;
-  --muted-foreground: #6b6560;
-  --accent: #E8E1D8;
-  --accent-foreground: #2d2d2d;
+  --secondary: #EFE9DA;
+  --secondary-foreground: #14213D;
+  --muted: #EFE9DA;
+  --muted-foreground: #5B6478;
+  --accent: #EFE9DA;
+  --accent-foreground: #14213D;
 
-  --destructive: #dc2626;
-  /* mais escura que antes (era #DDD7CE) — os cards/janelas estavam com uma
-     cara "chapada", sem separação visível do fundo creme */
-  --border: #CFC5B3;
-  --input: #CFC5B3;
-  --ring: #A9762F;
+  --destructive: #C4455F;
+  --border: #DDD6C4;
+  --input: #DDD6C4;
+  --ring: #E2654B;
 
-  /* chart colors vibrantes — mantidas, não fazem parte da paleta neutra */
   --chart-1: #C4478A;
   --chart-2: #4A9E6B;
   --chart-3: #D4A843;
   --chart-4: #6B8FD4;
   --chart-5: #E06B4A;
 
-  /* sidebar navy, puxando pra identidade dos sites (era preto puro), um tom
-     mais escuro que a versão anterior pra ficar mais sóbrio/sofisticado —
-     hover/ativo usam um creme claro como destaque (era um bege amarelado
-     puxado demais, lembrava "vômito" segundo o feedback). */
-  --sidebar-background: #101D35;
-  --sidebar-foreground: #AEB9CC;
-  --sidebar-primary: #A9762F;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #EEE8DC;
-  --sidebar-accent-foreground: #1E2A3F;
-  --sidebar-border: #1D3255;
-  --sidebar-ring: #EEE8DC;
+  --sidebar-background: #0F1B33;
+  --sidebar-foreground: #98A2BC;
+  --sidebar-primary: #EF8A6E;
+  --sidebar-primary-foreground: #F5F1E6;
+  --sidebar-accent: rgba(245, 241, 230, 0.08);
+  --sidebar-accent-foreground: #F5F1E6;
+  --sidebar-border: rgba(245, 241, 230, 0.08);
+  --sidebar-ring: #EF8A6E;
 
   --finance-income: #D5EAD9;
   --finance-expense: #F2D6D6;
+
+  --accent-light: #EF8A6E;
+  --accent-hover: #F5A890;
+  --glass-highlight: rgba(255, 255, 255, 0.85);
+  --glass-sheen: rgba(255, 255, 255, 0.70);
+  --glass-drop: rgba(20, 33, 61, 0.20);
+  --glass-contact: rgba(20, 33, 61, 0.07);
+  --glass-k: 9;
+  --glass-glow: 22%;
+  --glass-inner: 0%;
+  --glass-edge: 24%;
+  --card-glass: rgba(255, 255, 255, 0.55);
+  --glass-top: rgba(255, 255, 255, 0);
+  --glass-rim: rgba(255, 255, 255, 0.8);
+  --page-bg: #F7F3E9;
+  --glow-accent: radial-gradient(circle, color-mix(in srgb, var(--primary) 16%, transparent), transparent 70%);
+  --glow-navy: radial-gradient(circle, rgba(20, 33, 61, 0.08), rgba(20, 33, 61, 0) 70%);
+  --title-shadow: 0 1px 3px rgba(20, 33, 61, 0.15);
+  --text-soft-shadow: 0 1px 2px rgba(20, 33, 61, 0.16);
 }
 
 .dark {
-  /* Modo escuro = fundo navy + texto/detalhes creme, igual aos sites (srjur.com
-     usa exatamente esse navy de fundo com texto creme). */
-  --background: #0F1936;
-  --foreground: #F2EDE6;
-  --card: #162846;
-  --card-foreground: #F2EDE6;
-  --popover: #162846;
-  --popover-foreground: #F2EDE6;
-  --primary: #D4A843;
-  --primary-foreground: #1E2A3F;
-  --secondary: #1E3459;
-  --secondary-foreground: #E2D4C0;
-  --muted: #1E3459;
-  --muted-foreground: #94A1B8;
-  --accent: #1E3459;
-  --accent-foreground: #E2D4C0;
-  /* menos saturado que o modo claro — vermelho puro em cima de navy escuro
-     fica "gritando" (neon), destoa de todo o resto da paleta mais sóbria */
-  --destructive: oklch(0.6 0.16 25);
-  /* mais clara que antes (era #22385C) — mesma razão do modo claro, precisa
-     de mais contraste contra o card/fundo pra não ficar tudo "chapado" */
-  --border: #2C4870;
-  --input: #2C4870;
-  --ring: #D4A843;
+  /* tema escuro: gradiente navy, texto creme, vidro sobre navy */
+  --background: #0F1B33;
+  --foreground: #F5F1E6;
+  --card: rgba(245, 241, 230, 0.09);
+  --card-foreground: #F5F1E6;
+  --popover: #14213D;
+  --popover-foreground: #F5F1E6;
+  --primary: #E2654B;
+  --primary-foreground: #ffffff;
+  --secondary: rgba(245, 241, 230, 0.12);
+  --secondary-foreground: #F5F1E6;
+  --muted: rgba(245, 241, 230, 0.12);
+  --muted-foreground: #AEB8D0;
+  --accent: rgba(245, 241, 230, 0.12);
+  --accent-foreground: #F5F1E6;
+  --destructive: #D96C87;
+  --border: rgba(245, 241, 230, 0.17);
+  --input: rgba(245, 241, 230, 0.14);
+  --ring: #EF8A6E;
   --chart-1: #818cf8;
   --chart-2: #34d399;
   --chart-3: #fbbf24;
   --chart-4: #a78bfa;
   --chart-5: #f87171;
-  --sidebar-background: #0B1428;
-  --sidebar-foreground: #94A1B8;
-  --sidebar-primary: #D4A843;
-  --sidebar-primary-foreground: #1E2A3F;
-  --sidebar-accent: #EEE8DC;
-  --sidebar-accent-foreground: #1E2A3F;
-  --sidebar-border: #1E3459;
-  --sidebar-ring: #EEE8DC;
+  --sidebar-background: #101D38;
+  --sidebar-foreground: #98A2BC;
+  --sidebar-primary: #EF8A6E;
+  --sidebar-primary-foreground: #F5F1E6;
+  --sidebar-accent: rgba(245, 241, 230, 0.08);
+  --sidebar-accent-foreground: #F5F1E6;
+  --sidebar-border: rgba(245, 241, 230, 0.08);
+  --sidebar-ring: #EF8A6E;
   --finance-income: #1a3328;
   --finance-expense: #331a1a;
+
+  --glass-highlight: rgba(245, 241, 230, 0.10);
+  --glass-sheen: rgba(245, 241, 230, 0.05);
+  --glass-drop: rgba(0, 0, 0, 0.7);
+  --glass-contact: rgba(0, 0, 0, 0.22);
+  --glass-k: 9;
+  --glass-glow: 20%;
+  --glass-inner: 0%;
+  --glass-edge: 28%;
+  --card-glass: rgba(150, 180, 240, 0.16);
+  --glass-rim: rgba(245, 241, 230, 0.16);
+  --glass-top: rgba(245, 241, 230, 0.14);
+  --page-bg: linear-gradient(160deg, #0E1A33 0%, #16264A 55%, #203760 100%);
+  --glow-accent: radial-gradient(circle, color-mix(in srgb, var(--primary) 26%, transparent), transparent 70%);
+  --glow-navy: radial-gradient(circle, rgba(38, 64, 110, 0.5), rgba(38, 64, 110, 0) 70%);
+  --title-shadow: 0 0 14px rgba(245, 241, 230, 0.10);
+  --text-soft-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
 body {
@@ -155,7 +380,8 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: var(--background);
+  background: var(--page-bg);
+  background-attachment: fixed;
   color: var(--foreground);
   /* evita zoom no input em iOS */
   -webkit-text-size-adjust: 100%;
@@ -182,9 +408,34 @@ html {
   scroll-behavior: smooth;
 }
 
-h1 {
-  font-weight: 700;
+/* Títulos de página/diálogo usam a fonte de destaque (Estiana) com brilho suave. */
+h1, h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.005em;
+  text-shadow: var(--title-shadow);
 }
+h1 {
+  font-size: 1.875rem;
+  line-height: 1.15;
+}
+
+/* Números grandes dos cards (KPIs): mesma fonte de destaque e brilho. */
+.font-display { font-family: var(--font-display); }
+.text-glow { text-shadow: var(--text-soft-shadow); }
+
+/* Glows de fundo atrás do conteúdo (ver AppLayout). */
+.bg-glow-accent { background: var(--glow-accent); }
+.bg-glow-navy { background: var(--glow-navy); }
+
+/* Item ativo da sidebar: vidro com profundidade (ver AppSidebar). */
+.nav-item { border-radius: 10px; transition: background-color 200ms cubic-bezier(.22,.61,.36,1), box-shadow 200ms cubic-bezier(.22,.61,.36,1), color 200ms cubic-bezier(.22,.61,.36,1); }
+.nav-item[data-active] {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 26%, transparent), color-mix(in srgb, var(--primary) 12%, transparent)) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 38%, transparent), 0 10px 22px -12px color-mix(in srgb, var(--primary) 60%, transparent) !important;
+}
+.nav-item[data-active] .nav-icon { color: #F4A58E; }
+.nav-item:not([data-active]):hover .nav-icon { color: var(--sidebar-accent-foreground); }
 
 /* Barra de rolagem fina e discreta em QUALQUER lugar da aplicação — sem isso,
    o Windows/Chrome mostra a barra padrão grossa e cinza-escura em toda tela
@@ -223,4 +474,91 @@ h1 {
 .scrollbar-thin::-webkit-scrollbar-thumb {
   background-color: var(--border);
   border-radius: 999px;
+}
+
+/* Barra de rolagem escondida (sidebar e listas de navegação). */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Paleta "Notion" para etiquetas e tipos de evento (adapta ao tema claro/escuro). */
+:root {
+  --nc-red-dot: #D96C87;
+  --nc-red-bg: #FBE9ED;
+  --nc-red-text: #A6425C;
+  --nc-red-border: #F3C9D3;
+  --nc-orange-dot: #E08A52;
+  --nc-orange-bg: #FCEBDD;
+  --nc-orange-text: #A9561F;
+  --nc-orange-border: #F6D3B8;
+  --nc-yellow-dot: #D9A441;
+  --nc-yellow-bg: #FAF0D6;
+  --nc-yellow-text: #8A6414;
+  --nc-yellow-border: #F0DEA8;
+  --nc-green-dot: #6E9C7D;
+  --nc-green-bg: #E3F0E7;
+  --nc-green-text: #3F6F52;
+  --nc-green-border: #C6DFCE;
+  --nc-teal-dot: #5FA39A;
+  --nc-teal-bg: #DDF0EE;
+  --nc-teal-text: #2F6F68;
+  --nc-teal-border: #BCE0DC;
+  --nc-sky-dot: #5AA5C4;
+  --nc-sky-bg: #DDEEF5;
+  --nc-sky-text: #2F6D88;
+  --nc-sky-border: #BBDCEA;
+  --nc-blue-dot: #6A8FC7;
+  --nc-blue-bg: #E2EBF8;
+  --nc-blue-text: #3A5E96;
+  --nc-blue-border: #C5D6EE;
+  --nc-purple-dot: #8577C9;
+  --nc-purple-bg: #EAE6F7;
+  --nc-purple-text: #5B4EA3;
+  --nc-purple-border: #D3CCEE;
+  --nc-pink-dot: #D97B9B;
+  --nc-pink-bg: #F9E4EC;
+  --nc-pink-text: #A13F66;
+  --nc-pink-border: #F0C6D6;
+  --nc-brown-dot: #A58467;
+  --nc-brown-bg: #EFE6DD;
+  --nc-brown-text: #7A5A3C;
+  --nc-brown-border: #DCCBBA;
+  --nc-gray-dot: #8A93AA;
+  --nc-gray-bg: #ECEEF2;
+  --nc-gray-text: #5B6478;
+  --nc-gray-border: #D5D9E2;
+}
+.dark {
+  --nc-red-bg: rgba(217,108,135,0.18);
+  --nc-red-text: #E794A9;
+  --nc-red-border: rgba(217,108,135,0.35);
+  --nc-orange-bg: rgba(224,138,82,0.18);
+  --nc-orange-text: #EDAA7C;
+  --nc-orange-border: rgba(224,138,82,0.35);
+  --nc-yellow-bg: rgba(217,164,65,0.18);
+  --nc-yellow-text: #E8C275;
+  --nc-yellow-border: rgba(217,164,65,0.35);
+  --nc-green-bg: rgba(110,156,125,0.20);
+  --nc-green-text: #8FC7A2;
+  --nc-green-border: rgba(110,156,125,0.38);
+  --nc-teal-bg: rgba(95,163,154,0.20);
+  --nc-teal-text: #86CBC2;
+  --nc-teal-border: rgba(95,163,154,0.38);
+  --nc-sky-bg: rgba(90,165,196,0.20);
+  --nc-sky-text: #8FC8DE;
+  --nc-sky-border: rgba(90,165,196,0.38);
+  --nc-blue-bg: rgba(106,143,199,0.20);
+  --nc-blue-text: #9DB9E3;
+  --nc-blue-border: rgba(106,143,199,0.38);
+  --nc-purple-bg: rgba(133,119,201,0.20);
+  --nc-purple-text: #B0A5E8;
+  --nc-purple-border: rgba(133,119,201,0.38);
+  --nc-pink-bg: rgba(217,123,155,0.20);
+  --nc-pink-text: #E8A4BC;
+  --nc-pink-border: rgba(217,123,155,0.38);
+  --nc-brown-bg: rgba(165,132,103,0.20);
+  --nc-brown-text: #CDAE92;
+  --nc-brown-border: rgba(165,132,103,0.38);
+  --nc-gray-bg: rgba(138,147,170,0.20);
+  --nc-gray-text: #B3BBCE;
+  --nc-gray-border: rgba(138,147,170,0.38);
 }

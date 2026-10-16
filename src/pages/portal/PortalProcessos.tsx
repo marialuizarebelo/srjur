@@ -35,8 +35,8 @@ export default function PortalProcessos() {
   }
 
   const PHASE_COLORS: Record<string, string> = {
-    inicial: '#6B7280', citacao: '#3B82F6', instrucao: '#8B5CF6',
-    audiencia: '#F59E0B', recurso: '#EF4444', execucao: '#14B8A6', encerrado: '#10B981',
+    inicial: '#6E7A94', citacao: '#6A8FC7', instrucao: '#8577C9',
+    audiencia: '#D9A441', recurso: '#D96C87', execucao: '#5FA39A', encerrado: '#6E9C7D',
   }
 
   return (
