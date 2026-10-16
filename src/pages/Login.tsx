@@ -49,9 +49,9 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#f4f1eb]">
+    <div className="min-h-screen flex flex-col md:flex-row bg-background">
       {/* Left panel */}
-      <div className="relative overflow-hidden md:flex-[0_0_44%] bg-gradient-to-br from-[#0e1829] via-[#13243f] to-[#0e1829] px-8 py-10 md:px-14 md:py-13 flex flex-col justify-between">
+      <div className="relative overflow-hidden md:flex-[0_0_44%] bg-[image:linear-gradient(160deg,#0B1526_0%,#14213D_55%,#1E3159_100%)] px-8 py-10 md:px-14 md:py-13 flex flex-col justify-between">
         <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-80" viewBox="0 0 480 800" preserveAspectRatio="xMidYMid slice">
           <circle cx="420" cy="120" r="180" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
           <circle cx="420" cy="120" r="120" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
@@ -61,12 +61,12 @@ export default function Login() {
         </svg>
 
         <div className="relative z-10">
-          <div className="h-[50px] w-[50px] rounded-[10px] bg-white/10 border border-white/15 flex items-center justify-center text-white/90 font-medium text-[15px] tracking-wide shadow-lg mb-8 overflow-hidden">
-            {office.logo_url ? <img src={office.logo_url} alt="" className="w-full h-full object-cover" /> : 'SR'}
+          <div className="h-[56px] w-[56px] flex items-center justify-center mb-8 overflow-hidden">
+            {office.logo_url ? <img src={office.logo_url} alt="" className="w-full h-full object-cover rounded-xl" /> : <img src="/brand/srjur-monogram-cream.png" alt="SRJUR" className="w-full h-full object-contain" />}
           </div>
-          <div className="font-semibold text-[32px] text-white tracking-tight leading-none mb-3">SRJUR</div>
+          <div className="font-display text-[34px] text-[#F5F1E6] leading-none mb-3 text-glow">SRJUR</div>
           <div className="w-8 h-0.5 bg-white/25 mb-3.5" />
-          <div className="text-xs font-light text-white/40 tracking-[2px] uppercase">{office.name}</div>
+          <div className="text-xs font-medium text-[#98A2BC] tracking-[2px] uppercase">{office.name}</div>
         </div>
 
         <div className="relative z-10 hidden md:block">
@@ -92,30 +92,30 @@ export default function Login() {
           {!forgotMode ? (
             <>
               <div className="mb-8">
-                <div className="font-semibold text-[28px] text-[#0e1829] tracking-tight mb-1.5">Bem-vindo de volta</div>
-                <div className="text-sm text-[#8a8880] font-light">Acesse sua conta para continuar</div>
+                <div className="font-display text-[32px] text-foreground text-glow mb-1.5">Bem-vindo de volta</div>
+                <div className="text-sm text-muted-foreground">Acesse sua conta para continuar</div>
               </div>
 
-              <form onSubmit={handleSubmit} className="bg-white rounded-xl p-8 shadow-[0_2px_8px_rgba(14,24,41,0.06),0_16px_40px_rgba(14,24,41,0.08)] space-y-5">
+              <form onSubmit={handleSubmit} className="bg-card rounded-3xl border border-[var(--glass-border)] p-8 shadow-[0_20px_50px_-30px_rgba(20,33,61,0.25)] dark:shadow-[0_20px_50px_-28px_rgba(0,0,0,0.6)] space-y-5">
                 <div>
-                  <Label className="text-[11px] font-medium text-[#555] tracking-wide uppercase mb-1.5 block">E-mail</Label>
+                  <Label className="text-[11px] font-bold text-muted-foreground tracking-[0.1em] uppercase mb-1.5 block">E-mail</Label>
                   <Input
                     type="email" value={email} onChange={e => setEmail(e.target.value)} required
                     placeholder="seu@email.com.br"
-                    className="h-[46px] bg-[#faf9f7] border-[#e8e4dc] rounded-[7px] focus-visible:ring-[#1a3a6b]/20 focus-visible:border-[#1a3a6b]"
+                    className="h-[46px]"
                   />
                 </div>
                 <div>
-                  <Label className="text-[11px] font-medium text-[#555] tracking-wide uppercase mb-1.5 block">Senha</Label>
+                  <Label className="text-[11px] font-bold text-muted-foreground tracking-[0.1em] uppercase mb-1.5 block">Senha</Label>
                   <div className="relative">
                     <Input
                       type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required
                       placeholder="••••••••"
-                      className="h-[46px] bg-[#faf9f7] border-[#e8e4dc] rounded-[7px] pr-11 focus-visible:ring-[#1a3a6b]/20 focus-visible:border-[#1a3a6b]"
+                      className="h-[46px] pr-11"
                     />
                     <button
                       type="button" onClick={() => setShowPw(v => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#aaa] hover:text-[#555] transition-colors"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                     >
                       {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -126,7 +126,7 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => { setForgotMode(true); setForgotEmail(email); setForgotSent(false) }}
-                    className="text-xs text-[#a0a09a] hover:text-[#1a3a6b] transition-colors"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
                     Esqueceu a senha?
                   </button>
@@ -136,7 +136,7 @@ export default function Login() {
 
                 <Button
                   type="submit" disabled={loading}
-                  className="w-full h-12 bg-[#1a3a6b] hover:bg-[#0f2a52] rounded-[7px] text-sm font-medium tracking-wide shadow-[0_4px_14px_rgba(26,58,107,0.35)]"
+                  className="w-full h-12 text-sm font-medium tracking-wide"
                 >
                   {loading ? 'Entrando...' : 'Entrar'}
                 </Button>
@@ -145,16 +145,16 @@ export default function Login() {
           ) : (
             <>
               <div className="mb-8">
-                <div className="font-semibold text-[28px] text-[#0e1829] tracking-tight mb-1.5">Redefinir senha</div>
-                <div className="text-sm text-[#8a8880] font-light">
+                <div className="font-display text-[32px] text-foreground text-glow mb-1.5">Redefinir senha</div>
+                <div className="text-sm text-muted-foreground">
                   {forgotSent ? 'Confira seu e-mail' : 'Informe seu e-mail de acesso'}
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl p-8 shadow-[0_2px_8px_rgba(14,24,41,0.06),0_16px_40px_rgba(14,24,41,0.08)]">
+              <div className="bg-card rounded-3xl border border-[var(--glass-border)] p-8 shadow-[0_20px_50px_-30px_rgba(20,33,61,0.25)] dark:shadow-[0_20px_50px_-28px_rgba(0,0,0,0.6)]">
                 {forgotSent ? (
                   <div className="space-y-4">
-                    <p className="text-sm text-[#0e1829]">
+                    <p className="text-sm text-foreground">
                       Se <strong>{forgotEmail}</strong> tiver uma conta no sistema, enviamos um link pra redefinir a senha. Verifica sua caixa de entrada (e o spam).
                     </p>
                     <Button variant="outline" className="w-full h-11 rounded-[7px]" onClick={() => setForgotMode(false)}>
@@ -164,17 +164,17 @@ export default function Login() {
                 ) : (
                   <form onSubmit={handleForgotSubmit} className="space-y-5">
                     <div>
-                      <Label className="text-[11px] font-medium text-[#555] tracking-wide uppercase mb-1.5 block">E-mail</Label>
+                      <Label className="text-[11px] font-bold text-muted-foreground tracking-[0.1em] uppercase mb-1.5 block">E-mail</Label>
                       <Input
                         type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required
                         placeholder="seu@email.com.br"
-                        className="h-[46px] bg-[#faf9f7] border-[#e8e4dc] rounded-[7px] focus-visible:ring-[#1a3a6b]/20 focus-visible:border-[#1a3a6b]"
+                        className="h-[46px]"
                       />
                     </div>
-                    <Button type="submit" disabled={forgotLoading} className="w-full h-12 bg-[#1a3a6b] hover:bg-[#0f2a52] rounded-[7px] text-sm font-medium">
+                    <Button type="submit" disabled={forgotLoading} className="w-full h-12 text-sm font-medium">
                       {forgotLoading ? 'Enviando...' : 'Enviar link de redefinição'}
                     </Button>
-                    <button type="button" onClick={() => setForgotMode(false)} className="w-full text-center text-xs text-[#a0a09a] hover:text-[#1a3a6b] transition-colors">
+                    <button type="button" onClick={() => setForgotMode(false)} className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors">
                       Voltar ao login
                     </button>
                   </form>
