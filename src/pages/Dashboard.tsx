@@ -468,7 +468,7 @@ function AuthenticatorWidget() {
 export default function Dashboard() {
   const { profile } = useAuth()
   const navigate = useNavigate()
-  const [stats, setStats] = useState({ clients: 0, processes: 0, tasks: 0, overdueDeadlines: 0 })
+  const [stats, setStats] = useState({ clients: 0, processes: 0, consultivos: 0, tasks: 0, overdueDeadlines: 0 })
   const [finance, setFinance] = useState({ receitas: 0, despesas: 0, inadimplencia: 0, saldoMes: 0 })
   const [recentProcesses, setRecentProcesses] = useState<{ id: string; title: string; responsible?: string; status: string }[]>([])
   const [overdueTasks, setOverdueTasks] = useState<AttentionItem[]>([])
@@ -610,9 +610,10 @@ export default function Dashboard() {
       const todayD = new Date()
       const today = `${todayD.getFullYear()}-${String(todayD.getMonth() + 1).padStart(2, '0')}-${String(todayD.getDate()).padStart(2, '0')}`
 
-      const [clientsRes, processesRes, tasksRes, deadlinesRes] = await Promise.all([
+      const [clientsRes, processesRes, consultivosRes, tasksRes, deadlinesRes] = await Promise.all([
         supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
         supabase.from('processes').select('id', { count: 'exact', head: true }).eq('status', 'em_andamento'),
+        supabase.from('processes').select('id', { count: 'exact', head: true }).eq('status', 'em_andamento').eq('type', 'consultivo'),
         supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'pendente'),
         supabase.from('deadlines').select('id', { count: 'exact', head: true }).eq('status', 'pendente').lt('due_date', today),
       ])
@@ -620,6 +621,7 @@ export default function Dashboard() {
       setStats({
         clients: clientsRes.count ?? 0,
         processes: processesRes.count ?? 0,
+        consultivos: consultivosRes.count ?? 0,
         tasks: tasksRes.count ?? 0,
         overdueDeadlines: deadlinesRes.count ?? 0,
       })
@@ -1050,7 +1052,7 @@ export default function Dashboard() {
               title="Processos Ativos"
               color="purple"
               value={stats.processes}
-              subtitle={`${recentProcesses.length} consultivos`}
+              subtitle={stats.processes > 0 ? `${stats.processes - stats.consultivos} contenciosos · ${stats.consultivos} consultivos` : undefined}
               icon={Scale}
               onClick={openProcesses}
             />
