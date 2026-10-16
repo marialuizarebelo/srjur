@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
+import { soft } from '@/lib/colors'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +21,7 @@ import {
   Pencil, Trash2, X, ChevronUp, ChevronDown,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useEventColors } from '@/lib/eventColors'
 import { fmtDate, getDaysDiff } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
@@ -221,6 +223,7 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
 
 export default function Prazos() {
   const { profile } = useAuth()
+  const { styleOf } = useEventColors()
   const [deadlines, setDeadlines] = useState<Deadline[]>([])
   const [stages, setStages] = useState<DeadlineStage[]>([])
   const [processes, setProcesses] = useState<ProcessOption[]>([])
@@ -281,7 +284,7 @@ export default function Prazos() {
     ])
     setDeadlines((d as Deadline[]) ?? [])
     setProcesses((p as ProcessOption[]) ?? [])
-    setStages((s as DeadlineStage[]) ?? [])
+    setStages(((s as DeadlineStage[]) ?? []).map(st => ({ ...st, color: soft(st.color) ?? st.color })))
     setClients((c as ClientOption[]) ?? [])
     setLoading(false)
   }
@@ -577,10 +580,10 @@ export default function Prazos() {
     const isToday = days === 0 && deadline.status === 'pendente'
 
     return (
-      <div className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-lg border transition-colors hover:shadow-sm ${
+      <div className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3.5 rounded-2xl border bg-card shadow-sm transition-[filter] hover:brightness-[0.98] ${
         deadline.status !== 'pendente' ? 'opacity-50' : ''
-      } ${isOverdue ? 'border-red-300 bg-red-50/70 dark:border-red-900 dark:bg-red-950/30' :
-        isToday ? 'border-blue-300 bg-blue-50/70 dark:border-blue-900 dark:bg-blue-950/30' : ''}`}>
+      }`}
+        style={{ backgroundColor: `color-mix(in srgb, ${isOverdue ? 'var(--nc-red-dot)' : isToday ? 'var(--nc-yellow-dot)' : styleOf('prazo').dot} 7%, var(--card))`, borderColor: `color-mix(in srgb, ${isOverdue ? 'var(--nc-red-dot)' : isToday ? 'var(--nc-yellow-dot)' : styleOf('prazo').dot} 30%, transparent)` }}>
 
         <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
           <button onClick={() => toggleStatus(deadline)} className="shrink-0 mt-0.5 sm:mt-0">
@@ -805,7 +808,7 @@ export default function Prazos() {
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
           {(['pendente', 'cumprido', 'perdido', 'todos'] as const).map(s => (
-            <Button key={s} variant={statusFilter === s ? 'default' : 'ghost'} size="sm" className="h-8"
+            <Button key={s} variant={statusFilter === s ? 'secondary' : 'ghost'} size="sm" className="h-8"
               onClick={() => setStatusFilter(s)}>
               {s === 'pendente' ? 'Pendentes' : s === 'cumprido' ? 'Cumpridos' : s === 'perdido' ? 'Perdidos' : 'Todos'}
             </Button>
@@ -840,15 +843,15 @@ export default function Prazos() {
       {/* Content */}
       {viewMode === 'lista' ? (
         <div className="space-y-5">
-          <Section title="Vencidos" icon={AlertTriangle} items={vencidos} color="#EF4444" />
-          <Section title="Hoje" icon={Clock} items={hoje} color="#3B82F6" />
-          <Section title="Próximos 7 dias" icon={Calendar} items={proximos7} color="#8B5CF6" />
-          <Section title="Próximos 30 dias" icon={Calendar} items={proximos30} color="#F59E0B" />
-          <Section title="Depois de 30 dias" icon={Calendar} items={depois} color="#6B7280" defaultOpen={false} />
-          {statusFilter === 'cumprido' && <Section title="Cumpridos" icon={CheckCircle2} items={cumpridos} color="#10B981" />}
-          {statusFilter === 'perdido' && <Section title="Perdidos" icon={AlertTriangle} items={perdidos} color="#EF4444" />}
-          {statusFilter === 'todos' && cumpridos.length > 0 && <Section title="Cumpridos" icon={CheckCircle2} items={cumpridos} color="#10B981" defaultOpen={false} />}
-          {statusFilter === 'todos' && perdidos.length > 0 && <Section title="Perdidos" icon={AlertTriangle} items={perdidos} color="#EF4444" defaultOpen={false} />}
+          <Section title="Vencidos" icon={AlertTriangle} items={vencidos} color="#D96C87" />
+          <Section title="Hoje" icon={Clock} items={hoje} color="#6A8FC7" />
+          <Section title="Próximos 7 dias" icon={Calendar} items={proximos7} color="#8577C9" />
+          <Section title="Próximos 30 dias" icon={Calendar} items={proximos30} color="#D9A441" />
+          <Section title="Depois de 30 dias" icon={Calendar} items={depois} color="#6E7A94" defaultOpen={false} />
+          {statusFilter === 'cumprido' && <Section title="Cumpridos" icon={CheckCircle2} items={cumpridos} color="#6E9C7D" />}
+          {statusFilter === 'perdido' && <Section title="Perdidos" icon={AlertTriangle} items={perdidos} color="#D96C87" />}
+          {statusFilter === 'todos' && cumpridos.length > 0 && <Section title="Cumpridos" icon={CheckCircle2} items={cumpridos} color="#6E9C7D" defaultOpen={false} />}
+          {statusFilter === 'todos' && perdidos.length > 0 && <Section title="Perdidos" icon={AlertTriangle} items={perdidos} color="#D96C87" defaultOpen={false} />}
           {filtered.length === 0 && !loading && (
             <div className="py-12 text-center text-muted-foreground">
               <Bell className="h-8 w-8 mx-auto mb-2 opacity-40" />
