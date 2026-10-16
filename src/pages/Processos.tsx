@@ -26,6 +26,7 @@ import {
   Mail, Phone, IdCard, FolderOpen, ArrowRight,
 } from 'lucide-react'
 import { getAreaColor } from '@/lib/areaColors'
+import { TagChips, splitTags } from '@/components/TagChips'
 import { getTagColor } from '@/lib/deadlineTypes'
 import { fmtDate, fmtBRL } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR } from '@/lib/exportData'
@@ -291,6 +292,7 @@ export default function Processos() {
   const [statusFilter, setStatusFilter] = useState<'todos' | 'em_andamento' | 'concluido' | 'arquivado' | 'suspenso'>('em_andamento')
   const [responsibleFilter, setResponsibleFilter] = useState('todos')
   const [clientFilter, setClientFilter] = useState('todos')
+  const [tagFilter, setTagFilter] = useState('todos')
 
   // Process form
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -416,9 +418,11 @@ export default function Processos() {
       .filter(p => statusFilter === 'todos' || p.status === statusFilter)
       .filter(p => responsibleFilter === 'todos' || (p.responsible_ids ?? []).includes(responsibleFilter))
       .filter(p => clientFilter === 'todos' || p.client_id === clientFilter)
+      .filter(p => tagFilter === 'todos' || splitTags(p.tags).includes(tagFilter))
       .filter(p => !search || p.title.toLowerCase().includes(search.toLowerCase()) ||
-        p.number?.toLowerCase().includes(search.toLowerCase()))
-  }, [processes, statusFilter, responsibleFilter, clientFilter, search])
+        p.number?.toLowerCase().includes(search.toLowerCase()) || (p.tags ?? '').toLowerCase().includes(search.toLowerCase()))
+  }, [processes, statusFilter, responsibleFilter, clientFilter, tagFilter, search])
+  const allTags = useMemo(() => [...new Set(processes.flatMap(p => splitTags(p.tags)))].sort(), [processes])
 
   const byPhase = useMemo(() => {
     const map = new Map<string, Process[]>()
@@ -1050,6 +1054,17 @@ export default function Processos() {
             </SelectContent>
           </Select>
           {viewMode === 'kanban' && <CardFieldsButton className="h-8" defs={PROC_CARD_FIELDS} fields={cardFields} onChange={saveCardFields} onReset={resetCardFields} />}
+          {allTags.length > 0 && (
+            <Select value={tagFilter} onValueChange={v => setTagFilter(v ?? 'todos')}>
+              <SelectTrigger className="w-36 h-9">
+                <SelectValue>{tagFilter === 'todos' ? 'Etiqueta' : tagFilter}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas</SelectItem>
+                {allTags.map(tg => <SelectItem key={tg} value={tg}>{tg}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
           <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
             <Button variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
               onClick={() => setViewMode('kanban')}>
@@ -1110,6 +1125,7 @@ export default function Processos() {
                           {cardFields.instancia && proc.instance && (
                             <p className="text-[11px] text-muted-foreground truncate">{proc.instance}</p>
                           )}
+                          <TagChips tags={proc.tags} max={3} className="mt-1.5" />
                           <div className="flex items-center justify-between mt-1.5 gap-1.5">
                             {cardFields.area && proc.area && (
                               <Badge variant="outline" className={`text-[10px] border-0 ${getAreaColor(proc.area).bg} ${getAreaColor(proc.area).text}`}>
@@ -1166,6 +1182,7 @@ export default function Processos() {
                       <span className="text-xs text-muted-foreground">{getClientName(proc.client_id)}</span>
                       {proc.area && <span className="text-xs text-muted-foreground">· {proc.area}</span>}
                     </div>
+                    <TagChips tags={proc.tags} max={5} className="mt-1" />
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap pl-[18px] sm:pl-0">
