@@ -827,6 +827,8 @@ const CLIENT_DEFAULT_VISIBLE: Record<string, boolean> = {
 }
 
 // ── Client Card ──
+import { TagChips, splitTags } from '@/components/TagChips'
+
 function ClientCard({ client, onEdit, fields }: { client: Client; onEdit: () => void; fields: Record<string, boolean> }) {
   const profilesMap = useProfilesMap()
   const color = getAvatarColor(client.name)
@@ -844,6 +846,7 @@ function ClientCard({ client, onEdit, fields }: { client: Client; onEdit: () => 
           {fields.area && (client.area
             ? <AreaTags area={client.area} className="mt-0.5" />
             : <p className="text-xs text-muted-foreground truncate">{client.type}</p>)}
+          <TagChips tags={client.tags} max={3} className="mt-1.5" />
           {fields.telefone && client.phone && <p className="text-xs text-muted-foreground truncate mt-0.5"><Sensitive>{client.phone}</Sensitive></p>}
           {fields.email && client.email && <p className="text-xs text-muted-foreground truncate"><Sensitive>{client.email}</Sensitive></p>}
           {fields.documento && client.cpf_cnpj && <p className="text-xs text-muted-foreground truncate"><Sensitive>{client.cpf_cnpj}</Sensitive></p>}
@@ -964,6 +967,7 @@ export default function Clientes() {
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<'crm' | 'ativos' | 'encerrados'>('ativos')
   const [search, setSearch] = useState('')
+  const [tagFilter, setTagFilter] = useState('todos')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
   const { fields: cardFields, save: saveCardFields, reset: resetCardFields } = useCardFields('clientes', CLIENT_DEFAULT_VISIBLE)
   const [tableSortColumn, setTableSortColumn] = useState<'name' | 'type' | 'area' | 'phone' | 'email' | 'responsible' | 'status' | null>(null)
@@ -1120,7 +1124,8 @@ export default function Clientes() {
     const statusFilter = tab === 'ativos' ? 'ativo' : 'inativo'
     let list = clients
       .filter(c => c.status === statusFilter)
-      .filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()))
+      .filter(c => tagFilter === 'todos' || splitTags(c.tags).includes(tagFilter))
+      .filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || (c.tags ?? '').toLowerCase().includes(search.toLowerCase()))
     if (tableSortColumn) {
       const dir = tableSortDir === 'asc' ? 1 : -1
       list = [...list].sort((a, b) => {
@@ -1137,7 +1142,8 @@ export default function Clientes() {
       })
     }
     return list
-  }, [clients, tab, search, tableSortColumn, tableSortDir])
+  }, [clients, tab, search, tagFilter, tableSortColumn, tableSortDir])
+  const allClientTags = useMemo(() => [...new Set(clients.flatMap(c => splitTags(c.tags)))].sort(), [clients])
 
   const filteredLeads = useMemo(() => {
     return leads
@@ -1569,12 +1575,23 @@ export default function Clientes() {
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nome..."
+              placeholder="Buscar por nome ou etiqueta..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-9 h-9"
             />
           </div>
+          {allClientTags.length > 0 && (
+            <Select value={tagFilter} onValueChange={v => setTagFilter(v ?? 'todos')}>
+              <SelectTrigger className="w-40 h-9">
+                <SelectValue>{tagFilter === 'todos' ? 'Etiqueta' : tagFilter}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas</SelectItem>
+                {allClientTags.map(tg => <SelectItem key={tg} value={tg}>{tg}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
           {tab !== 'crm' && (
             <>
             {viewMode === 'cards' && <CardFieldsButton className="h-9" defs={CLIENT_CARD_FIELDS} fields={cardFields} onChange={saveCardFields} onReset={resetCardFields} />}
