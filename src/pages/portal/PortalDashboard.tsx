@@ -50,10 +50,10 @@ export default function PortalDashboard() {
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Processos ativos', value: processes.length, icon: Scale, color: '#3B82F6' },
-          { label: 'A pagar', value: fmtBRL(pendingValue), icon: DollarSign, color: '#10B981' },
-          { label: 'Próximos compromissos', value: upcoming.length, icon: CalendarDays, color: '#8B5CF6' },
-          { label: 'Mensagens', value: messages.filter(m => !m.read_at).length, icon: MessageSquare, color: '#EC4899' },
+          { label: 'Processos ativos', value: processes.length, icon: Scale, color: '#6A8FC7' },
+          { label: 'A pagar', value: fmtBRL(pendingValue), icon: DollarSign, color: '#6E9C7D' },
+          { label: 'Próximos compromissos', value: upcoming.length, icon: CalendarDays, color: '#8577C9' },
+          { label: 'Mensagens', value: messages.filter(m => !m.read_at).length, icon: MessageSquare, color: '#C4567C' },
         ].map((s, i) => {
           const Icon = s.icon
           return (
