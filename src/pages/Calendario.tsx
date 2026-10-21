@@ -86,10 +86,10 @@ function daysInMonth(y: number, m: number) { return new Date(y, m+1, 0).getDate(
 
 export default function Calendario() {
   const { styleOf, labelOf, colors: evColors, setColor: setEvColor } = useEventColors()
-  // Escritório de quem está criando: sem isso o banco usa o escritório padrão.
-  const owner = profile?.tenant_id ? { tenant_id: profile.tenant_id, created_by: profile.id } : {}
   const navigate = useNavigate()
   const { profile } = useAuth()
+  // Escritório de quem está criando: sem isso o banco usa o escritório padrão.
+  const owner = profile?.tenant_id ? { tenant_id: profile.tenant_id, created_by: profile.id } : {}
   const [events, setEvents]   = useState<CalEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
