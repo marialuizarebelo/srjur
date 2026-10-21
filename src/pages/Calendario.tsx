@@ -26,6 +26,9 @@ import { NOTION_COLORS, ncStyle } from '@/lib/notionColors'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
+import { ClientCombobox } from '@/components/ClientCombobox'
+import { ProcessCombobox } from '@/components/ProcessCombobox'
+import { TIPOS_PRAZO } from '@/lib/deadlineTypes'
 
 type ViewMode = 'mes' | 'semana' | 'dia'
 
@@ -83,6 +86,8 @@ function daysInMonth(y: number, m: number) { return new Date(y, m+1, 0).getDate(
 
 export default function Calendario() {
   const { styleOf, labelOf, colors: evColors, setColor: setEvColor } = useEventColors()
+  // Escritório de quem está criando: sem isso o banco usa o escritório padrão.
+  const owner = profile?.tenant_id ? { tenant_id: profile.tenant_id, created_by: profile.id } : {}
   const navigate = useNavigate()
   const { profile } = useAuth()
   const [events, setEvents]   = useState<CalEvent[]>([])
@@ -93,7 +98,11 @@ export default function Calendario() {
   const [qf, setQf] = useState({
     tipo: 'tarefa' as 'tarefa' | 'compromisso' | 'prazo', title: '', date: '', time: '',
     endDate: '', endTime: '', description: '', link: '', responsible_ids: [] as string[],
+    subtype: 'tarefa', client_id: '', process_id: '', priority: 'media',
   })
+  const [qClients, setQClients] = useState<{ id: string; name: string }[]>([])
+  const [qProcesses, setQProcesses] = useState<{ id: string; title: string; number: string | null; client_id?: string | null }[]>([])
+  const [firstStageId, setFirstStageId] = useState<string | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<CalEvent | null>(null)
   const [ef, setEf] = useState({ title: '', date: '', time: '', responsible_ids: [] as string[], status: '' })
@@ -112,6 +121,12 @@ export default function Calendario() {
   const [resp, setResp]   = useState('todos')
 
   useEffect(() => { load() }, [])
+  // Listas usadas no cadastro rápido (cliente, processo e primeira etapa dos prazos)
+  useEffect(() => {
+    supabase.from('clients').select('id, name').order('name').then(({ data }) => setQClients((data as { id: string; name: string }[]) ?? []))
+    supabase.from('processes').select('id, title, number, client_id').order('title').then(({ data }) => setQProcesses((data as { id: string; title: string; number: string | null; client_id?: string | null }[]) ?? []))
+    supabase.from('deadline_stages').select('id').order('position').limit(1).then(({ data }) => setFirstStageId(data?.[0]?.id ?? null))
+  }, [])
 
   function namesFor(ids: string[]) {
     const names = ids.map(id => profilesMap[id]?.display_name).filter(Boolean)
@@ -119,7 +134,7 @@ export default function Calendario() {
   }
 
   function openQuickCreate(date: string) {
-    setQf({ tipo: 'tarefa', title: '', date, time: '', endDate: '', endTime: '', description: '', link: '', responsible_ids: [] })
+    setQf({ tipo: 'tarefa', title: '', date, time: '', endDate: '', endTime: '', description: '', link: '', responsible_ids: [], subtype: 'tarefa', client_id: '', process_id: '', priority: 'media' })
     setQuickOpen(true)
   }
 
@@ -127,23 +142,32 @@ export default function Calendario() {
     if (!qf.title || !qf.date || saving) return
     setSaving(true)
     try {
+      const procClient = qProcesses.find(p => p.id === qf.process_id)?.client_id ?? null
+      const clientId = qf.client_id || procClient || null
+      const processId = qf.process_id || null
+      let error: { message: string } | null = null
       if (qf.tipo === 'prazo') {
-        await supabase.from('deadlines').insert({
+        const base = {
           title: qf.title, due_date: qf.date, status: 'pendente',
           responsible_ids: qf.responsible_ids, responsible: namesFor(qf.responsible_ids), source: 'Manual',
           notes: qf.description || null, drive_url: qf.link || null,
-          created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
-        })
+        }
+        const full = { ...base, ...owner, tipo: qf.subtype || null, client_id: clientId, process_id: processId, stage_id: firstStageId }
+        ;({ error } = await supabase.from('deadlines').insert(full))
+        if (error && /column|schema cache/i.test(error.message)) ({ error } = await supabase.from('deadlines').insert({ ...base, ...owner, process_id: processId }))
       } else {
-        await supabase.from('tasks').insert({
+        const base = {
           title: qf.title, due_date: qf.date, due_time: qf.time || null,
           end_date: qf.endDate || null, end_time: qf.endTime || null,
           description: qf.description || null, link: qf.link || null,
-          type: qf.tipo, status: 'pendente',
+          type: qf.subtype || qf.tipo, status: 'pendente',
           responsible_ids: qf.responsible_ids, responsible: namesFor(qf.responsible_ids),
-          created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
-        })
+        }
+        const full = { ...base, ...owner, priority: qf.priority, client_id: clientId, process_id: processId }
+        ;({ error } = await supabase.from('tasks').insert(full))
+        if (error && /column|schema cache/i.test(error.message)) ({ error } = await supabase.from('tasks').insert({ ...base, ...owner }))
       }
+      if (error) { toast.error('Erro ao criar: ' + error.message); return }
       toast.success('Criado!')
       setQuickOpen(false)
       load()
@@ -968,12 +992,12 @@ export default function Calendario() {
 
       {/* ── Quick create dialog ── */}
       <Dialog open={quickOpen} onOpenChange={setQuickOpen}>
-        <DialogContent className="max-w-[420px] w-[96vw] p-6">
+        <DialogContent className="max-w-[520px] w-[96vw] max-h-[92vh] overflow-y-auto p-6">
           <DialogHeader><DialogTitle>Novo evento — {qf.date && fmtDateLong(parseYMD(qf.date))}</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="flex gap-1.5">
               {(['tarefa', 'compromisso', 'prazo'] as const).map(t => (
-                <button key={t} onClick={() => setQf(f => ({ ...f, tipo: t }))}
+                <button key={t} onClick={() => setQf(f => ({ ...f, tipo: t, subtype: t === 'tarefa' ? 'tarefa' : t === 'compromisso' ? 'compromisso' : '' }))}
                   className={`flex-1 h-9 rounded-xl text-xs font-medium border transition-all ${
                     qf.tipo === t ? 'bg-primary text-primary-foreground border-primary' : 'border-border/60 text-muted-foreground hover:border-border'
                   }`}>
@@ -984,6 +1008,49 @@ export default function Calendario() {
             <div className="space-y-1.5">
               <Label>Título</Label>
               <Input value={qf.title} onChange={e => setQf(f => ({ ...f, title: e.target.value }))} className="h-10" autoFocus />
+            </div>
+            {(() => {
+              const options: [string, string][] = qf.tipo === 'prazo'
+                ? TIPOS_PRAZO.map(x => [x, x] as [string, string])
+                : qf.tipo === 'compromisso'
+                  ? [['compromisso', 'Compromisso'], ['reuniao', 'Reunião'], ['audiencia', 'Audiência'], ['diligencia', 'Diligência']]
+                  : [['tarefa', 'Tarefa'], ['interno', 'Interno'], ['cliente', 'Cliente']]
+              return (
+                <div className={qf.tipo === 'prazo' ? 'space-y-1.5' : 'grid grid-cols-2 gap-3'}>
+                  <div className="space-y-1.5">
+                    <Label>{qf.tipo === 'prazo' ? 'Tipo do prazo' : 'Tipo'}</Label>
+                    <Select value={qf.subtype} onValueChange={v => setQf(f => ({ ...f, subtype: v ?? '' }))}>
+                      <SelectTrigger className="h-10"><SelectValue placeholder="Selecione">{options.find(o => o[0] === qf.subtype)?.[1]}</SelectValue></SelectTrigger>
+                      <SelectContent>{options.map(o => <SelectItem key={o[0]} value={o[0]}>{o[1]}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  {qf.tipo !== 'prazo' && (
+                    <div className="space-y-1.5">
+                      <Label>Prioridade</Label>
+                      <Select value={qf.priority} onValueChange={v => setQf(f => ({ ...f, priority: v ?? 'media' }))}>
+                        <SelectTrigger className="h-10"><SelectValue>{({ baixa: 'Baixa', media: 'Média', alta: 'Alta', urgente: 'Urgente' } as Record<string, string>)[qf.priority]}</SelectValue></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="baixa">Baixa</SelectItem>
+                          <SelectItem value="media">Média</SelectItem>
+                          <SelectItem value="alta">Alta</SelectItem>
+                          <SelectItem value="urgente">Urgente</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5 min-w-0">
+                <Label>Cliente</Label>
+                <ClientCombobox clients={qClients} value={qf.client_id} onChange={id => setQf(f => ({ ...f, client_id: id, process_id: '' }))} />
+              </div>
+              <div className="space-y-1.5 min-w-0">
+                <Label>Processo</Label>
+                <ProcessCombobox processes={qf.client_id ? qProcesses.filter(p => p.client_id === qf.client_id) : qProcesses} value={qf.process_id}
+                  onChange={id => setQf(f => ({ ...f, process_id: id, client_id: f.client_id || (qProcesses.find(p => p.id === id)?.client_id ?? '') }))} />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
