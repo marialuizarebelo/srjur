@@ -681,11 +681,11 @@ export default function Prazos() {
           {(() => {
             const collapsed = collapsedStages.has('__unassigned__')
             return (
-              <div className={`w-full md:flex-shrink-0 ${collapsed ? 'md:w-44' : 'md:w-72'}`}>
-                <button className="flex items-center gap-2 mb-3 px-1 w-full" title={collapsed ? 'Mostrar coluna' : 'Minimizar coluna'} onClick={() => toggleStageCollapsed('__unassigned__')}>
+              <div className={`w-full md:flex-shrink-0 ${collapsed ? 'md:w-11' : 'md:w-72'}`}>
+                <button className={`flex items-center gap-2 mb-3 px-1 w-full ${collapsed ? 'md:flex-col md:mb-0 md:px-0 md:py-3 md:w-11 md:rounded-xl md:bg-muted/50 md:hover:bg-muted' : ''}`} title={collapsed ? 'Mostrar coluna' : 'Minimizar coluna'} onClick={() => toggleStageCollapsed('__unassigned__')}>
                   <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40 shrink-0" />
-                  <span className="text-sm font-semibold">Sem etapa</span>
-                  <Badge variant="secondary" className="text-[10px] ml-auto">{unassigned.length}</Badge>
+                  <span className={`text-sm font-semibold ${collapsed ? 'md:[writing-mode:vertical-rl] md:rotate-180' : ''}`}>Sem etapa</span>
+                  <Badge variant="secondary" className={`text-[10px] ml-auto ${collapsed ? 'md:ml-0' : ''}`}>{unassigned.length}</Badge>
                   {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                 </button>
                 {!collapsed && (
@@ -704,11 +704,11 @@ export default function Prazos() {
             const items = filtered.filter(d => d.stage_id === stage.id)
             const collapsed = collapsedStages.has(stage.id)
             return (
-              <div key={stage.id} className={`w-full md:flex-shrink-0 ${collapsed ? 'md:w-44' : 'md:w-72'}`}>
-                <button className="flex items-center gap-2 mb-3 px-1 w-full" title={collapsed ? 'Mostrar coluna' : 'Minimizar coluna'} onClick={() => toggleStageCollapsed(stage.id)}>
+              <div key={stage.id} className={`w-full md:flex-shrink-0 ${collapsed ? 'md:w-11' : 'md:w-72'}`}>
+                <button className={`flex items-center gap-2 mb-3 px-1 w-full ${collapsed ? 'md:flex-col md:mb-0 md:px-0 md:py-3 md:w-11 md:rounded-xl md:bg-muted/50 md:hover:bg-muted' : ''}`} title={collapsed ? 'Mostrar coluna' : 'Minimizar coluna'} onClick={() => toggleStageCollapsed(stage.id)}>
                   <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
-                  <span className="text-sm font-semibold">{stage.name}</span>
-                  <Badge variant="secondary" className="text-[10px] ml-auto">{items.length}</Badge>
+                  <span className={`text-sm font-semibold ${collapsed ? 'md:[writing-mode:vertical-rl] md:rotate-180 md:max-h-40 md:truncate' : ''}`}>{stage.name}</span>
+                  <Badge variant="secondary" className={`text-[10px] ml-auto ${collapsed ? 'md:ml-0' : ''}`}>{items.length}</Badge>
                   {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                 </button>
                 {!collapsed && (
