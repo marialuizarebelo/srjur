@@ -183,17 +183,20 @@ export default function Calendario() {
     if (!editTarget || saving) return
     setSaving(true)
     try {
+      const rawId = editTarget.id.replace(/^[tdm]-/, '')
+      let error: { message: string } | null = null
       if (editTarget.type === 'prazo') {
-        await supabase.from('deadlines').update({
+        ;({ error } = await supabase.from('deadlines').update({
           title: ef.title, due_date: ef.date, status: ef.status,
           responsible_ids: ef.responsible_ids, responsible: namesFor(ef.responsible_ids),
-        }).eq('id', editTarget.id)
+        }).eq('id', rawId))
       } else {
-        await supabase.from('tasks').update({
+        ;({ error } = await supabase.from('tasks').update({
           title: ef.title, due_date: ef.date, due_time: ef.time || null, status: ef.status,
           responsible_ids: ef.responsible_ids, responsible: namesFor(ef.responsible_ids),
-        }).eq('id', editTarget.id)
+        }).eq('id', rawId))
       }
+      if (error) { toast.error('Não foi possível atualizar: ' + error.message); return }
       toast.success('Atualizado!')
       setEditOpen(false)
       load()
@@ -224,7 +227,9 @@ export default function Calendario() {
     if (!editTarget) return
     if (!confirm('Excluir este evento?')) return
     const table = editTarget.type === 'prazo' ? 'deadlines' : 'tasks'
-    await supabase.from(table).delete().eq('id', editTarget.id)
+    const rawId = editTarget.id.replace(/^[tdm]-/, '')
+    const { error } = await supabase.from(table).delete().eq('id', rawId)
+    if (error) { toast.error('Não foi possível excluir: ' + error.message); return }
     toast.success('Excluído')
     setEditOpen(false)
     load()
