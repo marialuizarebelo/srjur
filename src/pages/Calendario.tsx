@@ -28,7 +28,7 @@ import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { ProcessCombobox } from '@/components/ProcessCombobox'
-import { TIPOS_PRAZO } from '@/lib/deadlineTypes'
+import { TipoPrazoCombobox } from '@/components/TipoPrazoCombobox'
 
 type ViewMode = 'mes' | 'semana' | 'dia'
 
@@ -1010,9 +1010,15 @@ export default function Calendario() {
               <Input value={qf.title} onChange={e => setQf(f => ({ ...f, title: e.target.value }))} className="h-10" autoFocus />
             </div>
             {(() => {
-              const options: [string, string][] = qf.tipo === 'prazo'
-                ? TIPOS_PRAZO.map(x => [x, x] as [string, string])
-                : qf.tipo === 'compromisso'
+              if (qf.tipo === 'prazo') {
+                return (
+                  <div className="space-y-1.5">
+                    <Label>Tipo do prazo</Label>
+                    <TipoPrazoCombobox value={qf.subtype} onChange={v => setQf(f => ({ ...f, subtype: v }))} placeholder="Selecione" />
+                  </div>
+                )
+              }
+              const options: [string, string][] = qf.tipo === 'compromisso'
                   ? [['compromisso', 'Compromisso'], ['reuniao', 'Reunião'], ['audiencia', 'Audiência'], ['diligencia', 'Diligência']]
                   : [['tarefa', 'Tarefa'], ['interno', 'Interno'], ['cliente', 'Cliente']]
               return (
