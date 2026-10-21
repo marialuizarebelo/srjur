@@ -261,7 +261,7 @@ export default function Prazos() {
 
   const resetDf = () => {
     setDf({ title: '', tipo: '', start_date: '', due_date: '', client_id: '', process_id: '', status: 'pendente',
-      responsible_ids: [], notes: '', source: 'Manual', portal_visible: false, stage_id: '', drive_url: '',
+      responsible_ids: [], notes: '', source: 'Manual', portal_visible: false, stage_id: stages[0]?.id ?? '', drive_url: '',
       _intimacaoId: '', _intimacaoTipo: '', _intimacaoText: '' })
     setEditing(null)
   }
@@ -955,7 +955,7 @@ export default function Prazos() {
                       {stages.find(s => s.id === df.stage_id)?.name ?? 'Sem etapa'}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="min-w-72">
                     <SelectItem value="">Sem etapa</SelectItem>
                     {stages.map(s => (
                       <SelectItem key={s.id} value={s.id}>
@@ -967,6 +967,7 @@ export default function Prazos() {
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-[11px] text-muted-foreground">A etapa mostra em que ponto o prazo está sendo tratado (por exemplo, em análise ou aguardando decisão). O tipo e as datas ficam nos outros campos.</p>
               </div>
             </div>
 
@@ -1009,6 +1010,7 @@ export default function Prazos() {
           <DialogHeader>
             <DialogTitle>Gerenciar Etapas</DialogTitle>
           </DialogHeader>
+          <p className="text-xs text-muted-foreground">Use as etapas para acompanhar o andamento do trabalho em cada prazo, como Identificado, Em análise, Aguardando peças e Em recurso. O tipo do prazo e as datas ficam no próprio cadastro, e para finalizar basta marcar o prazo como cumprido.</p>
           <div className="pt-2">
             {stages.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">Nenhuma etapa criada</p>
