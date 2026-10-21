@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getDriveAccessToken, createDriveFolder, listDriveFiles, type DriveFolder } from '@/lib/googleDrive'
-import { FolderOpen, FolderPlus, Loader2, ExternalLink, X } from 'lucide-react'
+import { FolderOpen, FolderPlus, Loader2, ExternalLink, Link2, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 const PICKER_API_KEY = import.meta.env.VITE_GOOGLE_PICKER_API_KEY as string | undefined
@@ -35,9 +35,12 @@ interface DriveFolderPickerProps {
   autoNumberLabel?: string
   /** Cor da pasta ao criar (paleta oficial do Drive, ex: DRIVE_COLOR_RED) */
   createColor?: string
+  /** Permite colar o link de uma pasta ou documento de outro serviço (OneDrive, Dropbox etc.) */
+  allowLink?: boolean
 }
 
-export function DriveFolderPicker({ value, onChange, folderNameSuggestion, parentFolderId, autoNumberLabel, createColor }: DriveFolderPickerProps) {
+export function DriveFolderPicker({ value, onChange, folderNameSuggestion, parentFolderId, autoNumberLabel, createColor, allowLink }: DriveFolderPickerProps) {
+  const [linkText, setLinkText] = useState('')
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [namingLoading, setNamingLoading] = useState(false)
@@ -117,6 +120,27 @@ export function DriveFolderPicker({ value, onChange, folderNameSuggestion, paren
     }
   }
 
+  function applyLink() {
+    const url = linkText.trim()
+    if (!/^https?:\/\/\S+$/i.test(url)) { toast.error('Cole um link completo, começando com http:// ou https://'); return }
+    onChange({ folder_id: '', drive_url: url })
+    setLinkText('')
+  }
+
+  if (!value.folder_id && value.drive_url) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
+        <Link2 className="h-4 w-4 text-primary shrink-0" />
+        <a href={value.drive_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline flex-1 truncate flex items-center gap-1">
+          Abrir link <ExternalLink className="h-3 w-3" />
+        </a>
+        <button type="button" onClick={() => onChange({ folder_id: '', drive_url: '' })} className="p-1 hover:bg-muted rounded" title="Remover link">
+          <X className="h-3.5 w-3.5 text-muted-foreground" />
+        </button>
+      </div>
+    )
+  }
+
   if (value.folder_id && value.drive_url) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
@@ -150,6 +174,14 @@ export function DriveFolderPicker({ value, onChange, folderNameSuggestion, paren
           <Button type="button" size="sm" onClick={handleCreate} disabled={creating || namingLoading || !newFolderName.trim()}>
             {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Criar'}
           </Button>
+        </div>
+      )}
+      {allowLink && (
+        <div className="flex gap-2">
+          <Input value={linkText} onChange={e => setLinkText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyLink() } }}
+            placeholder="Ou cole o link de uma pasta ou documento (OneDrive, Dropbox, outro)" className="h-9 text-xs" />
+          <Button type="button" size="sm" variant="outline" onClick={applyLink} disabled={!linkText.trim()}>Usar link</Button>
         </div>
       )}
     </div>

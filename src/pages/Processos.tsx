@@ -1397,7 +1397,7 @@ export default function Processos() {
             </div>
 
             <div className="space-y-2">
-              <Label>Pasta no Google Drive</Label>
+              <Label>Pasta ou link de documentos</Label>
               {(() => {
                 const linkedClient = clients.find(c => c.id === pf.client_id)
                 return (
@@ -1408,6 +1408,7 @@ export default function Processos() {
                       </p>
                     )}
                     <DriveFolderPicker
+                      allowLink
                       value={{ folder_id: pf.drive_folder_id, drive_url: pf.drive_url }}
                       onChange={f => setPf(prev => ({ ...prev, drive_folder_id: f.folder_id, drive_url: f.drive_url }))}
                       folderNameSuggestion={pf.title || pf.number}

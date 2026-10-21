@@ -768,6 +768,16 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
             </div>
           )}
 
+          {/* Link de pasta ou documentos (OneDrive, Dropbox etc.) */}
+          {!client.drive_folder_id && client.drive_url && (
+            <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pasta ou documentos</p>
+              <button onClick={() => window.open(client.drive_url!, '_blank')} className="flex items-center gap-1 text-[11px] text-primary hover:underline">
+                <ExternalLink className="h-3 w-3" />Abrir link
+              </button>
+            </div>
+          )}
+
           {/* Pasta no Drive */}
           {client.drive_folder_id && (
             <div className="rounded-xl border border-border/60 overflow-hidden">
@@ -1890,8 +1900,9 @@ export default function Clientes() {
             </div>
 
             <div className="space-y-2">
-              <Label>Pasta no Google Drive</Label>
+              <Label>Pasta ou link de documentos</Label>
               <DriveFolderPicker
+                allowLink
                 value={{ folder_id: lf.drive_folder_id, drive_url: lf.drive_url }}
                 onChange={f => setLf(prev => ({ ...prev, drive_folder_id: f.folder_id, drive_url: f.drive_url }))}
                 folderNameSuggestion={lf.name ? `${lf.name} - LEAD` : ''}

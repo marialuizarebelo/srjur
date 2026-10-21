@@ -608,6 +608,7 @@ export function ClientFormDialog({
                 onChange={f => setForm(prev => ({ ...prev, drive_folder_id: f.folder_id, drive_url: f.drive_url }))}
                 folderNameSuggestion={form.name}
                 parentFolderId={driveRootFolderId}
+                allowLink
               />
               {form.drive_folder_id && (
                 <div className="rounded-xl border border-border/60 p-3 mt-2">

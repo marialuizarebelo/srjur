@@ -980,11 +980,11 @@ export default function Prazos() {
             </div>
 
             <div className="space-y-1.5 min-w-0">
-              <Label>Documento do Drive (opcional)</Label>
+              <Label>Link do documento (opcional)</Label>
               <Input
                 value={df.drive_url}
                 onChange={e => setDf(f => ({ ...f, drive_url: e.target.value }))}
-                placeholder="https://drive.google.com/..."
+                placeholder="https://... (Google Drive, OneDrive, outro)"
                 className="h-10"
               />
             </div>
