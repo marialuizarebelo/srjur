@@ -230,12 +230,15 @@ export default function Prazos() {
   const [viewMode, setViewMode] = useState<'lista' | 'kanban'>('lista')
   const pinnedView = usePinnedView('prazos_view', 'lista')
   useEffect(() => { if (pinnedView.loaded && pinnedView.isPinned) setViewMode(pinnedView.pinnedValue as any) }, [pinnedView.loaded])
-  const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set())
+  const [collapsedStages, setCollapsedStages] = useState<Set<string>>(() => {
+    try { return new Set<string>(JSON.parse(localStorage.getItem('prazos-colunas-recolhidas') ?? '[]')) } catch { return new Set<string>() }
+  })
   const toggleStageCollapsed = (id: string) => {
     setCollapsedStages(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
+      try { localStorage.setItem('prazos-colunas-recolhidas', JSON.stringify([...next])) } catch { /* sem armazenamento: só não lembra */ }
       return next
     })
   }
@@ -675,12 +678,12 @@ export default function Prazos() {
           {(() => {
             const collapsed = collapsedStages.has('__unassigned__')
             return (
-              <div className="w-full md:flex-shrink-0 md:w-72">
-                <button className="flex items-center gap-2 mb-3 px-1 w-full md:cursor-default" onClick={() => toggleStageCollapsed('__unassigned__')}>
+              <div className={`w-full md:flex-shrink-0 ${collapsed ? 'md:w-44' : 'md:w-72'}`}>
+                <button className="flex items-center gap-2 mb-3 px-1 w-full" title={collapsed ? 'Mostrar coluna' : 'Minimizar coluna'} onClick={() => toggleStageCollapsed('__unassigned__')}>
                   <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40 shrink-0" />
                   <span className="text-sm font-semibold">Sem etapa</span>
                   <Badge variant="secondary" className="text-[10px] ml-auto">{unassigned.length}</Badge>
-                  {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+                  {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                 </button>
                 {!collapsed && (
                   <DroppableColumn id="__unassigned__" className="space-y-2 min-h-[60px] p-1 -m-1">
@@ -698,12 +701,12 @@ export default function Prazos() {
             const items = filtered.filter(d => d.stage_id === stage.id)
             const collapsed = collapsedStages.has(stage.id)
             return (
-              <div key={stage.id} className="w-full md:flex-shrink-0 md:w-72">
-                <button className="flex items-center gap-2 mb-3 px-1 w-full md:cursor-default" onClick={() => toggleStageCollapsed(stage.id)}>
+              <div key={stage.id} className={`w-full md:flex-shrink-0 ${collapsed ? 'md:w-44' : 'md:w-72'}`}>
+                <button className="flex items-center gap-2 mb-3 px-1 w-full" title={collapsed ? 'Mostrar coluna' : 'Minimizar coluna'} onClick={() => toggleStageCollapsed(stage.id)}>
                   <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
                   <span className="text-sm font-semibold">{stage.name}</span>
                   <Badge variant="secondary" className="text-[10px] ml-auto">{items.length}</Badge>
-                  {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+                  {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                 </button>
                 {!collapsed && (
                   <DroppableColumn id={stage.id} className="space-y-2 min-h-[60px] rounded-xl bg-muted/30 p-2">
