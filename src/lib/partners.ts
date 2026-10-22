@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 
-export type PartnerBase = 'inicial' | 'mensalidade' | 'tudo'
-
-export const PARTNER_BASES: { value: PartnerBase; label: string; short: string }[] = [
-  { value: 'inicial', label: 'Honorários iniciais / implementação', short: 'Iniciais' },
-  { value: 'mensalidade', label: 'Mensalidades', short: 'Mensalidades' },
-  { value: 'tudo', label: 'Tudo (iniciais e mensalidades)', short: 'Tudo' },
-]
-export const baseLabel = (b: string | null | undefined) => PARTNER_BASES.find(x => x.value === b)?.short ?? '—'
+// Categorias de receita do Financeiro: a comissão incide sobre as categorias escolhidas, então a
+// lista precisa ser exatamente a que existe no lançamento de receita.
+export const RECEITA_CATEGORIES = ['Honorários Iniciais', 'Implementação', 'Mensalidade', 'Acordo', 'Consultoria', 'Êxito', 'Outros']
+export const DEFAULT_PARTNER_CATEGORIES = ['Honorários Iniciais', 'Implementação']
+const norm = (s: string) => s.trim().toLowerCase()
+export const hasCategory = (list: string[] | null | undefined, c: string) => (list ?? []).some(x => norm(x) === norm(c))
+export const categoriesLabel = (list: string[] | null | undefined) => (list && list.length ? list.join(', ') : 'nenhuma categoria')
 
 export const PARTNER_KINDS = [
   { value: 'pessoa', label: 'Pessoa' },
@@ -32,7 +31,8 @@ export interface Partner {
   drive_url: string | null
   client_id: string | null
   default_pct: number | null
-  default_base: PartnerBase
+  default_categories: string[]
+  payment_days: number
   valid_from: string | null
   valid_until: string | null
 }
@@ -43,7 +43,7 @@ export interface PartnerLink {
   client_id: string
   process_id: string | null
   pct: number
-  base: PartnerBase
+  categories: string[]
   valid_from: string
   valid_until: string | null
   active: boolean
@@ -66,7 +66,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10)
 export interface ClientPartnerFields {
   partner_id?: string
   referral_fee_pct: string
-  partner_base?: string
+  partner_categories?: string[]
   partner_valid_from?: string
   partner_valid_until?: string
 }
@@ -80,7 +80,7 @@ export async function loadClientPartnerLink(clientId: string): Promise<Partial<C
   return {
     partner_id: data.partner_id,
     referral_fee_pct: String(data.pct).replace('.', ','),
-    partner_base: data.base,
+    partner_categories: data.categories ?? DEFAULT_PARTNER_CATEGORIES,
     partner_valid_from: data.valid_from ?? '',
     partner_valid_until: data.valid_until ?? '',
   }
@@ -105,7 +105,7 @@ export async function syncClientPartnerLink(clientId: string, f: ClientPartnerFi
 
   const pct = parseFloat((f.referral_fee_pct || '').replace(',', '.'))
   if (isNaN(pct) || pct < 0 || pct > 100) return 'Informe a % de comissão do parceiro (entre 0 e 100).'
-  const base = (f.partner_base || 'inicial') as PartnerBase
+  const categories = f.partner_categories && f.partner_categories.length ? f.partner_categories : DEFAULT_PARTNER_CATEGORIES
   const until = f.partner_valid_until || null
 
   // desativa vínculo com outro parceiro
@@ -118,12 +118,12 @@ export async function syncClientPartnerLink(clientId: string, f: ClientPartnerFi
   const mine = links.find(l => l.partner_id === f.partner_id)
   if (mine) {
     const { error } = await supabase.from('partner_clients').update({
-      pct, base, valid_from: f.partner_valid_from || mine.valid_from, valid_until: until, active: true,
+      pct, categories, valid_from: f.partner_valid_from || mine.valid_from, valid_until: until, active: true,
     }).eq('id', mine.id)
     return error?.message ?? null
   }
   const { error } = await supabase.from('partner_clients').insert({
-    partner_id: f.partner_id, client_id: clientId, pct, base,
+    partner_id: f.partner_id, client_id: clientId, pct, categories,
     valid_from: f.partner_valid_from || todayISO(), valid_until: until,
   })
   return error?.message ?? null

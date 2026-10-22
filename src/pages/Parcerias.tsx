@@ -16,24 +16,28 @@ import { Sensitive } from '@/components/Sensitive'
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { ProcessCombobox } from '@/components/ProcessCombobox'
 import { downloadPartnerReceipt, type PartnerReceipt } from '@/lib/partnerReceipt'
-import { PARTNER_BASES, PARTNER_KINDS, baseLabel, type Partner, type PartnerLink, type PartnerBase } from '@/lib/partners'
+import { PARTNER_KINDS, DEFAULT_PARTNER_CATEGORIES, categoriesLabel, type Partner, type PartnerLink } from '@/lib/partners'
+import { CategoryChips } from '@/components/CategoryChips'
 
 interface Commission {
   id: string; partner_id: string; link_id: string | null; client_id: string | null; source_finance_id: string | null
   base_amount: number; pct: number; amount: number; received_at: string; needs_review: boolean
+  historical: boolean; paid_at: string | null; notes: string | null
 }
-interface Expense { id: string; partner_commission_id: string; paid: boolean; payment_date: string | null }
+interface PaidReceita { id: string; description: string; value: number; date: string; payment_date: string | null }
+interface Expense { id: string; partner_commission_id: string; paid: boolean; payment_date: string | null; due_date: string | null }
 interface Receipt extends PartnerReceipt { id: string; commission_id: string | null; partner_id: string }
 interface ClientLite { id: string; name: string }
 interface ProcessLite { id: string; title: string; number: string | null; client_id: string | null }
 
 const emptyPartner = {
   name: '', kind: 'pessoa', document: '', oab: '', email: '', phone: '', pix_key: '', bank_info: '', notes: '',
-  status: 'ativo', started_at: '', drive_url: '', client_id: '', default_pct: '', default_base: 'inicial' as PartnerBase,
+  status: 'ativo', started_at: '', drive_url: '', client_id: '', default_pct: '', default_categories: DEFAULT_PARTNER_CATEGORIES as string[], payment_days: '5',
   valid_from: '', valid_until: '',
 }
 type PartnerForm = typeof emptyPartner
 
+type CStatus = 'a_pagar' | 'atrasada' | 'paga' | 'revisar'
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const pctStr = (n: number | null | undefined) => (n == null ? '' : String(n).replace('.', ','))
 const parsePct = (s: string) => { const n = parseFloat(s.replace(',', '.')); return isNaN(n) ? null : n }
@@ -63,14 +67,14 @@ export default function Parcerias() {
   const [search, setSearch] = useState('')
   const [showEnded, setShowEnded] = useState(false)
   const [openId, setOpenId] = useState<string | 'new' | null>(null)
-  const [statusFilter, setStatusFilter] = useState<'todas' | 'a_pagar' | 'paga' | 'revisar'>('todas')
+  const [statusFilter, setStatusFilter] = useState<'todas' | 'a_pagar' | 'atrasada' | 'paga' | 'revisar'>('todas')
 
   const load = async () => {
     const [p, l, c, e, r, cl, pr] = await Promise.all([
       supabase.from('partners').select('*').order('name'),
       supabase.from('partner_clients').select('*'),
       supabase.from('partner_commissions').select('*').order('received_at', { ascending: false }),
-      supabase.from('finance').select('id, partner_commission_id, paid, payment_date').not('partner_commission_id', 'is', null),
+      supabase.from('finance').select('id, partner_commission_id, paid, payment_date, due_date').not('partner_commission_id', 'is', null),
       supabase.from('partner_receipts').select('*').is('voided_at', null).order('created_at', { ascending: false }),
       supabase.from('clients').select('id, name').order('name'),
       supabase.from('processes').select('id, title, number, client_id').order('title'),
@@ -93,16 +97,20 @@ export default function Parcerias() {
   const clientName = useMemo(() => new Map(clients.map(c => [c.id, c.name])), [clients])
   const partnerName = useMemo(() => new Map(partners.map(p => [p.id, p.name])), [partners])
 
-  const statusOf = (c: Commission): 'a_pagar' | 'paga' | 'revisar' => {
+  const statusOf = (c: Commission): CStatus => {
     const e = expenseOf.get(c.id)
+    if (c.historical) return 'paga'
     if (c.needs_review) return 'revisar'
-    return e?.paid ? 'paga' : 'a_pagar'
+    if (e?.paid) return 'paga'
+    return e?.due_date && e.due_date < todayISO() ? 'atrasada' : 'a_pagar'
   }
+  const dueOf = (c: Commission) => expenseOf.get(c.id)?.due_date ?? null
 
   const stats = useMemo(() => {
     const month = todayISO().slice(0, 7)
-    const aPagar = commissions.filter(c => statusOf(c) === 'a_pagar').reduce((s, c) => s + Number(c.amount), 0)
+    const aPagar = commissions.filter(c => (statusOf(c) === 'a_pagar' || statusOf(c) === 'atrasada')).reduce((s, c) => s + Number(c.amount), 0)
     const pagoMes = commissions.filter(c => {
+      if (c.historical) return (c.paid_at ?? '').startsWith(month)
       const e = expenseOf.get(c.id)
       return e?.paid && (e.payment_date ?? '').startsWith(month)
     }).reduce((s, c) => s + Number(c.amount), 0)
@@ -117,7 +125,7 @@ export default function Parcerias() {
     const mine = commissions.filter(c => c.partner_id === id)
     return {
       clientes: links.filter(l => l.partner_id === id && l.active).length,
-      aPagar: mine.filter(c => statusOf(c) === 'a_pagar').reduce((s, c) => s + Number(c.amount), 0),
+      aPagar: mine.filter(c => (statusOf(c) === 'a_pagar' || statusOf(c) === 'atrasada')).reduce((s, c) => s + Number(c.amount), 0),
       pago: mine.filter(c => statusOf(c) === 'paga').reduce((s, c) => s + Number(c.amount), 0),
     }
   }
@@ -126,8 +134,9 @@ export default function Parcerias() {
     (showEnded || p.status === 'ativo') && (!search.trim() || p.name.toLowerCase().includes(search.trim().toLowerCase())))
   const visibleCommissions = commissions.filter(c => statusFilter === 'todas' || statusOf(c) === statusFilter)
 
-  const statusBadge = (s: 'a_pagar' | 'paga' | 'revisar') =>
-    s === 'paga' ? <Badge className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-0">Paga</Badge>
+  const statusBadge = (s: CStatus) =>
+    s === 'atrasada' ? <Badge className="text-[10px] bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border-0">Atrasada</Badge>
+      : s === 'paga' ? <Badge className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-0">Paga</Badge>
       : s === 'revisar' ? <Badge className="text-[10px] bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border-0">Revisar</Badge>
         : <Badge className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-0">A pagar</Badge>
 
@@ -165,7 +174,7 @@ export default function Parcerias() {
           </div>
         ) : (
           <div className="ml-auto flex items-center gap-1.5">
-            {([['todas', 'Todas'], ['a_pagar', 'A pagar'], ['paga', 'Pagas'], ['revisar', 'Revisar']] as const).map(([k, label]) => (
+            {([['todas', 'Todas'], ['a_pagar', 'A pagar'], ['atrasada', 'Atrasadas'], ['paga', 'Pagas'], ['revisar', 'Revisar']] as const).map(([k, label]) => (
               <button key={k} onClick={() => setStatusFilter(k)}
                 className={`px-2.5 py-1 rounded-md text-xs border ${statusFilter === k ? 'bg-primary/10 border-primary/30 text-primary' : 'border-transparent text-muted-foreground hover:bg-muted'}`}>{label}</button>
             ))}
@@ -197,7 +206,7 @@ export default function Parcerias() {
                     <TableRow key={p.id} className="cursor-pointer" onClick={() => setOpenId(p.id)}>
                       <TableCell className="font-medium">{p.name}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{PARTNER_KINDS.find(k => k.value === p.kind)?.label ?? p.kind}</TableCell>
-                      <TableCell className="text-sm">{p.default_pct != null ? `${pctStr(p.default_pct)}% · ${baseLabel(p.default_base)}` : '—'}</TableCell>
+                      <TableCell className="text-sm"><span className="block max-w-[220px] truncate" title={categoriesLabel(p.default_categories)}>{p.default_pct != null ? `${pctStr(p.default_pct)}% · ${categoriesLabel(p.default_categories)}` : '—'}</span></TableCell>
                       <TableCell className="text-right text-sm">{s.clientes}</TableCell>
                       <TableCell className="text-right text-sm"><Sensitive>{fmtBRL(s.aPagar)}</Sensitive></TableCell>
                       <TableCell className="text-right text-sm"><Sensitive>{fmtBRL(s.pago)}</Sensitive></TableCell>
@@ -218,12 +227,12 @@ export default function Parcerias() {
               <TableRow>
                 <TableHead>Recebido em</TableHead><TableHead>Parceiro</TableHead><TableHead>Cliente</TableHead>
                 <TableHead className="text-right">Base (líquido)</TableHead><TableHead className="text-right">%</TableHead>
-                <TableHead className="text-right">Comissão</TableHead><TableHead>Status</TableHead><TableHead>Recibo</TableHead>
+                <TableHead className="text-right">Comissão</TableHead><TableHead>Pagar até</TableHead><TableHead>Status</TableHead><TableHead>Recibo</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visibleCommissions.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma comissão</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhuma comissão</TableCell></TableRow>
               ) : visibleCommissions.map(c => {
                 const rec = receiptOf.get(c.id)
                 return (
@@ -234,6 +243,7 @@ export default function Parcerias() {
                     <TableCell className="text-right text-sm"><Sensitive>{fmtBRL(Number(c.base_amount))}</Sensitive></TableCell>
                     <TableCell className="text-right text-sm">{pctStr(c.pct)}%</TableCell>
                     <TableCell className="text-right text-sm font-medium"><Sensitive>{fmtBRL(Number(c.amount))}</Sensitive></TableCell>
+                    <TableCell className="text-sm">{statusOf(c) === 'paga' ? '—' : (dueOf(c) ? fmtDate(dueOf(c) as string) : '—')}</TableCell>
                     <TableCell>{statusBadge(statusOf(c))}</TableCell>
                     <TableCell>{rec && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => downloadPartnerReceipt(rec)}><FileDown className="h-3 w-3 mr-1" />{rec.number}</Button>}</TableCell>
                   </TableRow>
@@ -256,7 +266,7 @@ export default function Parcerias() {
           commissions={commissions.filter(c => c.partner_id === openId)}
           receipts={receipts.filter(r => r.partner_id === openId)}
           clients={clients} processes={processes} clientName={clientName}
-          statusOf={statusOf} statusBadge={statusBadge} receiptOf={receiptOf}
+          statusOf={statusOf} statusBadge={statusBadge} dueOf={dueOf} receiptOf={receiptOf}
           onClose={() => setOpenId(null)}
           onChanged={load}
           onCreated={id => { load(); setOpenId(id) }}
@@ -267,7 +277,7 @@ export default function Parcerias() {
 }
 
 // ── Ficha do parceiro ───────────────────────────────────────────────────────
-function PartnerDialog({ partner, links, commissions, receipts, clients, processes, clientName, statusOf, statusBadge, receiptOf, onClose, onChanged, onCreated }: {
+function PartnerDialog({ partner, links, commissions, receipts, clients, processes, clientName, statusOf, statusBadge, dueOf, receiptOf, onClose, onChanged, onCreated }: {
   partner: Partner | null
   links: PartnerLink[]
   commissions: Commission[]
@@ -275,8 +285,9 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
   clients: ClientLite[]
   processes: ProcessLite[]
   clientName: Map<string, string>
-  statusOf: (c: Commission) => 'a_pagar' | 'paga' | 'revisar'
-  statusBadge: (s: 'a_pagar' | 'paga' | 'revisar') => React.ReactNode
+  statusOf: (c: Commission) => CStatus
+  statusBadge: (s: CStatus) => React.ReactNode
+  dueOf: (c: Commission) => string | null
   receiptOf: Map<string, Receipt>
   onClose: () => void
   onChanged: () => void
@@ -288,26 +299,30 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
     name: partner.name, kind: partner.kind, document: partner.document ?? '', oab: partner.oab ?? '', email: partner.email ?? '',
     phone: partner.phone ?? '', pix_key: partner.pix_key ?? '', bank_info: partner.bank_info ?? '', notes: partner.notes ?? '',
     status: partner.status, started_at: partner.started_at ?? '', drive_url: partner.drive_url ?? '', client_id: partner.client_id ?? '',
-    default_pct: pctStr(partner.default_pct), default_base: partner.default_base, valid_from: partner.valid_from ?? '', valid_until: partner.valid_until ?? '',
+    default_pct: pctStr(partner.default_pct), default_categories: partner.default_categories ?? DEFAULT_PARTNER_CATEGORIES, payment_days: String(partner.payment_days ?? 5), valid_from: partner.valid_from ?? '', valid_until: partner.valid_until ?? '',
   } : { ...emptyPartner })
   const [saving, setSaving] = useState(false)
   const set = <K extends keyof PartnerForm>(k: K, v: PartnerForm[K]) => setForm(f => ({ ...f, [k]: v }))
 
   // vincular cliente
+  const [histOpen, setHistOpen] = useState(false)
+  const [hf, setHf] = useState({ client_id: '', source: '', base: '', pct: '', amount: '', received_at: '', paid_at: '', notes: '', createLink: true })
+  const [histPayments, setHistPayments] = useState<PaidReceita[]>([])
   const [linkOpen, setLinkOpen] = useState(false)
-  const [lf, setLf] = useState({ client_id: '', process_id: '', pct: '', base: 'inicial' as PartnerBase, valid_from: todayISO(), valid_until: '', indeterminate: true, notes: '' })
+  const [lf, setLf] = useState({ client_id: '', process_id: '', pct: '', categories: DEFAULT_PARTNER_CATEGORIES as string[], valid_from: todayISO(), valid_until: '', indeterminate: true, notes: '' })
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null)
 
   const save = async () => {
     if (saving) return
     if (!form.name.trim()) { toast.error('Informe o nome do parceiro'); return }
     const pct = form.default_pct.trim() ? parsePct(form.default_pct) : null
+    if (form.default_categories.length === 0) { toast.error('Escolha ao menos uma categoria de receita'); return }
     if (form.default_pct.trim() && (pct == null || pct < 0 || pct > 100)) { toast.error('% de comissão inválida'); return }
     const payload = {
       name: form.name.trim(), kind: form.kind, document: form.document || null, oab: form.oab || null, email: form.email || null,
       phone: form.phone || null, pix_key: form.pix_key || null, bank_info: form.bank_info || null, notes: form.notes || null,
       status: form.status, started_at: form.started_at || null, drive_url: form.drive_url || null, client_id: form.client_id || null,
-      default_pct: pct, default_base: form.default_base, valid_from: form.valid_from || null, valid_until: form.valid_until || null,
+      default_pct: pct, default_categories: form.default_categories, payment_days: Math.max(0, parseInt(form.payment_days) || 0), valid_from: form.valid_from || null, valid_until: form.valid_until || null,
     }
     setSaving(true)
     try {
@@ -332,14 +347,72 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
     toast.success('Parceiro excluído'); onChanged(); onClose()
   }
 
+  const parseMoney = (s: string) => { const n = parseFloat(s.replace(/\./g, '').replace(',', '.')); return isNaN(n) ? null : n }
+  const moneyStr = (n: number) => n.toFixed(2).replace('.', ',')
+  const openHist = () => {
+    setHf({ client_id: '', source: '', base: '', pct: pctStr(partner?.default_pct), amount: '', received_at: '', paid_at: '', notes: '', createLink: true })
+    setHistPayments([])
+    setHistOpen(true)
+  }
+  const pickHistClient = async (id: string) => {
+    setHf(f => ({ ...f, client_id: id, source: '' }))
+    setHistPayments([])
+    if (!id) return
+    const { data } = await supabase.from('finance').select('id, description, value, date, payment_date')
+      .eq('client_id', id).eq('type', 'receita').eq('paid', true).order('date', { ascending: false })
+    setHistPayments((data ?? []) as PaidReceita[])
+  }
+  const recalcHist = (patch: Partial<typeof hf>) => setHf(f => {
+    const n = { ...f, ...patch }
+    const b = parseMoney(n.base), p = parsePct(n.pct)
+    if (('base' in patch || 'pct' in patch) && b != null && p != null) n.amount = moneyStr(Math.round(b * p) / 100)
+    return n
+  })
+  const pickHistSource = (id: string) => {
+    const r = histPayments.find(x => x.id === id)
+    if (!r) { setHf(f => ({ ...f, source: '' })); return }
+    recalcHist({ source: id, base: moneyStr(Number(r.value)), received_at: (r.payment_date ?? r.date).slice(0, 10) })
+  }
+  const saveHist = async () => {
+    if (!partner) return
+    const base = parseMoney(hf.base), pct = parsePct(hf.pct), amount = parseMoney(hf.amount)
+    if (!hf.client_id) { toast.error('Escolha o cliente'); return }
+    if (base == null || base <= 0) { toast.error('Informe o valor recebido do cliente (líquido)'); return }
+    if (pct == null || pct < 0 || pct > 100) { toast.error('Informe a % de comissão'); return }
+    if (amount == null || amount < 0) { toast.error('Informe o valor da comissão'); return }
+    if (!hf.received_at) { toast.error('Informe quando o cliente pagou'); return }
+    if (!hf.paid_at) { toast.error('Informe quando o parceiro foi pago'); return }
+    let linkId = links.find(l => l.client_id === hf.client_id && !l.process_id)?.id ?? null
+    if (!linkId && hf.createLink) {
+      const { data: nl, error: le } = await supabase.from('partner_clients').insert({
+        partner_id: partner.id, client_id: hf.client_id, pct, categories: partner.default_categories, valid_from: todayISO(),
+      }).select('id').single()
+      if (le) { toast.error('Erro ao vincular o cliente: ' + le.message); return }
+      linkId = nl.id
+      await supabase.from('clients').update({ origin: 'Indicação', referred_by: partner.name, referral_fee_pct: pct }).eq('id', hf.client_id)
+    }
+    const { error } = await supabase.from('partner_commissions').insert({
+      partner_id: partner.id, link_id: linkId, client_id: hf.client_id, source_finance_id: hf.source || null,
+      base_amount: base, pct, amount, received_at: hf.received_at, paid_at: hf.paid_at, historical: true, notes: hf.notes || null,
+    })
+    if (error) { toast.error(/duplicate|unique/i.test(error.message) ? 'Esse pagamento já tem comissão registrada para este parceiro.' : 'Erro ao registrar: ' + error.message); return }
+    toast.success('Comissão antiga registrada'); setHistOpen(false); onChanged()
+  }
+  const removeHist = async (c: Commission) => {
+    if (!confirm('Excluir este registro de histórico?')) return
+    const { error } = await supabase.from('partner_commissions').delete().eq('id', c.id)
+    if (error) { toast.error('Erro: ' + error.message); return }
+    onChanged()
+  }
+
   const openNewLink = () => {
     setEditingLinkId(null)
-    setLf({ client_id: '', process_id: '', pct: pctStr(partner?.default_pct), base: partner?.default_base ?? 'inicial', valid_from: todayISO(), valid_until: '', indeterminate: true, notes: '' })
+    setLf({ client_id: '', process_id: '', pct: pctStr(partner?.default_pct), categories: partner?.default_categories ?? DEFAULT_PARTNER_CATEGORIES, valid_from: todayISO(), valid_until: '', indeterminate: true, notes: '' })
     setLinkOpen(true)
   }
   const openEditLink = (l: PartnerLink) => {
     setEditingLinkId(l.id)
-    setLf({ client_id: l.client_id, process_id: l.process_id ?? '', pct: pctStr(l.pct), base: l.base, valid_from: l.valid_from, valid_until: l.valid_until ?? '', indeterminate: !l.valid_until, notes: l.notes ?? '' })
+    setLf({ client_id: l.client_id, process_id: l.process_id ?? '', pct: pctStr(l.pct), categories: l.categories ?? DEFAULT_PARTNER_CATEGORIES, valid_from: l.valid_from, valid_until: l.valid_until ?? '', indeterminate: !l.valid_until, notes: l.notes ?? '' })
     setLinkOpen(true)
   }
   const saveLink = async () => {
@@ -347,9 +420,10 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
     if (!lf.client_id) { toast.error('Escolha o cliente'); return }
     const pct = parsePct(lf.pct)
     if (pct == null || pct < 0 || pct > 100) { toast.error('Informe a % de comissão'); return }
+    if (lf.categories.length === 0) { toast.error('Escolha ao menos uma categoria de receita'); return }
     if (!lf.indeterminate && !lf.valid_until) { toast.error('Informe a data de fim da vigência ou marque indeterminada'); return }
     const row = {
-      partner_id: partner.id, client_id: lf.client_id, process_id: lf.process_id || null, pct, base: lf.base,
+      partner_id: partner.id, client_id: lf.client_id, process_id: lf.process_id || null, pct, categories: lf.categories,
       valid_from: lf.valid_from || todayISO(), valid_until: lf.indeterminate ? null : lf.valid_until, notes: lf.notes || null, active: true,
     }
     const { error } = editingLinkId
@@ -423,11 +497,13 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span></div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Comissão sobre</Label>
-                    <Select value={form.default_base} onValueChange={v => v && set('default_base', v as PartnerBase)}>
-                      <SelectTrigger className="h-10"><SelectValue>{PARTNER_BASES.find(b => b.value === form.default_base)?.label}</SelectValue></SelectTrigger>
-                      <SelectContent className="min-w-72">{PARTNER_BASES.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectContent>
-                    </Select>
+                    <Label>Prazo para repassar (dias úteis)</Label>
+                    <Input value={form.payment_days} onChange={e => set('payment_days', e.target.value.replace(/\D/g, ''))} className="h-10" />
+                    <p className="text-[11px] text-muted-foreground">Contado a partir do recebimento do cliente.</p>
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label>Comissão sobre (categorias do Financeiro)</Label>
+                    <CategoryChips value={form.default_categories} onChange={v => set('default_categories', v)} />
                   </div>
                   <div className="space-y-1.5"><Label>Início da parceria</Label><Input type="date" value={form.valid_from} onChange={e => set('valid_from', e.target.value)} className="h-10" /></div>
                   <div className="space-y-1.5">
@@ -478,7 +554,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                             {clientName.get(l.client_id) ?? '—'}
                             {l.process_id && <span className="block text-[11px] text-muted-foreground font-normal">só no processo {processes.find(p => p.id === l.process_id)?.title ?? ''}</span>}
                           </TableCell>
-                          <TableCell className="text-sm">{pctStr(l.pct)}% · {baseLabel(l.base)}</TableCell>
+                          <TableCell className="text-sm">{pctStr(l.pct)}% · {categoriesLabel(l.categories)}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">{vigencia(l.valid_from, l.valid_until)}</TableCell>
                           <TableCell>{l.active ? <Badge className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-0">Ativo</Badge> : <Badge variant="secondary" className="text-[10px]">Desativado</Badge>}</TableCell>
                           <TableCell className="text-right whitespace-nowrap">
@@ -498,15 +574,21 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
           )}
 
           {tab === 'comissoes' && partner && (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">Comissões geradas pelo Financeiro e o histórico de parcerias anteriores.</p>
+              <Button size="sm" variant="outline" onClick={openHist}><Plus className="h-3 w-3 mr-1" />Registrar comissão antiga</Button>
+            </div>
+          )}
+          {tab === 'comissoes' && partner && (
             commissions.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">Nenhuma comissão gerada ainda. Elas aparecem quando um cliente vinculado tem um pagamento marcado como recebido no Financeiro.</p>
+              <p className="text-sm text-muted-foreground text-center py-8">Nenhuma comissão ainda. Elas aparecem quando um cliente vinculado tem um pagamento marcado como recebido no Financeiro — ou registre as antigas acima.</p>
             ) : (
               <>
                 <div className="rounded-lg border overflow-x-auto">
                   <Table>
                     <TableHeader><TableRow>
                       <TableHead>Recebido</TableHead><TableHead>Cliente</TableHead><TableHead className="text-right">Base</TableHead>
-                      <TableHead className="text-right">Comissão</TableHead><TableHead>Status</TableHead><TableHead>Recibo</TableHead>
+                      <TableHead className="text-right">Comissão</TableHead><TableHead>Pagar até</TableHead><TableHead>Status</TableHead><TableHead>Recibo</TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
                       {commissions.map(c => {
@@ -517,8 +599,9 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                             <TableCell className="text-sm">{c.client_id ? clientName.get(c.client_id) ?? '—' : '—'}</TableCell>
                             <TableCell className="text-right text-sm"><Sensitive>{fmtBRL(Number(c.base_amount))}</Sensitive></TableCell>
                             <TableCell className="text-right text-sm font-medium"><Sensitive>{fmtBRL(Number(c.amount))}</Sensitive> <span className="text-[11px] text-muted-foreground">({pctStr(c.pct)}%)</span></TableCell>
-                            <TableCell>{statusBadge(statusOf(c))}{c.needs_review && <AlertTriangle className="inline h-3.5 w-3.5 ml-1 text-red-500" />}</TableCell>
-                            <TableCell>{rec && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => downloadPartnerReceipt(rec)}><FileDown className="h-3 w-3 mr-1" />{rec.number}</Button>}</TableCell>
+                            <TableCell className="text-sm">{statusOf(c) === 'paga' ? '—' : (dueOf(c) ? fmtDate(dueOf(c) as string) : '—')}</TableCell>
+                            <TableCell>{statusBadge(statusOf(c))}{c.historical && <Badge variant="secondary" className="text-[10px] ml-1" title={c.paid_at ? `Pago em ${fmtDate(c.paid_at)}` : undefined}>Histórico</Badge>}{c.needs_review && <AlertTriangle className="inline h-3.5 w-3.5 ml-1 text-red-500" />}</TableCell>
+                            <TableCell>{rec && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => downloadPartnerReceipt(rec)}><FileDown className="h-3 w-3 mr-1" />{rec.number}</Button>}{c.historical && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive" onClick={() => removeHist(c)}><Trash2 className="h-3 w-3" /></Button>}</TableCell>
                           </TableRow>
                         )
                       })}
@@ -536,6 +619,52 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
             <p className="text-[11px] text-muted-foreground">{receipts.length} recibo(s) emitido(s) para este parceiro.</p>
           )}
         </div>
+
+        {/* comissão antiga (histórico) */}
+        <Dialog open={histOpen} onOpenChange={setHistOpen}>
+          <DialogContent className="max-w-[560px] w-[96vw] max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Registrar comissão antiga</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">Para guardar no histórico o que já veio por esta parceria e já foi pago ao parceiro. Não cria despesa no Financeiro nem mexe no que você já lançou lá.</p>
+              <div className="space-y-1.5">
+                <Label>Cliente</Label>
+                <ClientCombobox clients={clients} value={hf.client_id} onChange={pickHistClient} allowNone={false} placeholder="Escolha o cliente" />
+              </div>
+              {hf.client_id && histPayments.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label>Pagamento do cliente no Financeiro (opcional)</Label>
+                  <Select value={hf.source || '__none__'} onValueChange={v => pickHistSource(v === '__none__' ? '' : (v ?? ''))}>
+                    <SelectTrigger className="h-10"><SelectValue>{hf.source ? (() => { const r = histPayments.find(x => x.id === hf.source); return r ? `${fmtDate(r.date)} · ${r.description}` : '' })() : 'Informar valor manualmente'}</SelectValue></SelectTrigger>
+                    <SelectContent className="min-w-80">
+                      <SelectItem value="__none__">Informar valor manualmente</SelectItem>
+                      {histPayments.map(r => <SelectItem key={r.id} value={r.id}>{fmtDate(r.date)} · {r.description} · {fmtBRL(Number(r.value))}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5"><Label>Valor recebido do cliente (líquido)</Label><Input value={hf.base} onChange={e => recalcHist({ base: e.target.value })} placeholder="0,00" className="h-10" /></div>
+                <div className="space-y-1.5">
+                  <Label>% de comissão</Label>
+                  <div className="relative"><Input value={hf.pct} onChange={e => recalcHist({ pct: e.target.value })} className="h-10 pr-8" />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span></div>
+                </div>
+                <div className="space-y-1.5"><Label>Comissão paga ao parceiro</Label><Input value={hf.amount} onChange={e => setHf(f => ({ ...f, amount: e.target.value }))} placeholder="0,00" className="h-10" /></div>
+                <div className="space-y-1.5"><Label>Cliente pagou em</Label><Input type="date" value={hf.received_at} onChange={e => setHf(f => ({ ...f, received_at: e.target.value }))} className="h-10" /></div>
+                <div className="space-y-1.5"><Label>Parceiro foi pago em</Label><Input type="date" value={hf.paid_at} onChange={e => setHf(f => ({ ...f, paid_at: e.target.value }))} className="h-10" /></div>
+              </div>
+              <div className="space-y-1.5"><Label>Observação</Label><Textarea value={hf.notes} onChange={e => setHf(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
+              {hf.client_id && !links.some(l => l.client_id === hf.client_id && !l.process_id) && (
+                <label className="flex items-start gap-2 text-sm"><Switch checked={hf.createLink} onCheckedChange={v => setHf(f => ({ ...f, createLink: v }))} />
+                  <span>Vincular este cliente ao parceiro (vale só para os próximos pagamentos, com a regra do parceiro)</span></label>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="outline" onClick={() => setHistOpen(false)}>Cancelar</Button>
+                <Button onClick={saveHist}>Registrar</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* vincular cliente */}
         <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
@@ -559,12 +688,9 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                   <div className="relative"><Input value={lf.pct} onChange={e => setLf(f => ({ ...f, pct: e.target.value }))} className="h-10 pr-8" />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span></div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Comissão sobre</Label>
-                  <Select value={lf.base} onValueChange={v => v && setLf(f => ({ ...f, base: v as PartnerBase }))}>
-                    <SelectTrigger className="h-10"><SelectValue>{PARTNER_BASES.find(b => b.value === lf.base)?.short}</SelectValue></SelectTrigger>
-                    <SelectContent className="min-w-72">{PARTNER_BASES.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectContent>
-                  </Select>
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Comissão sobre (categorias do Financeiro)</Label>
+                  <CategoryChips value={lf.categories} onChange={v => setLf(f => ({ ...f, categories: v }))} />
                 </div>
                 <div className="space-y-1.5"><Label>Vigência — início</Label><Input type="date" value={lf.valid_from} onChange={e => setLf(f => ({ ...f, valid_from: e.target.value }))} className="h-10" /></div>
                 <div className="space-y-1.5">

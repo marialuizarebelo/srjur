@@ -29,6 +29,7 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown, CheckCircle2, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { fmtBRL, fmtDate, getDaysDiff } from '@/lib/format'
+import { RECEITA_CATEGORIES } from '@/lib/partners'
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { useCollapsibleSection } from '@/hooks/useCollapsibleSection'
 import { PinViewButton } from '@/components/PinViewButton'
@@ -83,7 +84,7 @@ interface FinancePayment {
 }
 
 // ── Constants ──
-const CATEGORIES_RECEITA = ['Honorários Iniciais', 'Mensalidade', 'Acordo', 'Consultoria', 'Êxito', 'Outros']
+const CATEGORIES_RECEITA = RECEITA_CATEGORIES
 const CATEGORIES_DESPESA = ['Operacional', 'Pessoal', 'Pró-labore/Salário', 'Impostos', 'Software', 'Marketing', 'Aluguel', 'Comissão de parceria', 'Outros']
 const PAYMENT_METHODS = ['PIX/Transferência', 'Boleto', 'Cartão de Crédito', 'Cartão de Débito', 'Dinheiro']
 
@@ -1249,6 +1250,7 @@ export default function Financeiro() {
                   <SelectTrigger className="h-10"><SelectValue>{af.category}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Honorários iniciais">Honorários iniciais</SelectItem>
+                    <SelectItem value="Implementação">Implementação</SelectItem>
                     <SelectItem value="Mensalidade">Mensalidade</SelectItem>
                     <SelectItem value="Honorários de êxito">Honorários de êxito</SelectItem>
                     <SelectItem value="Outro">Outro</SelectItem>

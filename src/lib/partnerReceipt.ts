@@ -15,14 +15,15 @@ export interface PartnerReceipt {
   }
 }
 
-const dmy = (s?: string | null) => (s ? s.slice(0, 10).split('-').reverse().join('/') : '—')
+// Identidade visual do sistema: azul marinho + bege (mesmos tons da barra lateral e do fundo do app).
+const NAVY: [number, number, number] = [15, 27, 51]        // #0F1B33
+const INK: [number, number, number] = [20, 33, 61]         // #14213D
+const MUTED: [number, number, number] = [107, 118, 145]    // azul-acinzentado
+const BEIGE: [number, number, number] = [247, 243, 233]    // #F7F3E9
+const BEIGE_DEEP: [number, number, number] = [237, 229, 210]
+const BEIGE_TEXT: [number, number, number] = [245, 241, 230] // #F5F1E6
 
-function hexToRgb(hex?: string | null): [number, number, number] {
-  const m = /^#?([0-9a-f]{6})$/i.exec((hex ?? '').trim())
-  if (!m) return [207, 140, 147]
-  const n = parseInt(m[1], 16)
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-}
+const dmy = (s?: string | null) => (s ? s.slice(0, 10).split('-').reverse().join('/') : '—')
 
 async function loadImage(url?: string | null): Promise<{ data: string; w: number; h: number } | null> {
   if (!url) return null
@@ -40,65 +41,68 @@ async function loadImage(url?: string | null): Promise<{ data: string; w: number
 
 export async function buildPartnerReceiptPdf(r: PartnerReceipt): Promise<jsPDF> {
   const s = r.snapshot
-  const [cr, cg, cb] = hexToRgb(s.office_color)
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-  const W = 210, M = 20
+  const W = 210, H = 297, M = 20
   const logo = await loadImage(s.office_logo)
 
-  // faixa de cabeçalho com a cor do escritório
-  doc.setFillColor(cr, cg, cb)
-  doc.rect(0, 0, W, 34, 'F')
+  // fundo bege na página toda
+  doc.setFillColor(...BEIGE); doc.rect(0, 0, W, H, 'F')
+
+  // faixa azul marinho com logo + nome do escritório
+  doc.setFillColor(...NAVY); doc.rect(0, 0, W, 38, 'F')
   let textX = M
   if (logo) {
-    const h = 20, w = Math.min(46, (logo.w / logo.h) * h)
+    const h = 22, w = Math.min(46, (logo.w / logo.h) * h)
     try {
-      doc.setFillColor(255, 255, 255)
-      doc.roundedRect(M - 2, 7, w + 4, h + 0, 2, 2, 'F')
-      doc.addImage(logo.data, 'JPEG', M, 7, w, h)
-      textX = M + w + 8
+      doc.setFillColor(...BEIGE_TEXT)
+      doc.roundedRect(M - 1.5, 8, w + 3, h, 2.5, 2.5, 'F')
+      doc.addImage(logo.data, 'JPEG', M, 8.5, w, h - 1)
+      textX = M + w + 9
     } catch { /* logo em formato que o PDF não aceita: segue só com o nome */ }
   }
-  doc.setTextColor(255, 255, 255)
+  doc.setTextColor(...BEIGE_TEXT)
   doc.setFont('helvetica', 'bold'); doc.setFontSize(15)
-  doc.text(s.office_name ?? 'Escritório', textX, 18)
+  doc.text(s.office_name ?? 'Escritório', textX, 20)
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
-  doc.text('Recibo de pagamento de comissão de parceria', textX, 24)
+  doc.setTextColor(152, 162, 188)
+  doc.text('Recibo de pagamento de comissão de parceria', textX, 26)
 
   // título + número
-  doc.setTextColor(40, 40, 40)
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(20)
-  doc.text('RECIBO', M, 54)
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(110, 110, 110)
-  doc.text(`Nº ${r.number}`, W - M, 54, { align: 'right' })
-  doc.setDrawColor(cr, cg, cb); doc.setLineWidth(0.6); doc.line(M, 58, W - M, 58)
+  doc.setTextColor(...INK)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(22)
+  doc.text('RECIBO', M, 58)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...MUTED)
+  doc.text(`Nº ${r.number}`, W - M, 58, { align: 'right' })
+  doc.setDrawColor(...NAVY); doc.setLineWidth(0.5); doc.line(M, 62, W - M, 62)
 
   // valor em destaque
-  const tint = (c: number) => Math.round(c + (255 - c) * 0.86)
-  doc.setFillColor(tint(cr), tint(cg), tint(cb))
-  doc.roundedRect(M, 66, W - 2 * M, 24, 3, 3, 'F')
-  doc.setTextColor(110, 110, 110); doc.setFontSize(9)
-  doc.text('VALOR PAGO', M + 6, 74)
-  doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'bold'); doc.setFontSize(22)
-  doc.text(fmtBRL(r.amount), M + 6, 85)
+  doc.setFillColor(...BEIGE_DEEP)
+  doc.roundedRect(M, 70, W - 2 * M, 25, 3, 3, 'F')
+  doc.setFillColor(...NAVY); doc.roundedRect(M, 70, 2.2, 25, 1, 1, 'F')
+  doc.setTextColor(...MUTED); doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
+  doc.text('VALOR PAGO', M + 8, 78)
+  doc.setTextColor(...INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(23)
+  doc.text(fmtBRL(r.amount), M + 8, 89)
 
   // texto do recibo
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(50, 50, 50)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(...INK)
   const pct = s.pct != null ? `${String(s.pct).replace('.', ',')}%` : ''
   const texto =
     `${s.office_name ?? 'O escritório'} pagou a ${s.partner_name ?? 'o(a) parceiro(a)'} a quantia de ${fmtBRL(r.amount)}, ` +
     `referente à comissão de parceria de ${pct} sobre o pagamento recebido do(a) cliente ${s.client_name ?? '—'}` +
     `${s.received_at ? ` em ${dmy(s.received_at)}` : ''}, calculada sobre o valor líquido de ${fmtBRL(Number(s.base_amount ?? 0))}.`
   const linhas = doc.splitTextToSize(texto, W - 2 * M)
-  doc.text(linhas, M, 104)
+  doc.text(linhas, M, 108)
 
   // detalhes
-  let y = 104 + linhas.length * 5.6 + 8
+  let y = 108 + linhas.length * 5.6 + 9
   const row = (label: string, value: string) => {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(110, 110, 110)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...MUTED)
     doc.text(label.toUpperCase(), M, y)
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(40, 40, 40)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(...INK)
     doc.text(doc.splitTextToSize(value || '—', W - 2 * M - 52), M + 52, y)
-    y += 8
+    doc.setDrawColor(...BEIGE_DEEP); doc.setLineWidth(0.2); doc.line(M, y + 3, W - M, y + 3)
+    y += 9
   }
   row('Parceiro(a)', s.partner_name ?? '')
   if (s.partner_document) row('CPF / CNPJ', s.partner_document)
@@ -111,11 +115,12 @@ export async function buildPartnerReceiptPdf(r: PartnerReceipt): Promise<jsPDF> 
   if (s.payment_method) row('Forma de pagamento', s.payment_method)
   if (s.partner_pix) row('Chave PIX', s.partner_pix)
 
-  // rodapé
-  doc.setDrawColor(210, 210, 210); doc.setLineWidth(0.3); doc.line(M, 270, W - M, 270)
-  doc.setFontSize(8); doc.setTextColor(140, 140, 140)
-  doc.text(`${s.office_name ?? ''} · Recibo ${r.number}`, M, 276)
-  doc.text('Documento gerado automaticamente pelo sistema.', W - M, 276, { align: 'right' })
+  // rodapé azul marinho
+  doc.setFillColor(...NAVY); doc.rect(0, H - 16, W, 16, 'F')
+  doc.setFontSize(8); doc.setTextColor(...BEIGE_TEXT)
+  doc.text(`${s.office_name ?? ''} · Recibo ${r.number}`, M, H - 7)
+  doc.setTextColor(152, 162, 188)
+  doc.text('Documento gerado automaticamente pelo sistema.', W - M, H - 7, { align: 'right' })
   return doc
 }
 

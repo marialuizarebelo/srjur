@@ -18,7 +18,8 @@ import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { DriveFileList } from '@/components/DriveFileList'
 import { ResponsibleSelect } from '@/components/ResponsibleSelect'
 import { AREA_COLORS } from '@/lib/areaColors'
-import { usePartners, PARTNER_BASES, baseLabel, type PartnerBase } from '@/lib/partners'
+import { usePartners, DEFAULT_PARTNER_CATEGORIES, categoriesLabel } from '@/lib/partners'
+import { CategoryChips } from '@/components/CategoryChips'
 
 const AREAS = Object.keys(AREA_COLORS)
 
@@ -135,7 +136,7 @@ export interface ClientFormData {
   rep_name: string; rep_cpf: string; rep_role: string; rep_document_type: string; rep_address: string
   is_juridico: boolean; is_saas: boolean; is_cortesia: boolean
   /** Parceria (módulo Parcerias): parceiro que indicou, base e vigência da comissão. A % fica em referral_fee_pct. */
-  partner_id?: string; partner_base?: string; partner_valid_from?: string; partner_valid_until?: string
+  partner_id?: string; partner_categories?: string[]; partner_valid_from?: string; partner_valid_until?: string
 }
 
 export const emptyClientForm: ClientFormData = {
@@ -573,10 +574,10 @@ export function ClientFormDialog({
               const pickPartner = (id: string) => {
                 const p = partners.find(x => x.id === id)
                 setForm(f => id === '__none__'
-                  ? { ...f, partner_id: '', partner_base: '', partner_valid_from: '', partner_valid_until: '' }
+                  ? { ...f, partner_id: '', partner_categories: [], partner_valid_from: '', partner_valid_until: '' }
                   : { ...f, partner_id: id, referred_by: p?.name ?? f.referred_by,
                       referral_fee_pct: p?.default_pct != null ? String(p.default_pct).replace('.', ',') : f.referral_fee_pct,
-                      partner_base: p?.default_base ?? 'inicial', partner_valid_from: '', partner_valid_until: p?.valid_until ?? '' })
+                      partner_categories: p?.default_categories ?? DEFAULT_PARTNER_CATEGORIES, partner_valid_from: '', partner_valid_until: p?.valid_until ?? '' })
               }
               return (
                 <div className="space-y-4">
@@ -608,16 +609,13 @@ export function ClientFormDialog({
                   {chosen && (
                     <div className="space-y-3 rounded-xl border p-3 bg-muted/30">
                       <p className="text-xs text-muted-foreground">
-                        Regra padrão de {chosen.name}: {chosen.default_pct != null ? `${String(chosen.default_pct).replace('.', ',')}% sobre ${baseLabel(chosen.default_base).toLowerCase()}` : 'sem % padrão'}.
+                        Regra padrão de {chosen.name}: {chosen.default_pct != null ? `${String(chosen.default_pct).replace('.', ',')}% sobre ${categoriesLabel(chosen.default_categories)}` : 'sem % padrão'}.
                         Só mude abaixo se este cliente tiver um acordo diferente.
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <Label>Comissão sobre</Label>
-                          <Select value={form.partner_base || 'inicial'} onValueChange={v => v && setForm(f => ({ ...f, partner_base: v }))}>
-                            <SelectTrigger className="h-10"><SelectValue>{PARTNER_BASES.find(b => b.value === ((form.partner_base || 'inicial') as PartnerBase))?.label}</SelectValue></SelectTrigger>
-                            <SelectContent className="min-w-72">{PARTNER_BASES.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectContent>
-                          </Select>
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <Label>Comissão sobre (categorias do Financeiro)</Label>
+                          <CategoryChips value={form.partner_categories ?? DEFAULT_PARTNER_CATEGORIES} onChange={v => setForm(f => ({ ...f, partner_categories: v }))} />
                         </div>
                         <div className="space-y-1.5">
                           <Label>Vigência — fim</Label>

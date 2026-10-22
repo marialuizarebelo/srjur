@@ -4,10 +4,10 @@ import { Handshake } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { fmtBRL, fmtDate } from '@/lib/format'
 import { Sensitive } from '@/components/Sensitive'
-import { baseLabel } from '@/lib/partners'
+import { categoriesLabel } from '@/lib/partners'
 
-interface LinkRow { id: string; pct: number; base: string; valid_from: string; valid_until: string | null; partners: { id: string; name: string } | null }
-interface CommRow { id: string; amount: number; link_id: string | null }
+interface LinkRow { id: string; pct: number; categories: string[]; valid_from: string; valid_until: string | null; partners: { id: string; name: string } | null }
+interface CommRow { id: string; amount: number; link_id: string | null; historical: boolean }
 
 // Na ficha do cliente: quem indicou, a regra da comissão e quanto já foi / falta repassar.
 export function ClientPartnerInfo({ clientId }: { clientId: string }) {
@@ -19,8 +19,8 @@ export function ClientPartnerInfo({ clientId }: { clientId: string }) {
     let alive = true
     ;(async () => {
       const { data: l } = await supabase.from('partner_clients')
-        .select('id, pct, base, valid_from, valid_until, partners(id, name)').eq('client_id', clientId).eq('active', true)
-      const { data: c } = await supabase.from('partner_commissions').select('id, amount, link_id').eq('client_id', clientId)
+        .select('id, pct, categories, valid_from, valid_until, partners(id, name)').eq('client_id', clientId).eq('active', true)
+      const { data: c } = await supabase.from('partner_commissions').select('id, amount, link_id, historical').eq('client_id', clientId)
       const ids = (c ?? []).map(x => x.id)
       const { data: e } = ids.length
         ? await supabase.from('finance').select('partner_commission_id, paid').in('partner_commission_id', ids)
@@ -28,7 +28,7 @@ export function ClientPartnerInfo({ clientId }: { clientId: string }) {
       if (!alive) return
       setLinks((l ?? []) as unknown as LinkRow[])
       setComms((c ?? []) as CommRow[])
-      setPaidIds(new Set((e ?? []).filter(x => x.paid).map(x => x.partner_commission_id)))
+      setPaidIds(new Set([...(e ?? []).filter(x => x.paid).map(x => x.partner_commission_id), ...(c ?? []).filter(x => x.historical).map(x => x.id)]))
     })()
     return () => { alive = false }
   }, [clientId])
@@ -44,7 +44,7 @@ export function ClientPartnerInfo({ clientId }: { clientId: string }) {
         return (
           <div key={l.id} className="text-sm space-y-0.5">
             <p><Link to="/parcerias" className="font-medium hover:underline">{l.partners?.name ?? 'Parceiro'}</Link>
-              <span className="text-muted-foreground"> · {String(l.pct).replace('.', ',')}% sobre {baseLabel(l.base).toLowerCase()}</span></p>
+              <span className="text-muted-foreground"> · {String(l.pct).replace('.', ',')}% sobre {categoriesLabel(l.categories)}</span></p>
             <p className="text-xs text-muted-foreground">
               Vigência: {fmtDate(l.valid_from)} → {l.valid_until ? fmtDate(l.valid_until) : 'indeterminada'}
               {' · '}Já repassado: <Sensitive>{fmtBRL(pago)}</Sensitive>{' · '}A repassar: <Sensitive>{fmtBRL(aPagar)}</Sensitive>
