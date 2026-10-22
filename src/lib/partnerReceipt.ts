@@ -10,7 +10,7 @@ export interface PartnerReceipt {
   snapshot: {
     partner_name?: string; partner_document?: string | null; partner_oab?: string | null; partner_pix?: string | null
     client_name?: string; pct?: number; base_amount?: number; received_at?: string
-    source_description?: string; payment_method?: string | null
+    source_description?: string; payment_method?: string | null; business_unit?: string | null
     office_name?: string; office_logo?: string | null; office_color?: string | null
   }
 }
@@ -22,6 +22,13 @@ const MUTED: [number, number, number] = [107, 118, 145]    // azul-acinzentado
 const BEIGE: [number, number, number] = [247, 243, 233]    // #F7F3E9
 const BEIGE_DEEP: [number, number, number] = [237, 229, 210]
 const BEIGE_TEXT: [number, number, number] = [245, 241, 230] // #F5F1E6
+
+// Quem paga o parceiro depende de onde veio o dinheiro: o que é do sistema (SaaS) é da SRJUR; o resto é do escritório.
+const SRJUR_ISSUER = { name: 'SRJUR', cnpj: '57.409.676/0001-50' }
+const OFFICE_CNPJ = '67.620.842/0001-17'
+function issuerOf(s: PartnerReceipt['snapshot']) {
+  return s.business_unit === 'saas' ? SRJUR_ISSUER : { name: s.office_name ?? 'Escritório', cnpj: OFFICE_CNPJ }
+}
 
 const dmy = (s?: string | null) => (s ? s.slice(0, 10).split('-').reverse().join('/') : '—')
 
@@ -44,6 +51,7 @@ export async function buildPartnerReceiptPdf(r: PartnerReceipt): Promise<jsPDF> 
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const W = 210, H = 297, M = 20
   const logo = await loadImage(s.office_logo)
+  const issuer = issuerOf(s)
 
   // fundo bege na página toda
   doc.setFillColor(...BEIGE); doc.rect(0, 0, W, H, 'F')
@@ -62,10 +70,11 @@ export async function buildPartnerReceiptPdf(r: PartnerReceipt): Promise<jsPDF> 
   }
   doc.setTextColor(...BEIGE_TEXT)
   doc.setFont('helvetica', 'bold'); doc.setFontSize(15)
-  doc.text(s.office_name ?? 'Escritório', textX, 20)
+  doc.text(issuer.name, textX, 20)
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
   doc.setTextColor(152, 162, 188)
-  doc.text('Recibo de pagamento de comissão de parceria', textX, 26)
+  doc.text(`CNPJ ${issuer.cnpj}`, textX, 26)
+  doc.text('Recibo de pagamento de comissão de parceria', textX, 31)
 
   // título + número
   doc.setTextColor(...INK)
@@ -88,7 +97,7 @@ export async function buildPartnerReceiptPdf(r: PartnerReceipt): Promise<jsPDF> 
   doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(...INK)
   const pct = s.pct != null ? `${String(s.pct).replace('.', ',')}%` : ''
   const texto =
-    `${s.office_name ?? 'O escritório'} pagou a ${s.partner_name ?? 'o(a) parceiro(a)'} a quantia de ${fmtBRL(r.amount)}, ` +
+    `${issuer.name}, inscrita no CNPJ ${issuer.cnpj}, pagou a ${s.partner_name ?? 'o(a) parceiro(a)'} a quantia de ${fmtBRL(r.amount)}, ` +
     `referente à comissão de parceria de ${pct} sobre o pagamento recebido do(a) cliente ${s.client_name ?? '—'}` +
     `${s.received_at ? ` em ${dmy(s.received_at)}` : ''}, calculada sobre o valor líquido de ${fmtBRL(Number(s.base_amount ?? 0))}.`
   const linhas = doc.splitTextToSize(texto, W - 2 * M)
@@ -118,9 +127,9 @@ export async function buildPartnerReceiptPdf(r: PartnerReceipt): Promise<jsPDF> 
   // rodapé azul marinho
   doc.setFillColor(...NAVY); doc.rect(0, H - 16, W, 16, 'F')
   doc.setFontSize(8); doc.setTextColor(...BEIGE_TEXT)
-  doc.text(`${s.office_name ?? ''} · Recibo ${r.number}`, M, H - 7)
+  doc.text(`${issuer.name} · CNPJ ${issuer.cnpj} · Recibo ${r.number}`, M, H - 9.5)
   doc.setTextColor(152, 162, 188)
-  doc.text('Documento gerado automaticamente pelo sistema.', W - M, H - 7, { align: 'right' })
+  doc.text('Documento gerado automaticamente pelo sistema.', M, H - 4.8)
   return doc
 }
 
