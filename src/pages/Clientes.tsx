@@ -217,7 +217,10 @@ function LeadCard({ lead, onClick, onStatusChange, stages, displaySignedAt }: {
         )}
         <ResponsibleAvatars ids={lead.responsible_ids} profilesMap={profilesMap} size="xs" />
       </div>
-      {lead.source && <p className="text-xs text-muted-foreground mt-0.5">{lead.source}</p>}
+      <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${lead.business_unit === 'saas' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{lead.business_unit === 'saas' ? 'Sistema' : 'Advocacia'}</span>
+        {lead.source}
+      </p>
       {lead.potential_value ? (
         <p className="text-xs font-medium text-green-600 mt-1">{fmtBRL(lead.potential_value)}</p>
       ) : null}
@@ -940,6 +943,7 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
             {lead.next_followup && (
               <div><p className="text-[11px] text-muted-foreground">Próximo follow-up</p><p className="font-medium">{new Date(lead.next_followup + 'T00:00').toLocaleDateString('pt-BR')}</p></div>
             )}
+            <div><p className="text-[11px] text-muted-foreground">Empresa</p><p className="font-medium">{lead.business_unit === 'saas' ? 'Sistema (SRJUR)' : 'Advocacia'}</p></div>
             {lead.referred_by && (
               <div><p className="text-[11px] text-muted-foreground">Indicado por</p><p className="font-medium">{lead.referred_by}</p></div>
             )}
@@ -1014,7 +1018,10 @@ export default function Clientes() {
   const { profile } = useAuth()
   const profilesMap = useProfilesMap()
   const [clients, setClients] = useState<Client[]>([])
-  const [leads, setLeads] = useState<Lead[]>([])
+  const [leadsAll, setLeads] = useState<Lead[]>([])
+  // Empresa do CRM: vazio = as duas. Lead sem empresa é da Advocacia. Tudo que o CRM calcula segue este filtro.
+  const [crmUnit, setCrmUnit] = useState<'' | 'advocacia' | 'saas'>('')
+  const leads = useMemo(() => leadsAll.filter(l => !crmUnit || (crmUnit === 'saas' ? l.business_unit === 'saas' : l.business_unit !== 'saas')), [leadsAll, crmUnit])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<'crm' | 'ativos' | 'encerrados'>('ativos')
@@ -1047,6 +1054,7 @@ export default function Clientes() {
   const [stagesDialogOpen, setStagesDialogOpen] = useState(false)
   const [quickLeadOpen, setQuickLeadOpen] = useState(false)
   const [quickName, setQuickName] = useState('')
+  const [quickUnit, setQuickUnit] = useState<'advocacia' | 'saas'>('advocacia')
   const [quickPhone, setQuickPhone] = useState('')
   const [quickSaving, setQuickSaving] = useState(false)
   const [newStageLabel, setNewStageLabel] = useState('')
@@ -1157,14 +1165,14 @@ export default function Clientes() {
 
   // ZapSign: check for signed contracts and auto-advance leads
   useEffect(() => {
-    if (!isZapSignConfigured() || leads.length === 0) return
+    if (!isZapSignConfigured() || leadsAll.length === 0) return
 
     const checkZapSign = async () => {
       // !l.client_id evita recriar o cliente (e as tarefas de onboarding) toda
       // vez que o efeito roda de novo pra um lead cujo status ainda não foi
       // atualizado — sem essa guarda, um lead "preso" gera um cliente duplicado
       // a cada recarregamento da tela.
-      const contractLeads = leads.filter(l => l.status === 'contrato_enviado' && !l.client_id)
+      const contractLeads = leadsAll.filter(l => l.status === 'contrato_enviado' && !l.client_id)
       if (contractLeads.length === 0) return
 
       for (const lead of contractLeads) {
@@ -1183,7 +1191,7 @@ export default function Clientes() {
 
     const timer = setTimeout(checkZapSign, 2000)
     return () => clearTimeout(timer)
-  }, [leads])
+  }, [leadsAll])
 
   // ── Filtered data ──
   const filteredClients = useMemo(() => {
@@ -1460,7 +1468,7 @@ export default function Clientes() {
   }
 
   const updateLeadStatus = async (leadId: string, newStatus: string) => {
-    const lead = leads.find(l => l.id === leadId)
+    const lead = leadsAll.find(l => l.id === leadId)
     // Data de fechamento do contrato — registrada automaticamente na primeira
     // vez que o lead entra em "Contrato Assinado", pra sempre sabermos em que
     // mês o negócio foi efetivamente fechado (não muda se já tiver sido setada).
@@ -1507,6 +1515,8 @@ export default function Clientes() {
       rep_name: lead.rep_name, rep_cpf: lead.rep_cpf, rep_role: lead.rep_role,
       rep_document_type: lead.rep_document_type, rep_address: lead.rep_address,
       tags: lead.tags, birth_date: lead.birth_date, created_by: lead.created_by, signed_at: lead.signed_at,
+      // Lead de sistema vira cliente de sistema (e não de advocacia).
+      is_saas: lead.business_unit === 'saas', is_juridico: lead.business_unit !== 'saas',
     }).select('id').single()
 
     // Vincula o lead ao cliente criado, mas mantém o status/etapa do kanban
@@ -1753,6 +1763,11 @@ export default function Clientes() {
       {tab === 'crm' && (
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+            {([['', 'As duas'], ['advocacia', 'Advocacia'], ['saas', 'Sistema']] as const).map(([k, l]) => (
+              <Button key={k} variant={crmUnit === k ? 'default' : 'ghost'} size="sm" className="h-8" onClick={() => setCrmUnit(k)}>{l}</Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
             <Button variant={crmPeriodMode === 'mes' ? 'default' : 'ghost'} size="sm" className="h-8" onClick={() => setCrmPeriodMode('mes')}>Mês</Button>
             <Button variant={crmPeriodMode === 'ano' ? 'default' : 'ghost'} size="sm" className="h-8" onClick={() => setCrmPeriodMode('ano')}>Ano</Button>
             <Button variant={crmPeriodMode === 'tudo' ? 'default' : 'ghost'} size="sm" className="h-8" onClick={() => setCrmPeriodMode('tudo')}>Tudo</Button>
@@ -1848,7 +1863,7 @@ export default function Clientes() {
       )}
       {tab === 'crm' && (
         <KanbanDndContext onDropOnColumn={(leadId, stageValue) => {
-          const lead = leads.find(l => l.id === leadId)
+          const lead = leadsAll.find(l => l.id === leadId)
           if (lead && lead.status !== stageValue) updateLeadStatus(leadId, stageValue)
         }}>
           <KanbanScrollRow className="gap-3 md:gap-4 pb-4">
@@ -2326,6 +2341,15 @@ export default function Clientes() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 pt-2">
+            <div className="space-y-1.5">
+              <Label>Empresa</Label>
+              <div className="inline-flex rounded-lg border p-0.5 bg-muted/40">
+                {([['advocacia', 'Advocacia'], ['saas', 'Sistema (SRJUR)']] as const).map(([k, l]) => (
+                  <button key={k} type="button" onClick={() => setQuickUnit(k)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${quickUnit === k ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{l}</button>
+                ))}
+              </div>
+            </div>
             <Input
               placeholder="Nome"
               value={quickName}
@@ -2353,6 +2377,7 @@ export default function Clientes() {
                   phone: quickPhone || null,
                   source: 'WhatsApp',
                   status: 'novo',
+                  business_unit: quickUnit,
                 })
                 setQuickSaving(false)
                 setQuickLeadOpen(false)

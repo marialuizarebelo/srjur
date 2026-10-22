@@ -485,7 +485,7 @@ export default function Dashboard() {
   // ── Atalhos "+ Novo" do cabeçalho: abrem um diálogo aqui mesmo, sem navegar
   // pra outra página (o ponto de ser atalho é não perder o contexto do painel).
   const [leadDialogOpen, setLeadDialogOpen] = useState(false)
-  const [leadForm, setLeadForm] = useState({ name: '', phone: '', email: '', source: '', responsible_ids: [] as string[] })
+  const [leadForm, setLeadForm] = useState({ name: '', phone: '', email: '', source: '', responsible_ids: [] as string[], business_unit: 'advocacia' as 'advocacia' | 'saas' })
   const [savingLead, setSavingLead] = useState(false)
 
   const [clientDialogOpen, setClientDialogOpen] = useState(false)
@@ -510,13 +510,13 @@ export default function Dashboard() {
     try {
       const { error } = await supabase.from('leads').insert({
         name: leadForm.name, phone: leadForm.phone || null, email: leadForm.email || null,
-        source: leadForm.source || null, status: 'novo',
+        source: leadForm.source || null, status: 'novo', business_unit: leadForm.business_unit,
         responsible_ids: leadForm.responsible_ids, responsible: responsibleNames(leadForm.responsible_ids),
       })
       if (error) { toast.error('Erro ao criar lead: ' + error.message); return }
       toast.success('Lead criado!')
       setLeadDialogOpen(false)
-      setLeadForm({ name: '', phone: '', email: '', source: '', responsible_ids: [] })
+      setLeadForm({ name: '', phone: '', email: '', source: '', responsible_ids: [], business_unit: 'advocacia' })
     } finally {
       setSavingLead(false)
     }
@@ -913,6 +913,15 @@ export default function Dashboard() {
               <div className="space-y-1.5">
                 <Label>E-mail</Label>
                 <Input type="email" value={leadForm.email} onChange={e => setLeadForm(f => ({ ...f, email: e.target.value }))} className="h-10" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Empresa</Label>
+              <div className="inline-flex rounded-lg border p-0.5 bg-muted/40">
+                {([['advocacia', 'Advocacia'], ['saas', 'Sistema (SRJUR)']] as const).map(([k, l]) => (
+                  <button key={k} type="button" onClick={() => setLeadForm(f => ({ ...f, business_unit: k }))}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${leadForm.business_unit === k ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{l}</button>
+                ))}
               </div>
             </div>
             <div className="space-y-1.5">
