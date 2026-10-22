@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { Target, TrendingUp, Users, Clock, AlertTriangle, Handshake, Megaphone, Hourglass, PhoneCall, Layers } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
+import { COMISSAO_CATEGORY, useHistoricalCommissions } from '@/lib/partners'
 import {
   monthsBack, usePeriod, KpiCard, ChartCard, DonutWithLegend,
   DetailDialog, useDetail, AttentionPanel, type Attention, previousPeriodRange, trendText, NotesPanel,
@@ -36,6 +37,7 @@ export default function ComercialTab() {
   const { unidade } = useUnidadeFilter()
   const { rows: finRowsAll } = useFinanceData()
   const finRows = useMemo(() => filtraFin(finRowsAll, unidade), [finRowsAll, unidade])
+  const comissoesAntigas = useHistoricalCommissions()
 
   useEffect(() => {
     Promise.all([
@@ -101,10 +103,17 @@ export default function ComercialTab() {
 
   // CAC: investimento em marketing (categoria Marketing, só Advocacia — o funil é jurídico) ÷ novos clientes.
   const marketing = useMemo(() => finRows.filter(r => r.type === 'despesa' && r.impacts_cash !== false && r.business_unit !== 'saas' && (r.category ?? '').toLowerCase().includes('marketing') && inRange(r.date, start, end)), [finRows, start, end])
+  // Comissões pagas a parceiros por clientes indicados também são custo de aquisição (só Advocacia aqui; as do SaaS entram no CAC do SaaS).
+  const comissoesFin = useMemo(() => finRows.filter(r => r.type === 'despesa' && r.impacts_cash !== false && r.business_unit !== 'saas' && r.category === COMISSAO_CATEGORY && inRange(r.date, start, end)), [finRows, start, end])
+  const comissoesHist = useMemo(() => comissoesAntigas.filter(h => h.business_unit === 'advocacia' && matchUnidadeFinance('advocacia', unidade) && inRange(h.received_at, start, end)), [comissoesAntigas, unidade, start, end])
+  const investComissoes = sum(comissoesFin.map(r => r.value)) + sum(comissoesHist.map(h => h.amount))
   const investMarketing = sum(marketing.map(r => r.value))
+  const investAquisicao = investMarketing + investComissoes
+  // O custo aqui é só da Advocacia, então o divisor também: clientes novos de SaaS não entram (têm o CAC próprio em Produto/SaaS).
+  const novosClientesCac = clientesNoPeriodo.filter(c => c.is_juridico !== false).length
   const novosClientes = clientesNoPeriodo.length
-  const cac = novosClientes > 0 ? investMarketing / novosClientes : 0
-  const custoPorLead = leadsNoPeriodo.length > 0 ? investMarketing / leadsNoPeriodo.length : 0
+  const cac = novosClientesCac > 0 ? investAquisicao / novosClientesCac : 0
+  const custoPorLead = leadsNoPeriodo.length > 0 ? investAquisicao / leadsNoPeriodo.length : 0
 
   // Follow-ups
   const semFollowup = abertos.filter(l => !l.next_followup)
@@ -236,9 +245,9 @@ export default function ComercialTab() {
           trend={convertidosPeriodo.length ? `mediana ${fmtNum(cicloMediano, 0)} dias` : undefined} trendTone="neutral" onClick={() => openLeads('Contratos considerados no ciclo de venda', convertidosPeriodo)} />
         <KpiCard title="Taxa de perda" hint="Leads do período marcados como perdidos ÷ leads recebidos." value={fmtPct(taxaPerda)} icon={AlertTriangle} color={PAL.red} trendTone="down-good"
           onClick={() => openLeads('Leads perdidos no período', perdidosPeriodo)} />
-        <KpiCard title="CAC" hint="Custo de aquisição: despesas da categoria Marketing no período ÷ novos clientes. Zero quando não há lançamentos de Marketing." value={fmtBRL(cac)} icon={Megaphone} color={PAL.pink} sensitive
-          trend={investMarketing > 0 ? `${fmtBRL(investMarketing)} investidos · ${fmtBRL(custoPorLead)}/lead` : 'sem lançamentos de Marketing'} trendTone="neutral"
-          onClick={() => detail.show('Despesas de Marketing no período', marketing.map((r, i) => ({ id: String(i), label: r.description, sublabel: fmtDate(r.date), value: fmtBRL(r.value) })))} />
+        <KpiCard title="CAC" hint="Custo de aquisição: Marketing + comissões pagas a parceiros por clientes indicados (Advocacia) no período ÷ novos clientes. Zero quando não há lançamentos." value={fmtBRL(cac)} icon={Megaphone} color={PAL.pink} sensitive
+          trend={investAquisicao > 0 ? `${fmtBRL(investMarketing)} marketing + ${fmtBRL(investComissoes)} parcerias · ${fmtBRL(custoPorLead)}/lead` : 'sem lançamentos de Marketing ou parcerias'} trendTone="neutral"
+          onClick={() => detail.show('Custo de aquisição no período', [...marketing, ...comissoesFin].map((r, i) => ({ id: String(i), label: r.description, sublabel: `${fmtDate(r.date)} · ${r.category ?? ''}`, value: fmtBRL(r.value) })).concat(comissoesHist.map((h, i) => ({ id: 'h' + i, label: 'Comissão de parceria (histórico)', sublabel: fmtDate(h.received_at), value: fmtBRL(h.amount) }))))} />
         <KpiCard title="Pipeline em aberto" hint="Valor potencial de todos os leads ainda em andamento (fotografia de hoje)." value={fmtBRL(valorAberto)} icon={Layers} color={PAL.blue} sensitive
           trend={`${abertos.length} lead(s)`} trendTone="neutral" onClick={() => openLeads('Pipeline em aberto', abertos)} />
         <KpiCard title="Previsão ponderada" hint="Pipeline em aberto × chance de fechar por etapa (10% na primeira etapa, subindo até 80% na última antes da conversão). É uma estimativa, não uma promessa." value={fmtBRL(pipelinePonderado)} icon={Hourglass} color={PAL.green} sensitive
@@ -363,6 +372,27 @@ export default function ComercialTab() {
           </div>
         </ChartCard>
       )}
+
+      {(() => {
+        // Comissões de parceria de TODAS as unidades do filtro de visão (lançamentos do Financeiro + histórico).
+        const fin = finRows.filter(r => r.type === 'despesa' && r.impacts_cash !== false && r.category === COMISSAO_CATEGORY && inRange(r.date, start, end))
+        const hist = comissoesAntigas.filter(h => matchUnidadeFinance(h.business_unit, unidade) && inRange(h.received_at, start, end))
+        const total = sum(fin.map(r => r.value)) + sum(hist.map(h => h.amount))
+        if (total <= 0) return null
+        const pagas = sum(fin.map(r => r.pago)) + sum(hist.map(h => h.amount))
+        const aPagar = sum(fin.map(r => r.aberto))
+        const receitaPeriodo = sum(finRows.filter(r => r.type === 'receita' && r.impacts_cash !== false && inRange(r.date, start, end)).map(r => r.value))
+        return (
+          <ChartCard title="Parcerias: comissões do período" icon={Handshake}>
+            <StatStrip items={[
+              { label: 'Geradas', value: fmtBRL(total), hint: 'Comissões sobre pagamentos recebidos no período (valor líquido), da unidade selecionada' },
+              { label: 'Pagas', value: fmtBRL(pagas), tone: 'good' },
+              { label: 'A pagar', value: fmtBRL(aPagar), tone: aPagar > 0 ? 'bad' : undefined },
+              { label: '% da receita', value: fmtPct(pct(total, receitaPeriodo)), hint: 'Comissões ÷ receita recebida no período' },
+            ]} />
+          </ChartCard>
+        )
+      })()}
 
       <DetailDialog open={detail.open} onClose={detail.close} title={detail.title} rows={detail.rows} />
     </div>

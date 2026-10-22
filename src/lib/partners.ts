@@ -128,3 +128,20 @@ export async function syncClientPartnerLink(clientId: string, f: ClientPartnerFi
   })
   return error?.message ?? null
 }
+
+export const COMISSAO_CATEGORY = 'Comissão de parceria'
+
+export interface HistoricalCommission { id: string; amount: number; received_at: string; paid_at: string | null; business_unit: 'advocacia' | 'saas' }
+
+// Comissões antigas (histórico retroativo): não existem como lançamento no Financeiro, então as
+// Métricas as buscam aqui. Falha em silêncio (instância sem o módulo de Parcerias).
+export function useHistoricalCommissions() {
+  const [rows, setRows] = useState<HistoricalCommission[]>([])
+  useEffect(() => {
+    let alive = true
+    supabase.from('partner_commissions').select('id, amount, received_at, paid_at, business_unit').eq('historical', true)
+      .then(({ data, error }) => { if (alive && !error) setRows(((data ?? []) as HistoricalCommission[]).map(r => ({ ...r, amount: Number(r.amount) }))) })
+    return () => { alive = false }
+  }, [])
+  return rows
+}

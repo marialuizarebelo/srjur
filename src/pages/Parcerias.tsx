@@ -22,12 +22,17 @@ import { CategoryChips } from '@/components/CategoryChips'
 interface Commission {
   id: string; partner_id: string; link_id: string | null; client_id: string | null; source_finance_id: string | null
   base_amount: number; pct: number; amount: number; received_at: string; needs_review: boolean
-  historical: boolean; paid_at: string | null; notes: string | null
+  historical: boolean; paid_at: string | null; notes: string | null; business_unit: 'advocacia' | 'saas'
 }
-interface PaidReceita { id: string; description: string; value: number; date: string; payment_date: string | null }
+interface PaidReceita { id: string; description: string; value: number; date: string; payment_date: string | null; business_unit: string | null }
 interface Expense { id: string; partner_commission_id: string; paid: boolean; payment_date: string | null; due_date: string | null }
 interface Receipt extends PartnerReceipt { id: string; commission_id: string | null; partner_id: string }
-interface ClientLite { id: string; name: string }
+interface ClientLite { id: string; name: string; is_juridico?: boolean | null; is_saas?: boolean | null }
+type Unidade = '' | 'advocacia' | 'saas'
+const UNIDADES: { key: Unidade; label: string }[] = [{ key: '', label: 'Empresa toda' }, { key: 'advocacia', label: 'Advocacia' }, { key: 'saas', label: 'Sistema (SaaS)' }]
+const unitLabel = (u: string) => (u === 'saas' ? 'SaaS' : 'Advocacia')
+// Mesma regra das Métricas: cliente jurídico (padrão) e/ou SaaS.
+const clientInUnit = (c: ClientLite | undefined, u: Unidade) => !u || !c ? true : u === 'saas' ? c.is_saas === true : c.is_juridico !== false
 interface ProcessLite { id: string; title: string; number: string | null; client_id: string | null }
 
 const emptyPartner = {
@@ -57,13 +62,14 @@ function KpiCard({ icon: Icon, label, value, sub }: { icon: typeof Users; label:
 export default function Parcerias() {
   const [partners, setPartners] = useState<Partner[]>([])
   const [links, setLinks] = useState<PartnerLink[]>([])
-  const [commissions, setCommissions] = useState<Commission[]>([])
+  const [commissionsAll, setCommissions] = useState<Commission[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [clients, setClients] = useState<ClientLite[]>([])
   const [processes, setProcesses] = useState<ProcessLite[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'parceiros' | 'comissoes'>('parceiros')
+  const [unidade, setUnidade] = useState<Unidade>('')
   const [search, setSearch] = useState('')
   const [showEnded, setShowEnded] = useState(false)
   const [openId, setOpenId] = useState<string | 'new' | null>(null)
@@ -76,7 +82,7 @@ export default function Parcerias() {
       supabase.from('partner_commissions').select('*').order('received_at', { ascending: false }),
       supabase.from('finance').select('id, partner_commission_id, paid, payment_date, due_date').not('partner_commission_id', 'is', null),
       supabase.from('partner_receipts').select('*').is('voided_at', null).order('created_at', { ascending: false }),
-      supabase.from('clients').select('id, name').order('name'),
+      supabase.from('clients').select('id, name, is_juridico, is_saas').order('name'),
       supabase.from('processes').select('id, title, number, client_id').order('title'),
     ])
     const firstErr = [p, l, c, e, r].find(x => x.error)?.error
@@ -92,6 +98,7 @@ export default function Parcerias() {
   }
   useEffect(() => { load() }, [])
 
+  const commissions = useMemo(() => commissionsAll.filter(c => !unidade || c.business_unit === unidade), [commissionsAll, unidade])
   const expenseOf = useMemo(() => new Map(expenses.map(e => [e.partner_commission_id, e])), [expenses])
   const receiptOf = useMemo(() => new Map(receipts.filter(r => r.commission_id).map(r => [r.commission_id as string, r])), [receipts])
   const clientName = useMemo(() => new Map(clients.map(c => [c.id, c.name])), [clients])
@@ -116,15 +123,15 @@ export default function Parcerias() {
     }).reduce((s, c) => s + Number(c.amount), 0)
     const pagoTotal = commissions.filter(c => statusOf(c) === 'paga').reduce((s, c) => s + Number(c.amount), 0)
     const ativos = partners.filter(p => p.status === 'ativo').length
-    const clientesIndicados = new Set(links.filter(l => l.active).map(l => l.client_id)).size
+    const clientesIndicados = new Set(links.filter(l => l.active && clientInUnit(clients.find(c => c.id === l.client_id), unidade)).map(l => l.client_id)).size
     return { aPagar, pagoMes, pagoTotal, ativos, clientesIndicados }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commissions, expenses, partners, links])
+  }, [commissions, expenses, partners, links, clients, unidade])
 
   const perPartner = (id: string) => {
     const mine = commissions.filter(c => c.partner_id === id)
     return {
-      clientes: links.filter(l => l.partner_id === id && l.active).length,
+      clientes: links.filter(l => l.partner_id === id && l.active && clientInUnit(clients.find(c => c.id === l.client_id), unidade)).length,
       aPagar: mine.filter(c => (statusOf(c) === 'a_pagar' || statusOf(c) === 'atrasada')).reduce((s, c) => s + Number(c.amount), 0),
       pago: mine.filter(c => statusOf(c) === 'paga').reduce((s, c) => s + Number(c.amount), 0),
     }
@@ -147,7 +154,15 @@ export default function Parcerias() {
           <h1 className="text-2xl font-semibold tracking-tight">Parcerias</h1>
           <p className="text-sm text-muted-foreground">Parceiros que indicam clientes e a comissão de cada um</p>
         </div>
-        <Button size="sm" onClick={() => setOpenId('new')}><Plus className="h-3 w-3 mr-1" />Novo parceiro</Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="inline-flex rounded-lg border p-0.5 bg-muted/40">
+            {UNIDADES.map(u => (
+              <button key={u.key} onClick={() => setUnidade(u.key)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${unidade === u.key ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{u.label}</button>
+            ))}
+          </div>
+          <Button size="sm" onClick={() => setOpenId('new')}><Plus className="h-3 w-3 mr-1" />Novo parceiro</Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -225,14 +240,14 @@ export default function Parcerias() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Recebido em</TableHead><TableHead>Parceiro</TableHead><TableHead>Cliente</TableHead>
+                <TableHead>Recebido em</TableHead><TableHead>Parceiro</TableHead><TableHead>Cliente</TableHead><TableHead>Unidade</TableHead>
                 <TableHead className="text-right">Base (líquido)</TableHead><TableHead className="text-right">%</TableHead>
                 <TableHead className="text-right">Comissão</TableHead><TableHead>Pagar até</TableHead><TableHead>Status</TableHead><TableHead>Recibo</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visibleCommissions.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhuma comissão</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhuma comissão</TableCell></TableRow>
               ) : visibleCommissions.map(c => {
                 const rec = receiptOf.get(c.id)
                 return (
@@ -240,6 +255,7 @@ export default function Parcerias() {
                     <TableCell className="text-sm">{fmtDate(c.received_at)}</TableCell>
                     <TableCell className="text-sm font-medium cursor-pointer hover:underline" onClick={() => setOpenId(c.partner_id)}>{partnerName.get(c.partner_id) ?? '—'}</TableCell>
                     <TableCell className="text-sm">{c.client_id ? clientName.get(c.client_id) ?? '—' : '—'}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-[10px]">{unitLabel(c.business_unit)}</Badge></TableCell>
                     <TableCell className="text-right text-sm"><Sensitive>{fmtBRL(Number(c.base_amount))}</Sensitive></TableCell>
                     <TableCell className="text-right text-sm">{pctStr(c.pct)}%</TableCell>
                     <TableCell className="text-right text-sm font-medium"><Sensitive>{fmtBRL(Number(c.amount))}</Sensitive></TableCell>
@@ -263,7 +279,7 @@ export default function Parcerias() {
           key={openId}
           partner={openId === 'new' ? null : partners.find(p => p.id === openId) ?? null}
           links={links.filter(l => l.partner_id === openId)}
-          commissions={commissions.filter(c => c.partner_id === openId)}
+          commissions={commissionsAll.filter(c => c.partner_id === openId)}
           receipts={receipts.filter(r => r.partner_id === openId)}
           clients={clients} processes={processes} clientName={clientName}
           statusOf={statusOf} statusBadge={statusBadge} dueOf={dueOf} receiptOf={receiptOf}
@@ -306,7 +322,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
 
   // vincular cliente
   const [histOpen, setHistOpen] = useState(false)
-  const [hf, setHf] = useState({ client_id: '', source: '', base: '', pct: '', amount: '', received_at: '', paid_at: '', notes: '', createLink: true })
+  const [hf, setHf] = useState({ unit: 'advocacia' as 'advocacia' | 'saas', client_id: '', source: '', base: '', pct: '', amount: '', received_at: '', paid_at: '', notes: '', createLink: true })
   const [histPayments, setHistPayments] = useState<PaidReceita[]>([])
   const [linkOpen, setLinkOpen] = useState(false)
   const [lf, setLf] = useState({ client_id: '', process_id: '', pct: '', categories: DEFAULT_PARTNER_CATEGORIES as string[], valid_from: todayISO(), valid_until: '', indeterminate: true, notes: '' })
@@ -350,15 +366,16 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
   const parseMoney = (s: string) => { const n = parseFloat(s.replace(/\./g, '').replace(',', '.')); return isNaN(n) ? null : n }
   const moneyStr = (n: number) => n.toFixed(2).replace('.', ',')
   const openHist = () => {
-    setHf({ client_id: '', source: '', base: '', pct: pctStr(partner?.default_pct), amount: '', received_at: '', paid_at: '', notes: '', createLink: true })
+    setHf({ unit: 'advocacia', client_id: '', source: '', base: '', pct: pctStr(partner?.default_pct), amount: '', received_at: '', paid_at: '', notes: '', createLink: true })
     setHistPayments([])
     setHistOpen(true)
   }
   const pickHistClient = async (id: string) => {
-    setHf(f => ({ ...f, client_id: id, source: '' }))
+    const c = clients.find(x => x.id === id)
+    setHf(f => ({ ...f, client_id: id, source: '', unit: c?.is_saas && c.is_juridico === false ? 'saas' : f.unit }))
     setHistPayments([])
     if (!id) return
-    const { data } = await supabase.from('finance').select('id, description, value, date, payment_date')
+    const { data } = await supabase.from('finance').select('id, description, value, date, payment_date, business_unit')
       .eq('client_id', id).eq('type', 'receita').eq('paid', true).order('date', { ascending: false })
     setHistPayments((data ?? []) as PaidReceita[])
   }
@@ -371,7 +388,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
   const pickHistSource = (id: string) => {
     const r = histPayments.find(x => x.id === id)
     if (!r) { setHf(f => ({ ...f, source: '' })); return }
-    recalcHist({ source: id, base: moneyStr(Number(r.value)), received_at: (r.payment_date ?? r.date).slice(0, 10) })
+    recalcHist({ source: id, unit: ((r as PaidReceita).business_unit === 'saas' ? 'saas' : 'advocacia') as 'advocacia' | 'saas', base: moneyStr(Number(r.value)), received_at: (r.payment_date ?? r.date).slice(0, 10) })
   }
   const saveHist = async () => {
     if (!partner) return
@@ -393,7 +410,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
     }
     const { error } = await supabase.from('partner_commissions').insert({
       partner_id: partner.id, link_id: linkId, client_id: hf.client_id, source_finance_id: hf.source || null,
-      base_amount: base, pct, amount, received_at: hf.received_at, paid_at: hf.paid_at, historical: true, notes: hf.notes || null,
+      base_amount: base, pct, amount, received_at: hf.received_at, paid_at: hf.paid_at, historical: true, notes: hf.notes || null, business_unit: hf.unit,
     })
     if (error) { toast.error(/duplicate|unique/i.test(error.message) ? 'Esse pagamento já tem comissão registrada para este parceiro.' : 'Erro ao registrar: ' + error.message); return }
     toast.success('Comissão antiga registrada'); setHistOpen(false); onChanged()
@@ -587,7 +604,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                 <div className="rounded-lg border overflow-x-auto">
                   <Table>
                     <TableHeader><TableRow>
-                      <TableHead>Recebido</TableHead><TableHead>Cliente</TableHead><TableHead className="text-right">Base</TableHead>
+                      <TableHead>Recebido</TableHead><TableHead>Cliente</TableHead><TableHead>Unidade</TableHead><TableHead className="text-right">Base</TableHead>
                       <TableHead className="text-right">Comissão</TableHead><TableHead>Pagar até</TableHead><TableHead>Status</TableHead><TableHead>Recibo</TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
@@ -597,6 +614,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                           <TableRow key={c.id}>
                             <TableCell className="text-sm">{fmtDate(c.received_at)}</TableCell>
                             <TableCell className="text-sm">{c.client_id ? clientName.get(c.client_id) ?? '—' : '—'}</TableCell>
+                            <TableCell><Badge variant="outline" className="text-[10px]">{unitLabel(c.business_unit)}</Badge></TableCell>
                             <TableCell className="text-right text-sm"><Sensitive>{fmtBRL(Number(c.base_amount))}</Sensitive></TableCell>
                             <TableCell className="text-right text-sm font-medium"><Sensitive>{fmtBRL(Number(c.amount))}</Sensitive> <span className="text-[11px] text-muted-foreground">({pctStr(c.pct)}%)</span></TableCell>
                             <TableCell className="text-sm">{statusOf(c) === 'paga' ? '—' : (dueOf(c) ? fmtDate(dueOf(c) as string) : '—')}</TableCell>
@@ -643,6 +661,15 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Empresa</Label>
+                  <div className="inline-flex rounded-lg border p-0.5 bg-muted/40">
+                    {(['advocacia', 'saas'] as const).map(u => (
+                      <button key={u} type="button" onClick={() => setHf(f => ({ ...f, unit: u }))}
+                        className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${hf.unit === u ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{u === 'saas' ? 'Sistema (SRJUR)' : 'Advocacia (escritório)'}</button>
+                    ))}
+                  </div>
+                </div>
                 <div className="space-y-1.5"><Label>Valor recebido do cliente (líquido)</Label><Input value={hf.base} onChange={e => recalcHist({ base: e.target.value })} placeholder="0,00" className="h-10" /></div>
                 <div className="space-y-1.5">
                   <Label>% de comissão</Label>

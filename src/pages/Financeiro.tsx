@@ -612,6 +612,9 @@ export default function Financeiro() {
   const [responsibleFilter, setResponsibleFilter] = useState<string>('todos')
   const [categoryFilter, setCategoryFilter] = useState<string>('todos')
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('todos')
+  // Duas empresas (escritório e SRJUR) no mesmo sistema: vazio = as duas; lançamento sem unidade é da Advocacia.
+  const [unitFilter, setUnitFilter] = useState<'' | 'advocacia' | 'saas'>('')
+  const matchUnit = (r: { business_unit: string | null }) => !unitFilter || (unitFilter === 'saas' ? r.business_unit === 'saas' : r.business_unit !== 'saas')
   const [sortColumn, setSortColumn] = useState<'date' | 'description' | 'client' | 'category' | 'payment' | 'value' | 'status' | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -771,6 +774,7 @@ export default function Financeiro() {
       if (responsibleFilter !== 'todos' && r.responsible !== responsibleFilter) return false
       if (categoryFilter !== 'todos' && r.category !== categoryFilter) return false
       if (paymentMethodFilter !== 'todos' && r.payment_method !== paymentMethodFilter) return false
+      if (!matchUnit(r)) return false
       // Compara as datas como texto (YYYY-MM-DD), nunca via objeto Date — parsear
       // "YYYY-MM-DD" com `new Date()` interpreta como UTC e pode "vazar" pro dia/mês
       // anterior dependendo do fuso horário do navegador, bagunçando os totais do mês.
@@ -785,7 +789,7 @@ export default function Financeiro() {
       }
       return true
     })
-  }, [rows, typeFilter, clientFilter, responsibleFilter, categoryFilter, paymentMethodFilter, viewMode, viewMonth, viewYear, customStart, customEnd])
+  }, [rows, typeFilter, clientFilter, responsibleFilter, categoryFilter, paymentMethodFilter, unitFilter, viewMode, viewMonth, viewYear, customStart, customEnd])
 
   const sortedFiltered = useMemo(() => {
     if (!sortColumn) return filtered
@@ -829,17 +833,17 @@ export default function Financeiro() {
   // acumulado de sempre, não só do que entrou/saiu dentro do filtro atual.
   const saldo = receitasPagas - despesasPagas
   const saldoTotal = useMemo(() => {
-    const recCaixa = rows.filter(r => r.type === 'receita' && r.impacts_cash !== false)
-    const despCaixa = rows.filter(r => r.type === 'despesa' && r.impacts_cash !== false)
+    const recCaixa = rows.filter(r => r.type === 'receita' && r.impacts_cash !== false && matchUnit(r))
+    const despCaixa = rows.filter(r => r.type === 'despesa' && r.impacts_cash !== false && matchUnit(r))
     const recPagas = recCaixa.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
     const despPagas = despCaixa.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
     return recPagas - despPagas
-  }, [rows, paymentsMap])
+  }, [rows, paymentsMap, unitFilter])
   const inadimplencia = receitasCaixa
     .filter(r => rowStatus(r, paymentsMap) !== 'pago' && r.due_date && r.due_date < today)
     .reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
   const proximosVencimentos = rows
-    .filter(r => !r.paid && r.due_date && r.due_date >= today)
+    .filter(r => matchUnit(r) && !r.paid && r.due_date && r.due_date >= today)
     .sort((a, b) => (a.due_date! > b.due_date! ? 1 : -1))
     .slice(0, 5)
 
@@ -1889,6 +1893,16 @@ export default function Financeiro() {
             {categoryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={unitFilter || 'todas'} onValueChange={v => setUnitFilter(v === 'todas' ? '' : (v as 'advocacia' | 'saas'))}>
+          <SelectTrigger className="h-7 text-xs w-[150px]">
+            <SelectValue>{unitFilter === 'saas' ? 'Sistema (SRJUR)' : unitFilter === 'advocacia' ? 'Advocacia' : 'Empresa: todas'}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">As duas empresas</SelectItem>
+            <SelectItem value="advocacia">Advocacia (escritório)</SelectItem>
+            <SelectItem value="saas">Sistema (SRJUR)</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
           <SelectTrigger className="h-7 text-xs w-[150px]">
             <SelectValue>{paymentMethodFilter === 'todos' ? 'Forma de pagamento' : paymentMethodFilter}</SelectValue>
@@ -2027,7 +2041,7 @@ export default function Financeiro() {
                     {row.responsible && <span className="text-xs text-muted-foreground ml-1">@{row.responsible}</span>}
                   </TableCell>
                   <TableCell className="text-sm">{getClientName(row.client_id)}</TableCell>
-                  <TableCell className="text-sm">{row.category ?? '—'}</TableCell>
+                  <TableCell className="text-sm">{row.category ?? '—'}{row.business_unit === 'saas' && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary align-middle">SaaS</span>}</TableCell>
                   <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
                     {row.payment_method ?? '—'}
                     {row.installments && row.installments > 1 && (

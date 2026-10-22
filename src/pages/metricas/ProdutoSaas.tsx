@@ -3,6 +3,7 @@ import {
   Users, DollarSign, TrendingUp, Repeat, Percent, UserMinus, UserPlus, Gauge, Hourglass, AlertTriangle, PiggyBank, ArrowLeftRight,
 } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
+import { COMISSAO_CATEGORY, useHistoricalCommissions } from '@/lib/partners'
 import {
   monthsBack, usePeriod, useUnidadeFilter, KpiCard, ChartCard, DonutWithLegend, AttentionPanel, type Attention, NotesPanel,
   DetailDialog, useDetail, previousPeriodRange, trendText,
@@ -95,7 +96,12 @@ export default function ProdutoSaasTab() {
   const margem = pct(resultado, receita)
   const recorrentePct = pct(sum(rowsP.filter(f => f.type === 'receita' && isRecorrente(f)).map(f => f.value)), receita)
   const marketingSaas = rowsP.filter(f => isDespesaCaixa(f) && (f.category ?? '').toLowerCase().includes('marketing'))
-  const cacSaas = novosPeriodo.length > 0 ? sum(marketingSaas.map(f => f.value)) / novosPeriodo.length : 0
+  // Comissões pagas a parceiros por clientes indicados do SaaS também são custo de aquisição.
+  const comissoesSaas = rowsP.filter(f => isDespesaCaixa(f) && f.category === COMISSAO_CATEGORY)
+  const comissoesAntigas = useHistoricalCommissions().filter(h => h.business_unit === 'saas' && inRange(h.received_at, start, end))
+  const investComissoesSaas = sum(comissoesSaas.map(f => f.value)) + sum(comissoesAntigas.map(h => h.amount))
+  const investAquisicaoSaas = sum(marketingSaas.map(f => f.value)) + investComissoesSaas
+  const cacSaas = novosPeriodo.length > 0 ? investAquisicaoSaas / novosPeriodo.length : 0
   // LTV = ARPA × margem ÷ churn mensal  (só calcula com churn > 0 observado)
   const margemBruta = Math.max(0, Math.min(1, receita > 0 ? (receita - despesa) / receita : 0.8))
   const ltv = churnMedio6 > 0 ? (atual.arpa * (margemBruta || 0.8)) / (churnMedio6 / 100) : 0
@@ -222,8 +228,8 @@ export default function ProdutoSaasTab() {
         <KpiCard title="Retenção bruta (GRR)" hint="Igual ao NRR, mas sem contar expansão: mede só o que se perdeu." value={anterior.mrr > 0 ? fmtPct(grr) : '—'} icon={Percent} color={grr >= 90 ? PAL.green : PAL.amber} onClick={() => openAss('Assinaturas ativas', assAtuais)} />
         <KpiCard title="LTV" hint="Valor do cliente ao longo da vida: ARPA × margem ÷ churn mensal médio (6 meses). Só calcula quando já houve cancelamentos." value={ltv > 0 ? fmtBRL(ltv) : '—'} icon={PiggyBank} color={PAL.purple} sensitive
           trend={vidaMediaMeses > 0 ? `vida média ≈ ${fmtNum(vidaMediaMeses, 0)} meses` : 'sem churn observado'} trendTone="neutral" onClick={() => openAss('Assinaturas ativas', assAtuais)} />
-        <KpiCard title="CAC do SaaS" hint="Despesas de Marketing do SaaS no período ÷ clientes novos. Zero se não houver lançamentos de Marketing no SaaS." value={cacSaas > 0 ? fmtBRL(cacSaas) : '—'} icon={Hourglass} color={PAL.pink} sensitive
-          trend={ltv > 0 && cacSaas > 0 ? `LTV:CAC ${fmtNum(ltv / cacSaas, 1)}×` : undefined} trendTone="neutral" onClick={() => openFin('Marketing do SaaS no período', marketingSaas)} />
+        <KpiCard title="CAC do SaaS" hint="Marketing do SaaS + comissões pagas a parceiros por clientes indicados do SaaS no período ÷ clientes novos. Zero se não houver lançamentos." value={cacSaas > 0 ? fmtBRL(cacSaas) : '—'} icon={Hourglass} color={PAL.pink} sensitive
+          trend={cacSaas > 0 ? `${fmtBRL(investAquisicaoSaas - investComissoesSaas)} marketing + ${fmtBRL(investComissoesSaas)} parcerias${ltv > 0 ? ` · LTV:CAC ${fmtNum(ltv / cacSaas, 1)}×` : ''}` : undefined} trendTone="neutral" onClick={() => openFin('Marketing e comissões do SaaS no período', [...marketingSaas, ...comissoesSaas])} />
         <KpiCard title="Churn de clientes" hint="Clientes que encerraram no mês ÷ clientes ativos no início do mês (pela data de encerramento do cadastro)." value={fmtPct(churnClientes, 1)} icon={UserMinus} color={PAL.red} trendTone="down-good"
           trend={`${encerradosMes.length} encerrado(s) no mês`} onClick={() => openClients('Clientes que encerraram no mês', encerradosMes)} />
         <KpiCard title="Clientes retidos" hint="Clientes SaaS ativos ÷ todos os já cadastrados (ativos + inativos)." value={fmtPct(retencaoClientes)} icon={Users} color={PAL.teal}
