@@ -104,6 +104,12 @@ export default function Parcerias() {
   const clientName = useMemo(() => new Map(clients.map(c => [c.id, c.name])), [clients])
   const partnerName = useMemo(() => new Map(partners.map(p => [p.id, p.name])), [partners])
 
+  const issueReceiptRow = async (c: Commission) => {
+    const { data, error } = await supabase.rpc('partner_issue_receipt', { p_commission: c.id })
+    if (error) { toast.error('Erro ao gerar o recibo: ' + error.message); return }
+    toast.success('Recibo ' + (data as { number: string }).number + ' gerado')
+    load()
+  }
   const statusOf = (c: Commission): CStatus => {
     const e = expenseOf.get(c.id)
     if (c.historical) return 'paga'
@@ -261,7 +267,8 @@ export default function Parcerias() {
                     <TableCell className="text-right text-sm font-medium"><Sensitive>{fmtBRL(Number(c.amount))}</Sensitive></TableCell>
                     <TableCell className="text-sm">{statusOf(c) === 'paga' ? '—' : (dueOf(c) ? fmtDate(dueOf(c) as string) : '—')}</TableCell>
                     <TableCell>{statusBadge(statusOf(c))}</TableCell>
-                    <TableCell>{rec && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => downloadPartnerReceipt(rec)}><FileDown className="h-3 w-3 mr-1" />{rec.number}</Button>}</TableCell>
+                    <TableCell>{rec ? <Button variant="ghost" size="sm" className="h-7 px-2 text-xs whitespace-nowrap" onClick={() => downloadPartnerReceipt(rec)}><FileDown className="h-3 w-3 mr-1" />{rec.number}</Button>
+                      : (c.historical && <Button variant="outline" size="sm" className="h-7 px-2 text-xs whitespace-nowrap" onClick={() => issueReceiptRow(c)}><FileDown className="h-3 w-3 mr-1" />Gerar recibo</Button>)}</TableCell>
                   </TableRow>
                 )
               })}
@@ -415,6 +422,12 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
     if (error) { toast.error(/duplicate|unique/i.test(error.message) ? 'Esse pagamento já tem comissão registrada para este parceiro.' : 'Erro ao registrar: ' + error.message); return }
     toast.success('Comissão antiga registrada'); setHistOpen(false); onChanged()
   }
+  const issueReceipt = async (c: Commission) => {
+    const { data, error } = await supabase.rpc('partner_issue_receipt', { p_commission: c.id })
+    if (error) { toast.error('Erro ao gerar o recibo: ' + error.message); return }
+    toast.success('Recibo ' + (data as { number: string }).number + ' gerado')
+    onChanged()
+  }
   const removeHist = async (c: Commission) => {
     if (!confirm('Excluir este registro de histórico?')) return
     const { error } = await supabase.from('partner_commissions').delete().eq('id', c.id)
@@ -462,7 +475,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
 
   return (
     <Dialog open onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="max-w-[760px] w-[96vw] max-h-[90vh] overflow-y-auto overflow-x-hidden p-0">
+      <DialogContent className="max-w-[1040px] w-[96vw] max-h-[90vh] overflow-y-auto overflow-x-hidden p-0">
         <DialogHeader className="px-6 pt-6 pb-3 border-b">
           <DialogTitle>{partner ? partner.name : 'Novo parceiro'}</DialogTitle>
           <div className="flex gap-1.5 pt-2">
@@ -591,7 +604,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
           )}
 
           {tab === 'comissoes' && partner && (
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-xs text-muted-foreground">Comissões geradas pelo Financeiro e o histórico de parcerias anteriores.</p>
               <Button size="sm" variant="outline" onClick={openHist}><Plus className="h-3 w-3 mr-1" />Registrar comissão antiga</Button>
             </div>
@@ -619,7 +632,8 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                             <TableCell className="text-right text-sm font-medium"><Sensitive>{fmtBRL(Number(c.amount))}</Sensitive> <span className="text-[11px] text-muted-foreground">({pctStr(c.pct)}%)</span></TableCell>
                             <TableCell className="text-sm">{statusOf(c) === 'paga' ? '—' : (dueOf(c) ? fmtDate(dueOf(c) as string) : '—')}</TableCell>
                             <TableCell>{statusBadge(statusOf(c))}{c.historical && <Badge variant="secondary" className="text-[10px] ml-1" title={c.paid_at ? `Pago em ${fmtDate(c.paid_at)}` : undefined}>Histórico</Badge>}{c.needs_review && <AlertTriangle className="inline h-3.5 w-3.5 ml-1 text-red-500" />}</TableCell>
-                            <TableCell>{rec && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => downloadPartnerReceipt(rec)}><FileDown className="h-3 w-3 mr-1" />{rec.number}</Button>}{c.historical && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive" onClick={() => removeHist(c)}><Trash2 className="h-3 w-3" /></Button>}</TableCell>
+                            <TableCell>{rec ? <Button variant="ghost" size="sm" className="h-7 px-2 text-xs whitespace-nowrap" onClick={() => downloadPartnerReceipt(rec)}><FileDown className="h-3 w-3 mr-1" />{rec.number}</Button>
+                              : (c.historical && <Button variant="outline" size="sm" className="h-7 px-2 text-xs whitespace-nowrap" onClick={() => issueReceipt(c)}><FileDown className="h-3 w-3 mr-1" />Gerar recibo</Button>)}{c.historical && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive" onClick={() => removeHist(c)}><Trash2 className="h-3 w-3" /></Button>}</TableCell>
                           </TableRow>
                         )
                       })}
