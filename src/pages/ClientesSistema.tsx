@@ -43,6 +43,27 @@ const HIST_KINDS = [['nota', 'Anotação'], ['plano', 'Plano'], ['reajuste', 'Re
 const PRIORITIES = [['baixa', 'Baixa'], ['media', 'Média'], ['alta', 'Alta'], ['urgente', 'Urgente']] as const
 const UNITS = [['dias', 'dias'], ['semanas', 'semanas'], ['meses', 'meses']] as const
 
+interface FinLite { client_id: string; category: string | null; value: number; date: string }
+interface Derived { implementation: number | null; monthly: number | null; monthlySince: string | null; startedAt: string | null }
+
+// Sugestão a partir dos lançamentos de receita do SISTEMA no Financeiro:
+//  - implantação = soma do que não é mensalidade;  - mensalidade = valor mais comum entre as mensalidades (empate: o mais recente);
+//  - a partir de = data da primeira mensalidade;  - cliente desde = data do primeiro lançamento.
+function deriveFromFinance(rows: FinLite[]): Derived {
+  const isMens = (r: FinLite) => (r.category ?? '').trim().toLowerCase() === 'mensalidade'
+  const impl = rows.filter(r => !isMens(r)), mens = rows.filter(isMens)
+  const counts = new Map<number, { n: number; last: string }>()
+  mens.forEach(r => { const v = Math.round(Number(r.value) * 100) / 100; const c = counts.get(v) ?? { n: 0, last: '' }; counts.set(v, { n: c.n + 1, last: r.date > c.last ? r.date : c.last }) })
+  const best = [...counts.entries()].sort((a, b) => b[1].n - a[1].n || (b[1].last > a[1].last ? 1 : -1))[0]
+  const dates = rows.map(r => r.date.slice(0, 10)).sort()
+  return {
+    implementation: impl.length ? impl.reduce((s, r) => s + Number(r.value), 0) : null,
+    monthly: best ? best[0] : null,
+    monthlySince: mens.length ? mens.map(r => r.date.slice(0, 10)).sort()[0] : null,
+    startedAt: dates[0] ?? null,
+  }
+}
+
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const parseMoney = (s: string) => { if (!s.trim()) return null; const n = parseFloat(s.replace(/\./g, '').replace(',', '.')); return isNaN(n) ? null : n }
 const moneyStr = (n: number | null | undefined) => (n == null ? '' : Number(n).toFixed(2).replace('.', ','))
@@ -62,6 +83,8 @@ export default function ClientesSistema() {
   const [clients, setClients] = useState<ClientRow[]>([])
   const [saas, setSaas] = useState<SaasClient[]>([])
   const [tasks, setTasks] = useState<TaskRow[]>([])
+  const [finRows, setFinRows] = useState<FinLite[]>([])
+  const [importing, setImporting] = useState(false)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'' | SaasClient['status']>('')
@@ -79,29 +102,73 @@ export default function ClientesSistema() {
     setClients((c.data ?? []) as ClientRow[])
     setSaas((s.data ?? []) as SaasClient[])
     setTasks((t.data ?? []) as TaskRow[])
+    const ids = ((c.data ?? []) as ClientRow[]).map(x => x.id)
+    const f = ids.length ? await supabase.from('finance').select('client_id, category, value, date').eq('type', 'receita').eq('business_unit', 'saas').in('client_id', ids) : { data: [], error: null }
+    if (f.error) toast.error('Erro ao ler o Financeiro: ' + f.error.message)
+    setFinRows(((f.data ?? []) as FinLite[]).map(r => ({ ...r, value: Number(r.value) })))
     setLoading(false)
   }
   useEffect(() => { load() }, [])
 
   const saasOf = useMemo(() => new Map(saas.map(s => [s.client_id, s])), [saas])
+  const derivedOf = useMemo(() => {
+    const by = new Map<string, FinLite[]>()
+    finRows.forEach(r => by.set(r.client_id, [...(by.get(r.client_id) ?? []), r]))
+    return new Map([...by.entries()].map(([id, rs]) => [id, deriveFromFinance(rs)]))
+  }, [finRows])
   const rows = useMemo(() => clients.map(c => {
     const s = saasOf.get(c.id)
     const mine = tasks.filter(t => t.client_id === c.id && t.status === 'pendente')
+    const d = derivedOf.get(c.id)
     return {
       client: c, saas: s,
+      impl: s?.implementation_value ?? d?.implementation ?? null, implFromFin: s?.implementation_value == null && d?.implementation != null,
+      monthly: s?.monthly_value ?? d?.monthly ?? null, monthlyFromFin: s?.monthly_value == null && d?.monthly != null,
+      since: s?.started_at ?? d?.startedAt ?? null,
       status: (s?.status ?? 'ativo') as SaasClient['status'],
       chamados: mine.filter(t => t.saas_kind !== 'verificacao').length,
       proxVerif: mine.filter(t => t.saas_kind === 'verificacao' && t.due_date).map(t => t.due_date as string).sort()[0] ?? null,
     }
-  }), [clients, saasOf, tasks])
+  }), [clients, saasOf, tasks, derivedOf])
+
+  // Grava no cadastro só o que está vazio; nunca sobrescreve o que já foi preenchido.
+  const importAll = async () => {
+    if (importing) return
+    if (!confirm('Gravar no cadastro os valores calculados a partir do Financeiro? Só os campos vazios são preenchidos.')) return
+    setImporting(true)
+    try {
+      let n = 0
+      for (const r of rows) {
+        const d = derivedOf.get(r.client.id)
+        if (!d) continue
+        const s = r.saas
+        const patch: Record<string, unknown> = {}
+        if (!s || (s.implementation_value == null && d.implementation != null)) patch.implementation_value = d.implementation
+        if (!s || (s.monthly_value == null && d.monthly != null)) patch.monthly_value = d.monthly
+        if (!s || (!s.monthly_since && d.monthlySince)) patch.monthly_since = d.monthlySince
+        if (!s || (!s.started_at && d.startedAt)) patch.started_at = d.startedAt
+        const real = Object.fromEntries(Object.entries(patch).filter(([, v]) => v != null))
+        if (Object.keys(real).length === 0) continue
+        const { data, error } = s
+          ? await supabase.from('saas_clients').update(real).eq('id', s.id).select('id').single()
+          : await supabase.from('saas_clients').insert({ ...real, client_id: r.client.id, status: d.monthly != null ? 'ativo' : 'implantacao' }).select('id').single()
+        if (error || !data) { toast.error(`${r.client.name}: ${error?.message ?? 'erro'}`); continue }
+        await supabase.from('saas_history').insert({ saas_client_id: data.id, kind: 'nota', body: 'Valores preenchidos a partir dos lançamentos do Financeiro' })
+        n++
+      }
+      toast.success(`${n} cliente(s) atualizado(s)`)
+      await load()
+    } finally { setImporting(false) }
+  }
 
   const visible = rows.filter(r => (!statusFilter || r.status === statusFilter) && (!search.trim() || r.client.name.toLowerCase().includes(search.trim().toLowerCase())))
   const stats = useMemo(() => ({
     ativos: rows.filter(r => r.status === 'ativo').length,
-    mrr: rows.filter(r => r.status === 'ativo').reduce((s, r) => s + Number(r.saas?.monthly_value ?? 0), 0),
+    mrr: rows.filter(r => r.status === 'ativo').reduce((s, r) => s + Number(r.monthly ?? 0), 0),
     implantando: rows.filter(r => r.status === 'implantacao').length,
     chamados: rows.reduce((s, r) => s + r.chamados, 0),
     semDados: rows.filter(r => !r.saas).length,
+    precisaImportar: rows.filter(r => { const d = derivedOf.get(r.client.id); return !!d && (!r.saas || (r.saas.monthly_value == null && d.monthly != null) || (r.saas.implementation_value == null && d.implementation != null)) }).length,
   }), [rows])
 
   return (
@@ -117,6 +184,13 @@ export default function ClientesSistema() {
         <Kpi icon={Rocket} title="Em implantação" value={stats.implantando} />
         <Kpi icon={Wrench} title="Chamados abertos" value={stats.chamados} />
       </div>
+
+      {stats.precisaImportar > 0 && (
+        <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
+          <p className="text-sm">Os valores em itálico vêm do Financeiro (lançamentos de receita do sistema) e ainda não estão gravados no cadastro de {stats.precisaImportar} cliente(s).</p>
+          <Button size="sm" disabled={importing} onClick={importAll}>{importing ? 'Gravando...' : 'Gravar a partir do Financeiro'}</Button>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 flex-wrap">
         {([['', 'Todos'], ...STATUS.map(s => [s.value, s.label])] as [string, string][]).map(([k, l]) => (
@@ -147,9 +221,9 @@ export default function ClientesSistema() {
                   <TableCell className="font-medium">{r.client.name}</TableCell>
                   <TableCell className="text-sm">{r.saas?.plan || '—'}</TableCell>
                   <TableCell><Badge className={`text-[10px] border-0 ${statusInfo(r.status).cls}`}>{statusInfo(r.status).label}</Badge></TableCell>
-                  <TableCell className="text-right text-sm"><Sensitive>{r.saas?.implementation_value != null ? fmtBRL(Number(r.saas.implementation_value)) : '—'}</Sensitive></TableCell>
-                  <TableCell className="text-right text-sm"><Sensitive>{r.saas?.monthly_value != null ? fmtBRL(Number(r.saas.monthly_value)) : '—'}</Sensitive></TableCell>
-                  <TableCell className="text-sm">{r.saas?.started_at ? fmtDate(r.saas.started_at) : '—'}</TableCell>
+                  <TableCell className="text-right text-sm"><Sensitive><span title={r.implFromFin ? 'Calculado a partir do Financeiro' : undefined} className={r.implFromFin ? 'text-muted-foreground italic' : ''}>{r.impl != null ? fmtBRL(Number(r.impl)) : '—'}</span></Sensitive></TableCell>
+                  <TableCell className="text-right text-sm"><Sensitive><span title={r.monthlyFromFin ? 'Calculado a partir do Financeiro' : undefined} className={r.monthlyFromFin ? 'text-muted-foreground italic' : ''}>{r.monthly != null ? fmtBRL(Number(r.monthly)) : '—'}</span></Sensitive></TableCell>
+                  <TableCell className="text-sm">{r.since ? fmtDate(r.since) : '—'}</TableCell>
                   <TableCell className="text-right text-sm">{r.chamados || '—'}</TableCell>
                   <TableCell className="text-sm">{r.proxVerif ? fmtDate(r.proxVerif) : '—'}</TableCell>
                 </TableRow>
@@ -160,14 +234,14 @@ export default function ClientesSistema() {
       )}
 
       {openId && (
-        <FichaDialog key={openId} client={clients.find(c => c.id === openId)!} saas={saasOf.get(openId) ?? null} onClose={() => setOpenId(null)} onChanged={load} />
+        <FichaDialog key={openId} client={clients.find(c => c.id === openId)!} saas={saasOf.get(openId) ?? null} derived={derivedOf.get(openId) ?? null} onClose={() => setOpenId(null)} onChanged={load} />
       )}
     </div>
   )
 }
 
 // ── Ficha ────────────────────────────────────────────────────────────────
-function FichaDialog({ client, saas, onClose, onChanged }: { client: ClientRow; saas: SaasClient | null; onClose: () => void; onChanged: () => void }) {
+function FichaDialog({ client, saas, derived, onClose, onChanged }: { client: ClientRow; saas: SaasClient | null; derived: Derived | null; onClose: () => void; onChanged: () => void }) {
   const { profile } = useAuth()
   const [tab, setTab] = useState<'dados' | 'acessos' | 'chamados' | 'verificacoes' | 'historico'>('dados')
   const [rec, setRec] = useState<SaasClient | null>(saas)
@@ -186,7 +260,7 @@ function FichaDialog({ client, saas, onClose, onChanged }: { client: ClientRow; 
           </div>
         </DialogHeader>
         <div className="px-6 py-4 space-y-4">
-          {tab === 'dados' && <DadosTab client={client} rec={rec} onSaved={r => { setRec(r); onChanged() }} />}
+          {tab === 'dados' && <DadosTab client={client} rec={rec} derived={derived} onSaved={r => { setRec(r); onChanged() }} />}
           {rec && tab === 'acessos' && <AcessosTab saasId={rec.id} />}
           {rec && tab === 'chamados' && <ChamadosTab client={client} onChanged={onChanged} userId={profile?.id ?? null} />}
           {rec && tab === 'verificacoes' && <VerificacoesTab saasId={rec.id} onChanged={onChanged} />}
@@ -198,12 +272,12 @@ function FichaDialog({ client, saas, onClose, onChanged }: { client: ClientRow; 
   )
 }
 
-function DadosTab({ client, rec, onSaved }: { client: ClientRow; rec: SaasClient | null; onSaved: (r: SaasClient) => void }) {
+function DadosTab({ client, rec, derived, onSaved }: { client: ClientRow; rec: SaasClient | null; derived: Derived | null; onSaved: (r: SaasClient) => void }) {
   const [f, setF] = useState({
-    plan: rec?.plan ?? '', status: (rec?.status ?? 'implantacao') as SaasClient['status'],
-    implementation_value: moneyStr(rec?.implementation_value), monthly_value: moneyStr(rec?.monthly_value),
-    monthly_since: rec?.monthly_since ?? '', billing_day: rec?.billing_day ? String(rec.billing_day) : '',
-    started_at: rec?.started_at ?? '', system_url: rec?.system_url ?? '', notes: rec?.notes ?? '',
+    plan: rec?.plan ?? '', status: (rec?.status ?? (derived?.monthly != null ? 'ativo' : 'implantacao')) as SaasClient['status'],
+    implementation_value: moneyStr(rec?.implementation_value ?? derived?.implementation), monthly_value: moneyStr(rec?.monthly_value ?? derived?.monthly),
+    monthly_since: rec?.monthly_since ?? derived?.monthlySince ?? '', billing_day: rec?.billing_day ? String(rec.billing_day) : '',
+    started_at: rec?.started_at ?? derived?.startedAt ?? '', system_url: rec?.system_url ?? '', notes: rec?.notes ?? '',
   })
   const [saving, setSaving] = useState(false)
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF(x => ({ ...x, [k]: v }))
@@ -255,6 +329,9 @@ function DadosTab({ client, rec, onSaved }: { client: ClientRow; rec: SaasClient
         <div className="space-y-1.5 sm:col-span-2"><Label>Link do sistema do cliente</Label><Input value={f.system_url} onChange={e => set('system_url', e.target.value)} placeholder="https://..." className="h-10" /></div>
         <div className="space-y-1.5 sm:col-span-3"><Label>Observações</Label><Textarea value={f.notes} onChange={e => set('notes', e.target.value)} rows={4} /></div>
       </div>
+      {derived && (!rec || rec.implementation_value == null || rec.monthly_value == null) && (
+        <p className="text-xs rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">Campos vazios foram preenchidos com o que está lançado no Financeiro (receitas do sistema). Confira e clique em Salvar para gravar.</p>
+      )}
       <p className="text-[11px] text-muted-foreground">Estes valores são o cadastro do contrato. O que entra no caixa continua vindo dos lançamentos do Financeiro.</p>
       <div className="flex justify-end"><Button onClick={save} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</Button></div>
     </div>
