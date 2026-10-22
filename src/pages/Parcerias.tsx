@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Plus, Search, Handshake, Users, Wallet, CheckCircle2, FileDown, Trash2, ExternalLink, AlertTriangle } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
 import { Sensitive } from '@/components/Sensitive'
@@ -18,6 +18,7 @@ import { ProcessCombobox } from '@/components/ProcessCombobox'
 import { downloadPartnerReceipt, type PartnerReceipt } from '@/lib/partnerReceipt'
 import { PARTNER_KINDS, DEFAULT_PARTNER_CATEGORIES, categoriesLabel, type Partner, type PartnerLink } from '@/lib/partners'
 import { CategoryChips } from '@/components/CategoryChips'
+import { StackTable } from '@/components/StackTable'
 
 interface Commission {
   id: string; partner_id: string; link_id: string | null; client_id: string | null; source_finance_id: string | null
@@ -27,7 +28,7 @@ interface Commission {
 interface PaidReceita { id: string; description: string; value: number; date: string; payment_date: string | null; business_unit: string | null }
 interface Expense { id: string; partner_commission_id: string; paid: boolean; payment_date: string | null; due_date: string | null }
 interface Receipt extends PartnerReceipt { id: string; commission_id: string | null; partner_id: string }
-interface ClientLite { id: string; name: string; is_juridico?: boolean | null; is_saas?: boolean | null }
+interface ClientLite { id: string; name: string; is_juridico?: boolean | null; is_saas?: boolean | null; email?: string | null; phone?: string | null; cpf_cnpj?: string | null; type?: string | null }
 type Unidade = '' | 'advocacia' | 'saas'
 const UNIDADES: { key: Unidade; label: string }[] = [{ key: '', label: 'Empresa toda' }, { key: 'advocacia', label: 'Advocacia' }, { key: 'saas', label: 'Sistema (SaaS)' }]
 const unitLabel = (u: string) => (u === 'saas' ? 'SaaS' : 'Advocacia')
@@ -82,7 +83,7 @@ export default function Parcerias() {
       supabase.from('partner_commissions').select('*').order('received_at', { ascending: false }),
       supabase.from('finance').select('id, partner_commission_id, paid, payment_date, due_date').not('partner_commission_id', 'is', null),
       supabase.from('partner_receipts').select('*').is('voided_at', null).order('created_at', { ascending: false }),
-      supabase.from('clients').select('id, name, is_juridico, is_saas').order('name'),
+      supabase.from('clients').select('id, name, is_juridico, is_saas, email, phone, cpf_cnpj, type').order('name'),
       supabase.from('processes').select('id, title, number, client_id').order('title'),
     ])
     const firstErr = [p, l, c, e, r].find(x => x.error)?.error
@@ -212,7 +213,7 @@ export default function Parcerias() {
           </div>
         ) : (
           <div className="rounded-lg border overflow-x-auto">
-            <Table>
+            <StackTable>
               <TableHeader>
                 <TableRow>
                   <TableHead>Parceiro</TableHead><TableHead>Tipo</TableHead><TableHead>Regra padrão</TableHead>
@@ -238,12 +239,12 @@ export default function Parcerias() {
                   )
                 })}
               </TableBody>
-            </Table>
+            </StackTable>
           </div>
         )
       ) : (
         <div className="rounded-lg border overflow-x-auto">
-          <Table>
+          <StackTable>
             <TableHeader>
               <TableRow>
                 <TableHead>Recebido em</TableHead><TableHead>Parceiro</TableHead><TableHead>Cliente</TableHead><TableHead>Unidade</TableHead>
@@ -273,7 +274,7 @@ export default function Parcerias() {
                 )
               })}
             </TableBody>
-          </Table>
+          </StackTable>
         </div>
       )}
       <p className="text-[11px] text-muted-foreground">
@@ -325,6 +326,16 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
     default_pct: pctStr(partner.default_pct), default_categories: partner.default_categories ?? DEFAULT_PARTNER_CATEGORIES, payment_days: String(partner.payment_days ?? 5), valid_from: partner.valid_from ?? '', valid_until: partner.valid_until ?? '',
   } : { ...emptyPartner })
   const [saving, setSaving] = useState(false)
+  // O parceiro que também é cliente já tem dados cadastrados: traz o que estiver vazio.
+  const pickOwnClient = (id: string) => {
+    const c = clients.find(x => x.id === id)
+    setForm(f => c ? {
+      ...f, client_id: id,
+      name: f.name.trim() ? f.name : c.name,
+      kind: f.name.trim() ? f.kind : (c.type === 'pessoa_juridica' ? 'empresa' : 'pessoa'),
+      document: f.document || c.cpf_cnpj || '', email: f.email || c.email || '', phone: f.phone || c.phone || '',
+    } : { ...f, client_id: id })
+  }
   const set = <K extends keyof PartnerForm>(k: K, v: PartnerForm[K]) => setForm(f => ({ ...f, [k]: v }))
 
   // vincular cliente
@@ -478,7 +489,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
       <DialogContent className="max-w-[1040px] w-[96vw] max-h-[90vh] overflow-y-auto overflow-x-hidden p-0">
         <DialogHeader className="px-6 pt-6 pb-3 border-b">
           <DialogTitle>{partner ? partner.name : 'Novo parceiro'}</DialogTitle>
-          <div className="flex gap-1.5 pt-2">
+          <div className="flex gap-1.5 pt-2 flex-wrap">
             {tabs.map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${tab === k ? 'bg-primary/10 border-primary/30 text-primary' : 'border-transparent text-muted-foreground hover:bg-muted'}`}>{label}</button>
@@ -513,7 +524,8 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                 <div className="space-y-1.5"><Label>Dados bancários</Label><Input value={form.bank_info} onChange={e => set('bank_info', e.target.value)} placeholder="Banco, agência, conta" className="h-10" /></div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label>Também é cliente?</Label>
-                  <ClientCombobox clients={clients} value={form.client_id} onChange={v => set('client_id', v)} placeholder="Não / escolher cliente" />
+                  <ClientCombobox clients={clients} value={form.client_id} onChange={pickOwnClient} placeholder="Não / escolher cliente" />
+                  <p className="text-[11px] text-muted-foreground">Ao escolher o cliente, nome, CPF/CNPJ, e-mail e telefone vêm do cadastro dele (só os campos ainda vazios).</p>
                 </div>
               </div>
 
@@ -573,7 +585,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                 <p className="text-sm text-muted-foreground text-center py-8">Nenhum cliente vinculado ainda.</p>
               ) : (
                 <div className="rounded-lg border overflow-x-auto">
-                  <Table>
+                  <StackTable>
                     <TableHeader><TableRow>
                       <TableHead>Cliente</TableHead><TableHead>Regra</TableHead><TableHead>Vigência</TableHead><TableHead>Status</TableHead><TableHead />
                     </TableRow></TableHeader>
@@ -594,7 +606,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                         </TableRow>
                       ))}
                     </TableBody>
-                  </Table>
+                  </StackTable>
                 </div>
               )}
               <p className="text-[11px] text-muted-foreground">
@@ -615,7 +627,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
             ) : (
               <>
                 <div className="rounded-lg border overflow-x-auto">
-                  <Table>
+                  <StackTable>
                     <TableHeader><TableRow>
                       <TableHead>Recebido</TableHead><TableHead>Cliente</TableHead><TableHead>Unidade</TableHead><TableHead className="text-right">Base</TableHead>
                       <TableHead className="text-right">Comissão</TableHead><TableHead>Pagar até</TableHead><TableHead>Status</TableHead><TableHead>Recibo</TableHead>
@@ -638,7 +650,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                         )
                       })}
                     </TableBody>
-                  </Table>
+                  </StackTable>
                 </div>
                 {commissions.some(c => c.needs_review) && (
                   <p className="text-xs text-red-600 dark:text-red-400">"Revisar": o pagamento do cliente foi estornado ou apagado depois de a comissão já ter sido paga. Confira com o parceiro.</p>

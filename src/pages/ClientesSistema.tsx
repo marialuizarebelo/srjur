@@ -10,18 +10,20 @@ import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Plus, Search, Cpu, Wallet, Wrench, Rocket, Eye, EyeOff, Copy, Trash2, ExternalLink, KeyRound, CalendarClock } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
 import { Sensitive } from '@/components/Sensitive'
 import { ResponsibleSelect } from '@/components/ResponsibleSelect'
+import { StackTable } from '@/components/StackTable'
+import { ClientCombobox } from '@/components/ClientCombobox'
 
 interface SaasClient {
   id: string; client_id: string; plan: string | null; status: 'implantacao' | 'ativo' | 'pausado' | 'cancelado'
   implementation_value: number | null; monthly_value: number | null; monthly_since: string | null; billing_day: number | null
   started_at: string | null; system_url: string | null; notes: string | null
 }
-interface ClientRow { id: string; name: string; status: string }
+interface ClientRow { id: string; name: string; status: string; email?: string | null; phone?: string | null; cpf_cnpj?: string | null }
 interface Credential {
   id: string; saas_client_id: string; label: string; kind: string; url: string | null; username: string | null
   vault_secret_id: string | null; notes: string | null; last_revealed_at: string | null
@@ -31,7 +33,7 @@ interface Check { id: string; title: string; description: string | null; every_n
 interface TaskRow { id: string; title: string; status: string; priority: string; due_date: string | null; client_id: string | null; saas_kind: string | null; recurring_check_id: string | null; responsible_ids: string[] | null; description: string | null }
 
 const STATUS: { value: SaasClient['status']; label: string; cls: string }[] = [
-  { value: 'implantacao', label: 'Em implantação', cls: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' },
+  { value: 'implantacao', label: 'Em implementação', cls: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' },
   { value: 'ativo', label: 'Ativo', cls: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' },
   { value: 'pausado', label: 'Pausado', cls: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' },
   { value: 'cancelado', label: 'Cancelado', cls: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300' },
@@ -43,11 +45,12 @@ const HIST_KINDS = [['nota', 'Anotação'], ['plano', 'Plano'], ['reajuste', 'Re
 const PRIORITIES = [['baixa', 'Baixa'], ['media', 'Média'], ['alta', 'Alta'], ['urgente', 'Urgente']] as const
 const UNITS = [['dias', 'dias'], ['semanas', 'semanas'], ['meses', 'meses']] as const
 
-interface FinLite { client_id: string; category: string | null; value: number; date: string }
+interface FinLite { client_id: string | null; category: string | null; value: number; date: string; due_date?: string | null; paid?: boolean; payment_date?: string | null; impacts_cash?: boolean | null }
+interface Phase { id: string; saas_client_id: string; position: number; name: string; status: 'pendente' | 'andamento' | 'concluida'; due_date: string | null; done_at: string | null; notes: string | null }
 interface Derived { implementation: number | null; monthly: number | null; monthlySince: string | null; startedAt: string | null }
 
 // Sugestão a partir dos lançamentos de receita do SISTEMA no Financeiro:
-//  - implantação = soma do que não é mensalidade;  - mensalidade = valor mais comum entre as mensalidades (empate: o mais recente);
+//  - implementação = soma do que não é mensalidade;  - mensalidade = valor mais comum entre as mensalidades (empate: o mais recente);
 //  - a partir de = data da primeira mensalidade;  - cliente desde = data do primeiro lançamento.
 function deriveFromFinance(rows: FinLite[]): Derived {
   const isMens = (r: FinLite) => (r.category ?? '').trim().toLowerCase() === 'mensalidade'
@@ -85,14 +88,21 @@ export default function ClientesSistema() {
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [finRows, setFinRows] = useState<FinLite[]>([])
   const [importing, setImporting] = useState(false)
+  const [phases, setPhases] = useState<Phase[]>([])
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'' | SaasClient['status']>('')
   const [openId, setOpenId] = useState<string | null>(null) // clients.id
+  const [addOpen, setAddOpen] = useState(false)
+  const [allClients, setAllClients] = useState<ClientRow[]>([])
+  const [addId, setAddId] = useState('')
+  const [addMode, setAddMode] = useState<'existente' | 'novo'>('existente')
+  const [nf, setNf] = useState({ name: '', type: 'pessoa_fisica', cpf_cnpj: '', email: '', phone: '' })
 
   const load = async () => {
     const [c, s, t] = await Promise.all([
-      supabase.from('clients').select('id, name, status').eq('is_saas', true).order('name'),
+      supabase.from('clients').select('id, name, status, email, phone, cpf_cnpj').eq('is_saas', true).order('name'),
       supabase.from('saas_clients').select('*'),
       supabase.from('tasks').select('id, title, status, priority, due_date, client_id, saas_kind, recurring_check_id, responsible_ids, description')
         .eq('business_unit', 'saas').not('client_id', 'is', null).neq('status', 'cancelada'),
@@ -102,8 +112,11 @@ export default function ClientesSistema() {
     setClients((c.data ?? []) as ClientRow[])
     setSaas((s.data ?? []) as SaasClient[])
     setTasks((t.data ?? []) as TaskRow[])
-    const ids = ((c.data ?? []) as ClientRow[]).map(x => x.id)
-    const f = ids.length ? await supabase.from('finance').select('client_id, category, value, date').eq('type', 'receita').eq('business_unit', 'saas').in('client_id', ids) : { data: [], error: null }
+    const [f, ph] = await Promise.all([
+      supabase.from('finance').select('client_id, category, value, date, due_date, paid, payment_date, impacts_cash').eq('type', 'receita').eq('business_unit', 'saas'),
+      supabase.from('saas_impl_phases').select('id, saas_client_id, position, name, status, due_date, done_at, notes'),
+    ])
+    setPhases((ph.data ?? []) as Phase[])
     if (f.error) toast.error('Erro ao ler o Financeiro: ' + f.error.message)
     setFinRows(((f.data ?? []) as FinLite[]).map(r => ({ ...r, value: Number(r.value) })))
     setLoading(false)
@@ -113,15 +126,17 @@ export default function ClientesSistema() {
   const saasOf = useMemo(() => new Map(saas.map(s => [s.client_id, s])), [saas])
   const derivedOf = useMemo(() => {
     const by = new Map<string, FinLite[]>()
-    finRows.forEach(r => by.set(r.client_id, [...(by.get(r.client_id) ?? []), r]))
+    finRows.forEach(r => { if (r.client_id) by.set(r.client_id, [...(by.get(r.client_id) ?? []), r]) })
     return new Map([...by.entries()].map(([id, rs]) => [id, deriveFromFinance(rs)]))
   }, [finRows])
   const rows = useMemo(() => clients.map(c => {
     const s = saasOf.get(c.id)
     const mine = tasks.filter(t => t.client_id === c.id && t.status === 'pendente')
     const d = derivedOf.get(c.id)
+    const ph = s ? phases.filter(p => p.saas_client_id === s.id) : []
     return {
       client: c, saas: s,
+      fasesDone: ph.filter(p => p.status === 'concluida').length, fasesTotal: ph.length,
       impl: s?.implementation_value ?? d?.implementation ?? null, implFromFin: s?.implementation_value == null && d?.implementation != null,
       monthly: s?.monthly_value ?? d?.monthly ?? null, monthlyFromFin: s?.monthly_value == null && d?.monthly != null,
       since: s?.started_at ?? d?.startedAt ?? null,
@@ -129,7 +144,7 @@ export default function ClientesSistema() {
       chamados: mine.filter(t => t.saas_kind !== 'verificacao').length,
       proxVerif: mine.filter(t => t.saas_kind === 'verificacao' && t.due_date).map(t => t.due_date as string).sort()[0] ?? null,
     }
-  }), [clients, saasOf, tasks, derivedOf])
+  }), [clients, saasOf, tasks, derivedOf, phases])
 
   // Grava no cadastro só o que está vazio; nunca sobrescreve o que já foi preenchido.
   const importAll = async () => {
@@ -161,27 +176,67 @@ export default function ClientesSistema() {
     } finally { setImporting(false) }
   }
 
+  const openAdd = async () => {
+    const { data } = await supabase.from('clients').select('id, name, status, email, phone, cpf_cnpj').neq('is_saas', true).order('name')
+    setAllClients((data ?? []) as ClientRow[]); setAddId(''); setAddMode('existente'); setNf({ name: '', type: 'pessoa_fisica', cpf_cnpj: '', email: '', phone: '' }); setAddOpen(true)
+  }
+  const confirmAdd = async () => {
+    if (addMode === 'novo') {
+      if (!nf.name.trim()) { toast.error('Informe o nome do cliente'); return }
+      const { data, error } = await supabase.from('clients').insert({
+        name: nf.name.trim(), type: nf.type, cpf_cnpj: nf.cpf_cnpj.trim() || null, email: nf.email.trim().toLowerCase() || null, phone: nf.phone.trim() || null,
+        status: 'ativo', is_saas: true, is_juridico: false, created_by: profile?.id ?? null,
+      }).select('id').single()
+      if (error || !data) { toast.error('Erro ao cadastrar: ' + (error?.message ?? '')); return }
+      toast.success('Cliente cadastrado — ele também aparece em Clientes')
+      setAddOpen(false); await load(); setOpenId(data.id); return
+    }
+    if (!addId) { toast.error('Escolha o cliente'); return }
+    const { error } = await supabase.from('clients').update({ is_saas: true }).eq('id', addId)
+    if (error) { toast.error('Erro: ' + error.message); return }
+    setAddOpen(false); await load(); setOpenId(addId)
+  }
+
   const visible = rows.filter(r => (!statusFilter || r.status === statusFilter) && (!search.trim() || r.client.name.toLowerCase().includes(search.trim().toLowerCase())))
   const stats = useMemo(() => ({
     ativos: rows.filter(r => r.status === 'ativo').length,
     mrr: rows.filter(r => r.status === 'ativo').reduce((s, r) => s + Number(r.monthly ?? 0), 0),
     implantando: rows.filter(r => r.status === 'implantacao').length,
     chamados: rows.reduce((s, r) => s + r.chamados, 0),
+    implValor: rows.filter(r => r.status === 'implantacao').reduce((s, r) => s + Number(r.impl ?? 0), 0),
+    fasesAbertas: rows.filter(r => r.status === 'implantacao').reduce((s, r) => s + (r.fasesTotal - r.fasesDone), 0),
+    ...(() => {
+      const mes = new Date().toISOString().slice(0, 7)
+      const caixa = finRows.filter(r => r.impacts_cash !== false)
+      const sum = (xs: FinLite[]) => xs.reduce((s, r) => s + Number(r.value), 0)
+      return {
+        recebidoMes: sum(caixa.filter(r => r.paid && (r.payment_date ?? r.date).slice(0, 7) === mes)),
+        aReceberMes: sum(caixa.filter(r => !r.paid && (r.due_date ?? r.date).slice(0, 7) === mes)),
+        totalRecebido: sum(caixa.filter(r => r.paid)),
+      }
+    })(),
     semDados: rows.filter(r => !r.saas).length,
     precisaImportar: rows.filter(r => { const d = derivedOf.get(r.client.id); return !!d && (!r.saas || (r.saas.monthly_value == null && d.monthly != null) || (r.saas.implementation_value == null && d.implementation != null)) }).length,
-  }), [rows])
+  }), [rows, finRows, derivedOf])
 
   return (
     <div className="space-y-5">
-      <div>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Clientes do sistema</h1>
         <p className="text-sm text-muted-foreground">Quem usa o SRJUR: plano, valores, acessos, chamados e verificações</p>
+       </div>
+        <Button size="sm" onClick={openAdd}><Plus className="h-3 w-3 mr-1" />Adicionar cliente</Button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Kpi icon={Wallet} title="Recebido no mês" value={<Sensitive>{fmtBRL(stats.recebidoMes)}</Sensitive>} sub="receitas do sistema já pagas" />
+        <Kpi icon={CalendarClock} title="A receber no mês" value={<Sensitive>{fmtBRL(stats.aReceberMes)}</Sensitive>} sub="vence neste mês e ainda não foi pago" />
+        <Kpi icon={Wallet} title="Total recebido" value={<Sensitive>{fmtBRL(stats.totalRecebido)}</Sensitive>} sub="tudo que o sistema já recebeu" />
+        <Kpi icon={Wallet} title="Mensalidades (ativos)" value={<Sensitive>{fmtBRL(stats.mrr)}</Sensitive>} sub="por mês, dos clientes ativos" />
         <Kpi icon={Cpu} title="Clientes ativos" value={stats.ativos} sub={stats.semDados ? `${stats.semDados} sem dados cadastrados` : undefined} />
-        <Kpi icon={Wallet} title="Mensalidades (ativos)" value={<Sensitive>{fmtBRL(stats.mrr)}</Sensitive>} sub="soma dos valores cadastrados" />
-        <Kpi icon={Rocket} title="Em implantação" value={stats.implantando} />
+        <Kpi icon={Rocket} title="Em implementação" value={stats.implantando} sub={stats.implantando ? `${stats.fasesAbertas} fase(s) em aberto` : undefined} />
+        <Kpi icon={Rocket} title="Implementações (valor)" value={<Sensitive>{fmtBRL(stats.implValor)}</Sensitive>} sub="clientes em implementação" />
         <Kpi icon={Wrench} title="Chamados abertos" value={stats.chamados} />
       </div>
 
@@ -209,10 +264,10 @@ export default function ClientesSistema() {
         </div>
       ) : (
         <div className="rounded-lg border overflow-x-auto">
-          <Table>
+          <StackTable>
             <TableHeader><TableRow>
-              <TableHead>Cliente</TableHead><TableHead>Plano</TableHead><TableHead>Status</TableHead>
-              <TableHead className="text-right">Implantação</TableHead><TableHead className="text-right">Mensalidade</TableHead>
+              <TableHead>Cliente</TableHead><TableHead>Plano</TableHead><TableHead>Status</TableHead><TableHead>Fases</TableHead>
+              <TableHead className="text-right">Implementação</TableHead><TableHead className="text-right">Mensalidade</TableHead>
               <TableHead>Desde</TableHead><TableHead className="text-right">Chamados</TableHead><TableHead>Próx. verificação</TableHead>
             </TableRow></TableHeader>
             <TableBody>
@@ -221,6 +276,7 @@ export default function ClientesSistema() {
                   <TableCell className="font-medium">{r.client.name}</TableCell>
                   <TableCell className="text-sm">{r.saas?.plan || '—'}</TableCell>
                   <TableCell><Badge className={`text-[10px] border-0 ${statusInfo(r.status).cls}`}>{statusInfo(r.status).label}</Badge></TableCell>
+                  <TableCell className="text-sm">{r.fasesTotal ? `${r.fasesDone}/${r.fasesTotal}` : '—'}</TableCell>
                   <TableCell className="text-right text-sm"><Sensitive><span title={r.implFromFin ? 'Calculado a partir do Financeiro' : undefined} className={r.implFromFin ? 'text-muted-foreground italic' : ''}>{r.impl != null ? fmtBRL(Number(r.impl)) : '—'}</span></Sensitive></TableCell>
                   <TableCell className="text-right text-sm"><Sensitive><span title={r.monthlyFromFin ? 'Calculado a partir do Financeiro' : undefined} className={r.monthlyFromFin ? 'text-muted-foreground italic' : ''}>{r.monthly != null ? fmtBRL(Number(r.monthly)) : '—'}</span></Sensitive></TableCell>
                   <TableCell className="text-sm">{r.since ? fmtDate(r.since) : '—'}</TableCell>
@@ -229,9 +285,47 @@ export default function ClientesSistema() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </StackTable>
         </div>
       )}
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-[480px] w-[96vw]">
+          <DialogHeader><DialogTitle>Adicionar cliente ao sistema</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="inline-flex rounded-lg border p-0.5 bg-muted/40">
+              {([['existente', 'Já cadastrado'], ['novo', 'Cliente novo']] as const).map(([k, l]) => (
+                <button key={k} type="button" onClick={() => setAddMode(k)}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${addMode === k ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{l}</button>
+              ))}
+            </div>
+            {addMode === 'existente' ? (
+              <>
+                <p className="text-xs text-muted-foreground">Escolha um cliente já cadastrado. Ele passa a ser cliente do sistema (continua sendo da advocacia, se for) e os dados dele e os valores do Financeiro já vêm preenchidos.</p>
+                <ClientCombobox clients={allClients} value={addId} onChange={setAddId} allowNone={false} placeholder="Escolha o cliente" />
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground">O cliente é criado como cliente do sistema e também aparece na tela Clientes (marcado como Sistema).</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5 sm:col-span-2"><Label>Nome</Label><Input value={nf.name} onChange={e => setNf(f => ({ ...f, name: e.target.value }))} className="h-10" /></div>
+                  <div className="space-y-1.5">
+                    <Label>Tipo</Label>
+                    <Select value={nf.type} onValueChange={v => v && setNf(f => ({ ...f, type: v }))}>
+                      <SelectTrigger className="h-10"><SelectValue>{nf.type === 'pessoa_juridica' ? 'Pessoa jurídica' : 'Pessoa física'}</SelectValue></SelectTrigger>
+                      <SelectContent><SelectItem value="pessoa_fisica">Pessoa física</SelectItem><SelectItem value="pessoa_juridica">Pessoa jurídica</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5"><Label>CPF / CNPJ</Label><Input value={nf.cpf_cnpj} onChange={e => setNf(f => ({ ...f, cpf_cnpj: e.target.value }))} className="h-10" /></div>
+                  <div className="space-y-1.5"><Label>E-mail</Label><Input type="email" value={nf.email} onChange={e => setNf(f => ({ ...f, email: e.target.value }))} className="h-10" /></div>
+                  <div className="space-y-1.5"><Label>Telefone</Label><Input value={nf.phone} onChange={e => setNf(f => ({ ...f, phone: e.target.value }))} className="h-10" /></div>
+                </div>
+              </>
+            )}
+            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setAddOpen(false)}>Cancelar</Button><Button onClick={confirmAdd}>{addMode === 'novo' ? 'Cadastrar' : 'Adicionar'}</Button></div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {openId && (
         <FichaDialog key={openId} client={clients.find(c => c.id === openId)!} saas={saasOf.get(openId) ?? null} derived={derivedOf.get(openId) ?? null} onClose={() => setOpenId(null)} onChanged={load} />
@@ -243,15 +337,18 @@ export default function ClientesSistema() {
 // ── Ficha ────────────────────────────────────────────────────────────────
 function FichaDialog({ client, saas, derived, onClose, onChanged }: { client: ClientRow; saas: SaasClient | null; derived: Derived | null; onClose: () => void; onChanged: () => void }) {
   const { profile } = useAuth()
-  const [tab, setTab] = useState<'dados' | 'acessos' | 'chamados' | 'verificacoes' | 'historico'>('dados')
+  const [tab, setTab] = useState<'dados' | 'implementacao' | 'acessos' | 'chamados' | 'verificacoes' | 'historico'>('dados')
   const [rec, setRec] = useState<SaasClient | null>(saas)
 
-  const tabs: [typeof tab, string][] = [['dados', 'Dados'], ['acessos', 'Acessos'], ['chamados', 'Chamados'], ['verificacoes', 'Verificações'], ['historico', 'Histórico']]
+  const tabs: [typeof tab, string][] = [['dados', 'Dados'], ['implementacao', 'Implementação'], ['acessos', 'Acessos'], ['chamados', 'Chamados'], ['verificacoes', 'Verificações'], ['historico', 'Histórico']]
   return (
     <Dialog open onOpenChange={v => { if (!v) onClose() }}>
       <DialogContent className="max-w-[980px] w-[96vw] max-h-[90vh] overflow-y-auto overflow-x-hidden p-0">
         <DialogHeader className="px-6 pt-6 pb-3 border-b">
           <DialogTitle>{client.name}</DialogTitle>
+          {(client.email || client.phone || client.cpf_cnpj) && (
+            <p className="text-xs text-muted-foreground break-words">{[client.cpf_cnpj, client.email, client.phone].filter(Boolean).join(' · ')}</p>
+          )}
           <div className="flex gap-1.5 pt-2 flex-wrap">
             {tabs.map(([k, l]) => (
               <button key={k} onClick={() => setTab(k)} disabled={k !== 'dados' && !rec}
@@ -261,6 +358,7 @@ function FichaDialog({ client, saas, derived, onClose, onChanged }: { client: Cl
         </DialogHeader>
         <div className="px-6 py-4 space-y-4">
           {tab === 'dados' && <DadosTab client={client} rec={rec} derived={derived} onSaved={r => { setRec(r); onChanged() }} />}
+          {rec && tab === 'implementacao' && <ImplementacaoTab saasId={rec.id} status={rec.status} onChanged={onChanged} />}
           {rec && tab === 'acessos' && <AcessosTab saasId={rec.id} />}
           {rec && tab === 'chamados' && <ChamadosTab client={client} onChanged={onChanged} userId={profile?.id ?? null} />}
           {rec && tab === 'verificacoes' && <VerificacoesTab saasId={rec.id} onChanged={onChanged} />}
@@ -322,7 +420,7 @@ function DadosTab({ client, rec, derived, onSaved }: { client: ClientRow; rec: S
           </Select>
         </div>
         <div className="space-y-1.5"><Label>Cliente desde</Label><Input type="date" value={f.started_at} onChange={e => set('started_at', e.target.value)} className="h-10" /></div>
-        <div className="space-y-1.5"><Label>Valor da implantação (R$)</Label><Input value={f.implementation_value} onChange={e => set('implementation_value', e.target.value)} placeholder="0,00" className="h-10" /></div>
+        <div className="space-y-1.5"><Label>Valor da implementação (R$)</Label><Input value={f.implementation_value} onChange={e => set('implementation_value', e.target.value)} placeholder="0,00" className="h-10" /></div>
         <div className="space-y-1.5"><Label>Valor da mensalidade (R$)</Label><Input value={f.monthly_value} onChange={e => set('monthly_value', e.target.value)} placeholder="0,00" className="h-10" /></div>
         <div className="space-y-1.5"><Label>Mensalidade a partir de</Label><Input type="date" value={f.monthly_since} onChange={e => set('monthly_since', e.target.value)} className="h-10" /></div>
         <div className="space-y-1.5"><Label>Dia da cobrança</Label><Input value={f.billing_day} onChange={e => set('billing_day', e.target.value.replace(/\D/g, '').slice(0, 2))} placeholder="Ex: 5" className="h-10" /></div>
@@ -396,7 +494,7 @@ function AcessosTab({ saasId }: { saasId: string }) {
       </div>
       {list.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">Nenhum acesso cadastrado.</p> : (
         <div className="rounded-lg border overflow-x-auto">
-          <Table>
+          <StackTable>
             <TableHeader><TableRow><TableHead>Acesso</TableHead><TableHead>Link</TableHead><TableHead>Usuário</TableHead><TableHead>Senha / token</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>
               {list.map(c => (
@@ -424,7 +522,7 @@ function AcessosTab({ saasId }: { saasId: string }) {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </StackTable>
         </div>
       )}
 
@@ -491,13 +589,13 @@ function ChamadosTab({ client, onChanged, userId }: { client: ClientRow; onChang
 
   const abertos = list.filter(t => t.status === 'pendente'), feitos = list.filter(t => t.status === 'concluida')
   const Row = ({ t }: { t: TaskRow }) => (
-    <div className="flex items-start gap-3 rounded-lg border px-3 py-2">
+    <div className="flex items-start gap-3 rounded-lg border px-3 py-2 flex-wrap sm:flex-nowrap">
       <input type="checkbox" className="mt-1" checked={t.status === 'concluida'} onChange={() => toggle(t)} />
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-medium ${t.status === 'concluida' ? 'line-through text-muted-foreground' : ''}`}>{t.title}</p>
         {t.description && <p className="text-xs text-muted-foreground whitespace-pre-wrap">{t.description}</p>}
       </div>
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end max-sm:basis-full max-sm:justify-start">
         <Badge variant="outline" className="text-[10px]">{label(TICKET_KINDS, t.saas_kind)}</Badge>
         <Badge variant="secondary" className="text-[10px]">{label(PRIORITIES, t.priority)}</Badge>
         {t.due_date && <span className="text-xs text-muted-foreground">{fmtDate(t.due_date)}</span>}
@@ -591,7 +689,7 @@ function VerificacoesTab({ saasId, onChanged }: { saasId: string; onChanged: () 
       </div>
       {list.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">Nenhuma verificação recorrente.</p> : (
         <div className="rounded-lg border overflow-x-auto">
-          <Table>
+          <StackTable>
             <TableHeader><TableRow><TableHead>Verificar</TableHead><TableHead>Frequência</TableHead><TableHead>Próxima</TableHead><TableHead>Última vez</TableHead><TableHead>Ativa</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>
               {list.map(c => (
@@ -605,7 +703,7 @@ function VerificacoesTab({ saasId, onChanged }: { saasId: string; onChanged: () 
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </StackTable>
         </div>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
@@ -679,6 +777,94 @@ function HistoricoTab({ saasId }: { saasId: string }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+const PHASE_STATUS = [['pendente', 'Pendente'], ['andamento', 'Em andamento'], ['concluida', 'Concluída']] as const
+const DEFAULT_PHASES = ['Contrato e levantamento', 'Configuração do sistema', 'Migração dos dados', 'Treinamento da equipe', 'Entrada em produção']
+
+function ImplementacaoTab({ saasId, status, onChanged }: { saasId: string; status: SaasClient['status']; onChanged: () => void }) {
+  const [list, setList] = useState<Phase[]>([])
+  const [newName, setNewName] = useState('')
+  const load = async () => {
+    const { data, error } = await supabase.from('saas_impl_phases').select('id, saas_client_id, position, name, status, due_date, done_at, notes').eq('saas_client_id', saasId).order('position')
+    if (error) toast.error('Erro: ' + error.message)
+    setList((data ?? []) as Phase[])
+  }
+  useEffect(() => { load() }, [saasId])
+
+  const done = list.filter(p => p.status === 'concluida').length
+  const patch = async (p: Phase, fields: Partial<Phase>) => {
+    const { error } = await supabase.from('saas_impl_phases').update(fields).eq('id', p.id)
+    if (error) { toast.error('Erro: ' + error.message); return }
+    await load(); onChanged()
+  }
+  const addPhase = async (name: string) => {
+    if (!name.trim()) return
+    const pos = list.reduce((m, p) => Math.max(m, p.position), 0) + 1
+    const { error } = await supabase.from('saas_impl_phases').insert({ saas_client_id: saasId, name: name.trim(), position: pos })
+    if (error) { toast.error('Erro: ' + error.message); return }
+    setNewName(''); await load(); onChanged()
+  }
+  const useDefaults = async () => {
+    const { error } = await supabase.from('saas_impl_phases').insert(DEFAULT_PHASES.map((name, i) => ({ saas_client_id: saasId, name, position: i + 1 })))
+    if (error) { toast.error('Erro: ' + error.message); return }
+    await load(); onChanged()
+  }
+  const move = async (p: Phase, dir: -1 | 1) => {
+    const i = list.findIndex(x => x.id === p.id), other = list[i + dir]
+    if (!other) return
+    await supabase.from('saas_impl_phases').update({ position: other.position }).eq('id', p.id)
+    await supabase.from('saas_impl_phases').update({ position: p.position }).eq('id', other.id)
+    await load()
+  }
+  const remove = async (p: Phase) => {
+    if (!confirm(`Excluir a fase "${p.name}"? A tarefa dela no Calendário também é cancelada.`)) return
+    const { error } = await supabase.from('saas_impl_phases').delete().eq('id', p.id)
+    if (error) { toast.error('Erro: ' + error.message); return }
+    await load(); onChanged()
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-xs text-muted-foreground">Etapas da implementação deste cliente. Fase com prazo vira tarefa no Calendário e conclui junto.</p>
+        {list.length === 0 && <Button size="sm" variant="outline" onClick={useDefaults}>Usar fases padrão</Button>}
+      </div>
+      {list.length > 0 && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs text-muted-foreground"><span>{done} de {list.length} fases concluídas</span><span>{Math.round((done / list.length) * 100)}%</span></div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden"><div className="h-full bg-primary transition-all" style={{ width: `${(done / list.length) * 100}%` }} /></div>
+          {done === list.length && status === 'implantacao' && <p className="text-xs text-emerald-700 dark:text-emerald-300 pt-1">Todas as fases concluídas — se o cliente já está em produção, mude o status para Ativo na aba Dados.</p>}
+        </div>
+      )}
+      <div className="space-y-2">
+        {list.map((p, i) => (
+          <div key={p.id} className="rounded-lg border px-3 py-2 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-muted-foreground w-5">{i + 1}.</span>
+              <Input defaultValue={p.name} onBlur={e => { const v = e.target.value.trim(); if (v && v !== p.name) patch(p, { name: v }) }} className={`h-9 flex-1 min-w-[160px] ${p.status === 'concluida' ? 'line-through text-muted-foreground' : ''}`} />
+              <Select value={p.status} onValueChange={v => v && patch(p, { status: v as Phase['status'] })}>
+                <SelectTrigger className="h-9 w-[150px]"><SelectValue>{label(PHASE_STATUS, p.status)}</SelectValue></SelectTrigger>
+                <SelectContent>{PHASE_STATUS.map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
+              </Select>
+              <Input type="date" value={p.due_date ?? ''} onChange={e => patch(p, { due_date: e.target.value || null })} className="h-9 w-[150px]" title="Prazo" />
+              <div className="flex items-center">
+                <Button variant="ghost" size="sm" className="h-8 px-2" disabled={i === 0} onClick={() => move(p, -1)}>↑</Button>
+                <Button variant="ghost" size="sm" className="h-8 px-2" disabled={i === list.length - 1} onClick={() => move(p, 1)}>↓</Button>
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-destructive" onClick={() => remove(p)}><Trash2 className="h-3 w-3" /></Button>
+              </div>
+            </div>
+            <Input defaultValue={p.notes ?? ''} placeholder="Observações da fase" onBlur={e => { const v = e.target.value.trim(); if (v !== (p.notes ?? '')) patch(p, { notes: v || null }) }} className="h-8 text-xs" />
+            {p.done_at && <p className="text-[11px] text-muted-foreground">Concluída em {fmtDate(p.done_at)}</p>}
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Input value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addPhase(newName) }} placeholder="Nova fase (ex: Integração com o Asaas)" className="h-9" />
+        <Button size="sm" className="h-9" onClick={() => addPhase(newName)}><Plus className="h-3 w-3 mr-1" />Adicionar</Button>
+      </div>
     </div>
   )
 }
