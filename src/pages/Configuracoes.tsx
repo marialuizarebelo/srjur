@@ -61,6 +61,7 @@ const MODULES = [
   { key: 'metricas', label: 'Métricas e Metas' },
   { key: 'financeiro', label: 'Financeiro' },
   { key: 'parcerias', label: 'Parcerias' },
+  { key: 'clientes-sistema', label: 'Clientes do sistema' },
   { key: 'calculadora', label: 'Calculadora' },
   { key: 'marketing', label: 'Marketing' },
   { key: 'portal-admin', label: 'Portal do Cliente' },
