@@ -60,6 +60,7 @@ const MODULES = [
   { key: 'calendario', label: 'Calendário' },
   { key: 'metricas', label: 'Métricas e Metas' },
   { key: 'financeiro', label: 'Financeiro' },
+  { key: 'parcerias', label: 'Parcerias' },
   { key: 'calculadora', label: 'Calculadora' },
   { key: 'marketing', label: 'Marketing' },
   { key: 'portal-admin', label: 'Portal do Cliente' },

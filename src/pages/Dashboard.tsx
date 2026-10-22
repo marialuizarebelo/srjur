@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 import { fmtBRL, fmtDate, fmtDateLong, getDaysDiff } from '@/lib/format'
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { ClientFormDialog, emptyClientForm, type ClientFormData } from '@/components/ClientForm'
+import { syncClientPartnerLink } from '@/lib/partners'
 import {
   Users, Scale, ClipboardList, AlertTriangle, ChevronRight,
   DollarSign, Bell,
@@ -530,10 +531,16 @@ export default function Dashboard() {
         cpf_cnpj: clientForm.cpf_cnpj || null, type: clientForm.type, status: 'ativo',
         responsible_ids: clientForm.responsible_ids, responsible: responsibleNames(clientForm.responsible_ids),
         portal_visible: false,
+        origin: clientForm.origin || null, referred_by: clientForm.referred_by || null,
+        referral_fee_pct: clientForm.referral_fee_pct ? parseFloat(clientForm.referral_fee_pct.replace(',', '.')) : null,
       }
       const { data: newClient, error } = await supabase.from('clients').insert(payload).select('id').single()
       if (error) { toast.error('Erro ao criar cliente: ' + error.message); return }
       if (newClient) {
+        if (clientForm.origin === 'Indicação' && clientForm.partner_id) {
+          const linkErr = await syncClientPartnerLink(newClient.id, clientForm)
+          if (linkErr) toast.error('Cliente criado, mas a parceria não: ' + linkErr)
+        }
         await supabase.from('tasks').insert({
           title: `Completar cadastro — ${clientForm.name}`,
           description: 'Verificar e completar todos os dados do cliente: documentos, endereço, pasta no Drive',

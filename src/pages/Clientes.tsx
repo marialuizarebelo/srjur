@@ -27,6 +27,8 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown, Copy,
 } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
+import { loadClientPartnerLink, syncClientPartnerLink } from '@/lib/partners'
+import { ClientPartnerInfo } from '@/components/ClientPartnerInfo'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ClientFormDialog, emptyClientForm, type ClientFormData, GENDERS, MARITAL_STATUSES, REP_ROLES, REP_DOCUMENT_TYPES, STATES } from '@/components/ClientForm'
@@ -645,6 +647,8 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
               )}
             </div>
           )}
+
+          <ClientPartnerInfo clientId={client.id} />
 
           {/* Dados */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5">
@@ -1294,6 +1298,7 @@ export default function Clientes() {
     })
     setEditingClient(c)
     setDialogOpen(true)
+    loadClientPartnerLink(c.id).then(link => { if (Object.keys(link).length) setCf(f => ({ ...f, ...link })) })
   }
 
   const saveClient = async () => {
@@ -1332,6 +1337,8 @@ export default function Clientes() {
       let { error } = await supabase.from('clients').update({ ...payload, ...extrasEncerramento }).eq('id', editingClient.id)
       if (error && /inactiv/.test(error.message)) ({ error } = await supabase.from('clients').update(payload).eq('id', editingClient.id))
       if (error) { toast.error('Erro ao salvar cliente: ' + error.message); return }
+      const linkErr = await syncClientPartnerLink(editingClient.id, cf.origin === 'Indicação' ? cf : { ...cf, partner_id: '' })
+      if (linkErr) toast.error('Cliente salvo, mas a parceria não: ' + linkErr)
       if (editingClient.status !== cf.status) {
         logActivity('client', editingClient.id, `Status alterado para "${cf.status}"`)
       }
@@ -1340,6 +1347,8 @@ export default function Clientes() {
       if (error) { toast.error('Erro ao criar cliente: ' + error.message); return }
       // If new client, create task to complete registration
       if (newClient) {
+        const linkErr = cf.origin === 'Indicação' && cf.partner_id ? await syncClientPartnerLink(newClient.id, cf) : null
+        if (linkErr) toast.error('Cliente criado, mas a parceria não: ' + linkErr)
         await supabase.from('tasks').insert({
           title: `Completar cadastro — ${cf.name}`,
           description: 'Verificar e completar todos os dados do cliente: documentos, endereço, pasta no Drive',

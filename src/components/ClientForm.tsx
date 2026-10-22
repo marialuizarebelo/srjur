@@ -18,6 +18,7 @@ import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { DriveFileList } from '@/components/DriveFileList'
 import { ResponsibleSelect } from '@/components/ResponsibleSelect'
 import { AREA_COLORS } from '@/lib/areaColors'
+import { usePartners, PARTNER_BASES, baseLabel, type PartnerBase } from '@/lib/partners'
 
 const AREAS = Object.keys(AREA_COLORS)
 
@@ -133,6 +134,8 @@ export interface ClientFormData {
   inactivated_at?: string; inactive_reason?: string
   rep_name: string; rep_cpf: string; rep_role: string; rep_document_type: string; rep_address: string
   is_juridico: boolean; is_saas: boolean; is_cortesia: boolean
+  /** Parceria (módulo Parcerias): parceiro que indicou, base e vigência da comissão. A % fica em referral_fee_pct. */
+  partner_id?: string; partner_base?: string; partner_valid_from?: string; partner_valid_until?: string
 }
 
 export const emptyClientForm: ClientFormData = {
@@ -185,6 +188,7 @@ export function ClientFormDialog({
   open, onOpenChange, form, setForm, onSave, onDelete, isEditing, clientId, saving,
 }: ClientFormDialogProps) {
   const [cepLoading, setCepLoading] = useState(false)
+  const { partners } = usePartners()
   const [driveRootFolderId, setDriveRootFolderId] = useState<string | null>(null)
   const [creatingAccess, setCreatingAccess] = useState(false)
   const [credentialsOpen, setCredentialsOpen] = useState(false)
@@ -563,21 +567,72 @@ export function ClientFormDialog({
             )}
 
             {/* Campos de indicação — aparecem só quando origem é Indicação */}
-            {form.origin === 'Indicação' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Indicado por</Label>
-                  <Input value={form.referred_by} onChange={e => setForm(f => ({ ...f, referred_by: e.target.value }))} placeholder="Nome de quem indicou" className="h-10" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>% de repasse acordado</Label>
-                  <div className="relative">
-                    <Input value={form.referral_fee_pct} onChange={e => setForm(f => ({ ...f, referral_fee_pct: e.target.value }))} placeholder="Ex: 10" className="h-10 pr-8" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+            {form.origin === 'Indicação' && (() => {
+              const activePartners = partners.filter(p => p.status === 'ativo' || p.id === form.partner_id)
+              const chosen = partners.find(p => p.id === form.partner_id)
+              const pickPartner = (id: string) => {
+                const p = partners.find(x => x.id === id)
+                setForm(f => id === '__none__'
+                  ? { ...f, partner_id: '', partner_base: '', partner_valid_from: '', partner_valid_until: '' }
+                  : { ...f, partner_id: id, referred_by: p?.name ?? f.referred_by,
+                      referral_fee_pct: p?.default_pct != null ? String(p.default_pct).replace('.', ',') : f.referral_fee_pct,
+                      partner_base: p?.default_base ?? 'inicial', partner_valid_from: '', partner_valid_until: p?.valid_until ?? '' })
+              }
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>Parceiro</Label>
+                      <Select value={form.partner_id || '__none__'} onValueChange={v => v && pickPartner(v)}>
+                        <SelectTrigger className="h-10"><SelectValue>{chosen?.name ?? 'Outra pessoa (sem cadastro de parceria)'}</SelectValue></SelectTrigger>
+                        <SelectContent className="min-w-72">
+                          <SelectItem value="__none__">Outra pessoa (sem cadastro de parceria)</SelectItem>
+                          {activePartners.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>{chosen ? '% de comissão' : '% de repasse acordado'}</Label>
+                      <div className="relative">
+                        <Input value={form.referral_fee_pct} onChange={e => setForm(f => ({ ...f, referral_fee_pct: e.target.value }))} placeholder="Ex: 10" className="h-10 pr-8" />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                      </div>
+                    </div>
                   </div>
+                  {!chosen && (
+                    <div className="space-y-1.5">
+                      <Label>Indicado por</Label>
+                      <Input value={form.referred_by} onChange={e => setForm(f => ({ ...f, referred_by: e.target.value }))} placeholder="Nome de quem indicou" className="h-10" />
+                    </div>
+                  )}
+                  {chosen && (
+                    <div className="space-y-3 rounded-xl border p-3 bg-muted/30">
+                      <p className="text-xs text-muted-foreground">
+                        Regra padrão de {chosen.name}: {chosen.default_pct != null ? `${String(chosen.default_pct).replace('.', ',')}% sobre ${baseLabel(chosen.default_base).toLowerCase()}` : 'sem % padrão'}.
+                        Só mude abaixo se este cliente tiver um acordo diferente.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <Label>Comissão sobre</Label>
+                          <Select value={form.partner_base || 'inicial'} onValueChange={v => v && setForm(f => ({ ...f, partner_base: v }))}>
+                            <SelectTrigger className="h-10"><SelectValue>{PARTNER_BASES.find(b => b.value === ((form.partner_base || 'inicial') as PartnerBase))?.label}</SelectValue></SelectTrigger>
+                            <SelectContent className="min-w-72">{PARTNER_BASES.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Vigência — fim</Label>
+                          <div className="flex items-center gap-3 h-10">
+                            <Switch checked={!form.partner_valid_until} onCheckedChange={v => setForm(f => ({ ...f, partner_valid_until: v ? '' : new Date().toISOString().slice(0, 10) }))} />
+                            <span className="text-sm">Indeterminada</span>
+                          </div>
+                          {form.partner_valid_until && <Input type="date" value={form.partner_valid_until} onChange={e => setForm(f => ({ ...f, partner_valid_until: e.target.value }))} className="h-10" />}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
