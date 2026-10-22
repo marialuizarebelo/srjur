@@ -325,7 +325,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
   const [hf, setHf] = useState({ unit: 'advocacia' as 'advocacia' | 'saas', client_id: '', source: '', base: '', pct: '', amount: '', received_at: '', paid_at: '', notes: '', createLink: true })
   const [histPayments, setHistPayments] = useState<PaidReceita[]>([])
   const [linkOpen, setLinkOpen] = useState(false)
-  const [lf, setLf] = useState({ client_id: '', process_id: '', pct: '', categories: DEFAULT_PARTNER_CATEGORIES as string[], valid_from: todayISO(), valid_until: '', indeterminate: true, notes: '' })
+  const [lf, setLf] = useState({ unit: '' as '' | 'advocacia' | 'saas', client_id: '', process_id: '', pct: '', categories: DEFAULT_PARTNER_CATEGORIES as string[], valid_from: todayISO(), valid_until: '', indeterminate: true, notes: '' })
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null)
 
   const save = async () => {
@@ -424,12 +424,12 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
 
   const openNewLink = () => {
     setEditingLinkId(null)
-    setLf({ client_id: '', process_id: '', pct: pctStr(partner?.default_pct), categories: partner?.default_categories ?? DEFAULT_PARTNER_CATEGORIES, valid_from: todayISO(), valid_until: '', indeterminate: true, notes: '' })
+    setLf({ unit: '', client_id: '', process_id: '', pct: pctStr(partner?.default_pct), categories: partner?.default_categories ?? DEFAULT_PARTNER_CATEGORIES, valid_from: todayISO(), valid_until: '', indeterminate: true, notes: '' })
     setLinkOpen(true)
   }
   const openEditLink = (l: PartnerLink) => {
     setEditingLinkId(l.id)
-    setLf({ client_id: l.client_id, process_id: l.process_id ?? '', pct: pctStr(l.pct), categories: l.categories ?? DEFAULT_PARTNER_CATEGORIES, valid_from: l.valid_from, valid_until: l.valid_until ?? '', indeterminate: !l.valid_until, notes: l.notes ?? '' })
+    setLf({ unit: l.business_unit ?? '', client_id: l.client_id, process_id: l.process_id ?? '', pct: pctStr(l.pct), categories: l.categories ?? DEFAULT_PARTNER_CATEGORIES, valid_from: l.valid_from, valid_until: l.valid_until ?? '', indeterminate: !l.valid_until, notes: l.notes ?? '' })
     setLinkOpen(true)
   }
   const saveLink = async () => {
@@ -440,7 +440,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
     if (lf.categories.length === 0) { toast.error('Escolha ao menos uma categoria de receita'); return }
     if (!lf.indeterminate && !lf.valid_until) { toast.error('Informe a data de fim da vigência ou marque indeterminada'); return }
     const row = {
-      partner_id: partner.id, client_id: lf.client_id, process_id: lf.process_id || null, pct, categories: lf.categories,
+      partner_id: partner.id, client_id: lf.client_id, process_id: lf.process_id || null, business_unit: lf.unit || null, pct, categories: lf.categories,
       valid_from: lf.valid_from || todayISO(), valid_until: lf.indeterminate ? null : lf.valid_until, notes: lf.notes || null, active: true,
     }
     const { error } = editingLinkId
@@ -571,7 +571,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                             {clientName.get(l.client_id) ?? '—'}
                             {l.process_id && <span className="block text-[11px] text-muted-foreground font-normal">só no processo {processes.find(p => p.id === l.process_id)?.title ?? ''}</span>}
                           </TableCell>
-                          <TableCell className="text-sm">{pctStr(l.pct)}% · {categoriesLabel(l.categories)}</TableCell>
+                          <TableCell className="text-sm">{pctStr(l.pct)}% · {categoriesLabel(l.categories)}{l.business_unit && <Badge variant="outline" className="text-[10px] ml-1.5">só {l.business_unit === 'saas' ? 'SaaS' : 'Advocacia'}</Badge>}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">{vigencia(l.valid_from, l.valid_until)}</TableCell>
                           <TableCell>{l.active ? <Badge className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-0">Ativo</Badge> : <Badge variant="secondary" className="text-[10px]">Desativado</Badge>}</TableCell>
                           <TableCell className="text-right whitespace-nowrap">
@@ -714,6 +714,16 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                   <Label>% de comissão</Label>
                   <div className="relative"><Input value={lf.pct} onChange={e => setLf(f => ({ ...f, pct: e.target.value }))} className="h-10 pr-8" />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span></div>
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Vale para</Label>
+                  <div className="inline-flex rounded-lg border p-0.5 bg-muted/40">
+                    {([['', 'As duas empresas'], ['advocacia', 'Só advocacia'], ['saas', 'Só sistema']] as const).map(([k, label]) => (
+                      <button key={k} type="button" onClick={() => setLf(f => ({ ...f, unit: k }))}
+                        className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${lf.unit === k ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{label}</button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Para cliente das duas empresas com acordos diferentes, crie um vínculo para cada empresa.</p>
                 </div>
                 <div className="space-y-1.5 col-span-2">
                   <Label>Comissão sobre (categorias do Financeiro)</Label>

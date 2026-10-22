@@ -651,7 +651,7 @@ export default function Financeiro() {
     recurrence: 'Única',
     payment_link: '',
     card_fee_percent: '',
-    business_unit: 'advocacia' as 'advocacia' | 'saas',
+    business_unit: 'advocacia' as 'advocacia' | 'saas' | '',
     refletir_metricas: true,
     intragrupo: false,
     cost_type: '',
@@ -852,6 +852,7 @@ export default function Financeiro() {
     if (saving) return
     const val = parseBRLValue(form.value)
     if (isNaN(val) || val <= 0) { toast.error('Valor inválido'); return }
+    if (!form.business_unit) { toast.error('Este cliente é da advocacia e do sistema: escolha a empresa (Unidade) deste lançamento.'); return }
     const numInstallments = parseInt(form.installments) || 1
     // Cartão parcelado (parcelamento no cartão): 1 lançamento único, valor líquido — a operadora
     // paga tudo de uma vez, minus a taxa. Diferente de "mensalidade no cartão" (recorrência mensal),
@@ -1584,15 +1585,15 @@ export default function Financeiro() {
                       setForm(f => ({
                         ...f, client_id: id,
                         // Sugere a unidade certa sozinho quando o cliente só é uma das duas coisas.
-                        business_unit: c && c.is_saas && !c.is_juridico ? 'saas' : c && c.is_juridico && !c.is_saas ? 'advocacia' : f.business_unit,
+                        business_unit: c && c.is_saas && !c.is_juridico ? 'saas' : c && c.is_juridico && !c.is_saas ? 'advocacia' : c && c.is_saas && c.is_juridico ? '' : f.business_unit,
                         refletir_metricas: c?.is_cortesia ? false : true,
                       }))
                     }} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Unidade</Label>
+                    <Label className={!form.business_unit ? 'text-destructive' : ''}>Unidade{!form.business_unit && ' — escolha (cliente das duas empresas)'}</Label>
                     <Select value={form.business_unit} onValueChange={v => setForm(f => ({ ...f, business_unit: v as 'advocacia' | 'saas' }))}>
-                      <SelectTrigger className="h-10"><SelectValue>{form.business_unit === 'saas' ? 'Sistema (SaaS)' : 'Advocacia'}</SelectValue></SelectTrigger>
+                      <SelectTrigger className={`h-10 ${!form.business_unit ? 'border-destructive' : ''}`}><SelectValue>{form.business_unit === 'saas' ? 'Sistema (SaaS)' : form.business_unit === 'advocacia' ? 'Advocacia' : 'Escolha a empresa'}</SelectValue></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="advocacia">Advocacia</SelectItem>
                         <SelectItem value="saas">Sistema (SaaS)</SelectItem>

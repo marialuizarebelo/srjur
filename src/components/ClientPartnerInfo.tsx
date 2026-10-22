@@ -6,7 +6,7 @@ import { fmtBRL, fmtDate } from '@/lib/format'
 import { Sensitive } from '@/components/Sensitive'
 import { categoriesLabel } from '@/lib/partners'
 
-interface LinkRow { id: string; pct: number; categories: string[]; valid_from: string; valid_until: string | null; partners: { id: string; name: string } | null }
+interface LinkRow { id: string; pct: number; categories: string[]; business_unit: string | null; valid_from: string; valid_until: string | null; partners: { id: string; name: string } | null }
 interface CommRow { id: string; amount: number; link_id: string | null; historical: boolean }
 
 // Na ficha do cliente: quem indicou, a regra da comissão e quanto já foi / falta repassar.
@@ -19,7 +19,7 @@ export function ClientPartnerInfo({ clientId }: { clientId: string }) {
     let alive = true
     ;(async () => {
       const { data: l } = await supabase.from('partner_clients')
-        .select('id, pct, categories, valid_from, valid_until, partners(id, name)').eq('client_id', clientId).eq('active', true)
+        .select('id, pct, categories, business_unit, valid_from, valid_until, partners(id, name)').eq('client_id', clientId).eq('active', true)
       const { data: c } = await supabase.from('partner_commissions').select('id, amount, link_id, historical').eq('client_id', clientId)
       const ids = (c ?? []).map(x => x.id)
       const { data: e } = ids.length
@@ -44,7 +44,7 @@ export function ClientPartnerInfo({ clientId }: { clientId: string }) {
         return (
           <div key={l.id} className="text-sm space-y-0.5">
             <p><Link to="/parcerias" className="font-medium hover:underline">{l.partners?.name ?? 'Parceiro'}</Link>
-              <span className="text-muted-foreground"> · {String(l.pct).replace('.', ',')}% sobre {categoriesLabel(l.categories)}</span></p>
+              <span className="text-muted-foreground"> · {String(l.pct).replace('.', ',')}% sobre {categoriesLabel(l.categories)}{l.business_unit ? ` · só ${l.business_unit === 'saas' ? 'sistema' : 'advocacia'}` : ''}</span></p>
             <p className="text-xs text-muted-foreground">
               Vigência: {fmtDate(l.valid_from)} → {l.valid_until ? fmtDate(l.valid_until) : 'indeterminada'}
               {' · '}Já repassado: <Sensitive>{fmtBRL(pago)}</Sensitive>{' · '}A repassar: <Sensitive>{fmtBRL(aPagar)}</Sensitive>

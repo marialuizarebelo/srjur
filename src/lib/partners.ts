@@ -48,6 +48,8 @@ export interface PartnerLink {
   valid_until: string | null
   active: boolean
   notes: string | null
+  /** null = vale para as duas empresas */
+  business_unit: 'advocacia' | 'saas' | null
 }
 
 // Parceiros ativos, pra escolher no cadastro do cliente.
@@ -74,7 +76,7 @@ export interface ClientPartnerFields {
 // Vínculo vigente do cliente com um parceiro (sem processo específico), pra preencher o formulário.
 export async function loadClientPartnerLink(clientId: string): Promise<Partial<ClientPartnerFields>> {
   const { data } = await supabase.from('partner_clients').select('*')
-    .eq('client_id', clientId).eq('active', true).is('process_id', null)
+    .eq('client_id', clientId).eq('active', true).is('process_id', null).is('business_unit', null)
     .order('created_at', { ascending: false }).limit(1).maybeSingle()
   if (!data) return {}
   return {
@@ -90,7 +92,7 @@ export async function loadClientPartnerLink(clientId: string): Promise<Partial<C
 // Retorna uma mensagem de erro, ou null se deu certo.
 export async function syncClientPartnerLink(clientId: string, f: ClientPartnerFields): Promise<string | null> {
   const { data: existing, error: e0 } = await supabase.from('partner_clients').select('*')
-    .eq('client_id', clientId).is('process_id', null)
+    .eq('client_id', clientId).is('process_id', null).is('business_unit', null)
   if (e0) return e0.message
   const links = (existing ?? []) as PartnerLink[]
 
