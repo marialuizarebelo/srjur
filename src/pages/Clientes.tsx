@@ -27,6 +27,7 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown, Copy,
 } from 'lucide-react'
 import { fmtBRL, fmtDate } from '@/lib/format'
+import { AreaTags } from '@/components/AreaTags'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ClientFormDialog, emptyClientForm, type ClientFormData, GENDERS, MARITAL_STATUSES, REP_ROLES, REP_DOCUMENT_TYPES, STATES } from '@/components/ClientForm'
@@ -650,7 +651,12 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
             <InfoRow label="E-mail" value={client.email} copyable />
             <InfoRow label="Telefone" value={client.phone} copyable />
             <InfoRow label="Origem" value={client.origin === 'Indicação' && client.referred_by ? `Indicação (${client.referred_by})` : client.origin} />
-            <InfoRow label="Área" value={client.area} />
+            {client.area && (
+              <div className="flex items-center gap-1 text-sm">
+                <span className="text-muted-foreground shrink-0">Área:</span>
+                <AreaTags area={client.area} />
+              </div>
+            )}
             <InfoRow label="Responsável" value={(client.responsible_ids ?? []).map(id => profilesMap[id]?.display_name).filter(Boolean).join(', ') || null} />
             {client.type === 'pessoa_juridica' && (
               <>
@@ -856,7 +862,9 @@ function ClientCard({ client, onEdit }: { client: Client; onEdit: () => void }) 
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-medium text-sm truncate"><Sensitive>{client.name}</Sensitive></p>
-          <p className="text-xs text-muted-foreground truncate">{client.area ?? client.type}</p>
+          {client.area
+            ? <AreaTags area={client.area} className="mt-0.5" />
+            : <p className="text-xs text-muted-foreground truncate">{client.type}</p>}
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
             <ResponsibleAvatars ids={client.responsible_ids} profilesMap={profilesMap} size="xs" />
             <Badge variant={client.status === 'ativo' ? 'active' : 'secondary'} className="text-[10px]">
@@ -1921,7 +1929,7 @@ export default function Clientes() {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">{c.type === 'pessoa_fisica' ? 'PF' : 'PJ'}</TableCell>
-                    <TableCell className="text-sm">{c.area ?? '—'}</TableCell>
+                    <TableCell className="text-sm"><AreaTags area={c.area} /></TableCell>
                     <TableCell className="text-sm">{c.phone ?? '—'}</TableCell>
                     <TableCell className="text-sm">{c.email ?? '—'}</TableCell>
                     <TableCell className="text-sm">{c.responsible ?? '—'}</TableCell>
