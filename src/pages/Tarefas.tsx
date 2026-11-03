@@ -29,6 +29,8 @@ import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/D
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
+import { useCardFields } from '@/hooks/useCardFields'
+import { CardFieldsButton } from '@/components/CardFieldsButton'
 import { ActivityTimeline } from '@/components/ActivityTimeline'
 import { logActivity } from '@/lib/activityLog'
 
@@ -211,6 +213,23 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
 }
 
 // ── Main ──
+// Campos que o cartão do kanban de execução mostra (cada pessoa escolhe; fica salvo neste navegador).
+const TASK_CARD_FIELDS = [
+  { key: 'tipo', label: 'Tipo' },
+  { key: 'prioridade', label: 'Prioridade (alta e urgente)' },
+  { key: 'prioridade_todas', label: 'Prioridade (todas, também baixa e média)' },
+  { key: 'responsavel', label: 'Responsável' },
+  { key: 'data', label: 'Data' },
+  { key: 'cliente', label: 'Cliente' },
+  { key: 'processo', label: 'Processo vinculado' },
+  { key: 'descricao', label: 'Descrição' },
+  { key: 'etapas', label: 'Botões de mover de etapa' },
+]
+const TASK_DEFAULT_VISIBLE: Record<string, boolean> = {
+  tipo: true, prioridade: true, prioridade_todas: false, responsavel: true, data: true,
+  cliente: false, processo: false, descricao: false, etapas: true,
+}
+
 export default function Tarefas() {
   const { profile } = useAuth()
   const { styleOf, labelOf } = useEventColors()
@@ -221,6 +240,7 @@ export default function Tarefas() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'board' | 'list' | 'execucao'>('list')
+  const { fields: visibleFields, save: saveVisibleFields, reset: resetVisibleFields } = useCardFields('tarefas', TASK_DEFAULT_VISIBLE, 'tarefas_card_fields')
   const pinnedView = usePinnedView('tarefas_view', 'list')
   useEffect(() => { if (pinnedView.loaded && pinnedView.isPinned) setViewMode(pinnedView.pinnedValue as any) }, [pinnedView.loaded])
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -582,6 +602,9 @@ export default function Tarefas() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-8" />
           </div>
+          {viewMode === 'execucao' && (
+            <CardFieldsButton className="h-8" defs={TASK_CARD_FIELDS} fields={visibleFields} onChange={saveVisibleFields} onReset={resetVisibleFields} />
+          )}
           <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
             <Button variant={viewMode === 'board' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
               onClick={() => setViewMode('board')}>
@@ -660,21 +683,35 @@ export default function Tarefas() {
                             onClick={() => setViewTask(task)}>
                             <div className="flex items-start justify-between gap-2 mb-1">
                               <p className="text-sm font-medium truncate flex-1">{task.title}</p>
-                              <ResponsibleAvatars ids={task.responsible_ids} profilesMap={profilesMap} size="xs" />
+                              {visibleFields.responsavel && <ResponsibleAvatars ids={task.responsible_ids} profilesMap={profilesMap} size="xs" />}
                             </div>
-                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                              <Badge variant="outline" className="text-[9px] border-transparent" style={{ backgroundColor: styleOf(task.type).bg, color: styleOf(task.type).text }}>
-                                {getTypeInfo(task.type).label}
-                              </Badge>
-                              {task.priority === 'alta' || task.priority === 'urgente' ? (
-                                <Badge className="text-[9px]" style={{ backgroundColor: getPriorityInfo(task.priority).color, color: '#fff' }}>
-                                  {getPriorityInfo(task.priority).label}
-                                </Badge>
-                              ) : null}
-                            </div>
-                            {task.due_date && (
+                            {(visibleFields.tipo || visibleFields.prioridade || visibleFields.prioridade_todas) && (
+                              <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                {visibleFields.tipo && (
+                                  <Badge variant="outline" className="text-[9px] border-transparent" style={{ backgroundColor: styleOf(task.type).bg, color: styleOf(task.type).text }}>
+                                    {getTypeInfo(task.type).label}
+                                  </Badge>
+                                )}
+                                {(visibleFields.prioridade_todas || (visibleFields.prioridade && (task.priority === 'alta' || task.priority === 'urgente'))) ? (
+                                  <Badge className="text-[9px]" style={{ backgroundColor: getPriorityInfo(task.priority).color, color: '#fff' }}>
+                                    {getPriorityInfo(task.priority).label}
+                                  </Badge>
+                                ) : null}
+                              </div>
+                            )}
+                            {visibleFields.cliente && task.client_id && clients.find(c => c.id === task.client_id) && (
+                              <p className="text-[11px] text-muted-foreground truncate">{clients.find(c => c.id === task.client_id)?.name}</p>
+                            )}
+                            {visibleFields.processo && task.process_id && processes.find(p => p.id === task.process_id) && (
+                              <p className="text-[11px] text-muted-foreground truncate">{processes.find(p => p.id === task.process_id)?.title}</p>
+                            )}
+                            {visibleFields.descricao && task.description && (
+                              <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{task.description}</p>
+                            )}
+                            {visibleFields.data && task.due_date && (
                               <p className="text-[10px] text-muted-foreground">{fmtDate(task.due_date)}</p>
                             )}
+                            {visibleFields.etapas && (
                             <div className="flex items-center gap-1 mt-2">
                               {prevStage && (
                                 <Button variant="ghost" size="sm" className="flex-1 h-6 text-[10px] text-muted-foreground hover:text-foreground"
@@ -689,6 +726,7 @@ export default function Tarefas() {
                                 </Button>
                               )}
                             </div>
+                            )}
                           </div>
                         </DraggableCard>
                       ))}
