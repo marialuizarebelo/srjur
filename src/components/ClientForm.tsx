@@ -253,14 +253,19 @@ export function ClientFormDialog({
   const docPlaceholder = form.type === 'pessoa_fisica' ? '000.000.000-00' : '00.000.000/0000-00'
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-w-[800px] w-[96vw] max-h-[92vh] overflow-y-auto p-6 md:p-8"
-        // Não fecha ao clicar fora nem ao trocar de janela
-        onInteractOutside={e => e.preventDefault()}
-        onPointerDownOutside={e => e.preventDefault()}
-        onFocusOutside={e => e.preventDefault()}
-      >
+    <Dialog
+      open={open}
+      onOpenChange={(o, details) => {
+        // Não fecha ao clicar fora nem ao trocar de janela (senão a pessoa
+        // perde o que já digitou no cadastro). Só fecha pelo X, Esc ou Cancelar.
+        if (!o && (details.reason === 'outside-press' || details.reason === 'focus-out')) {
+          details.cancel()
+          return
+        }
+        onOpenChange(o)
+      }}
+    >
+      <DialogContent className="max-w-[800px] w-[96vw] max-h-[92vh] overflow-y-auto p-6 md:p-8">
         <DialogHeader>
           <DialogTitle className="text-lg">{isEditing ? 'Editar' : 'Novo'} Cliente</DialogTitle>
         </DialogHeader>
