@@ -41,6 +41,8 @@ import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { SortableStageList, StageColorPicker } from '@/components/StageManagerList'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
+import { useCardFields } from '@/hooks/useCardFields'
+import { CardFieldsButton } from '@/components/CardFieldsButton'
 import { ActivityTimeline, type ExternalEntry } from '@/components/ActivityTimeline'
 import { logActivity } from '@/lib/activityLog'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
@@ -811,8 +813,21 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
   )
 }
 
+// Campos que o cartão do cliente mostra (cada usuário escolhe; fica salvo no usuário).
+const CLIENT_CARD_FIELDS = [
+  { key: 'area', label: 'Área / tipo' },
+  { key: 'responsavel', label: 'Responsável' },
+  { key: 'status', label: 'Status' },
+  { key: 'telefone', label: 'Telefone' },
+  { key: 'email', label: 'E-mail' },
+  { key: 'documento', label: 'CPF / CNPJ' },
+]
+const CLIENT_DEFAULT_VISIBLE: Record<string, boolean> = {
+  area: true, responsavel: true, status: true, telefone: false, email: false, documento: false,
+}
+
 // ── Client Card ──
-function ClientCard({ client, onEdit }: { client: Client; onEdit: () => void }) {
+function ClientCard({ client, onEdit, fields }: { client: Client; onEdit: () => void; fields: Record<string, boolean> }) {
   const profilesMap = useProfilesMap()
   const color = getAvatarColor(client.name)
   return (
@@ -826,15 +841,22 @@ function ClientCard({ client, onEdit }: { client: Client; onEdit: () => void }) 
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-medium text-sm truncate"><Sensitive>{client.name}</Sensitive></p>
-          {client.area
+          {fields.area && (client.area
             ? <AreaTags area={client.area} className="mt-0.5" />
-            : <p className="text-xs text-muted-foreground truncate">{client.type}</p>}
+            : <p className="text-xs text-muted-foreground truncate">{client.type}</p>)}
+          {fields.telefone && client.phone && <p className="text-xs text-muted-foreground truncate mt-0.5"><Sensitive>{client.phone}</Sensitive></p>}
+          {fields.email && client.email && <p className="text-xs text-muted-foreground truncate"><Sensitive>{client.email}</Sensitive></p>}
+          {fields.documento && client.cpf_cnpj && <p className="text-xs text-muted-foreground truncate"><Sensitive>{client.cpf_cnpj}</Sensitive></p>}
+          {(fields.responsavel || fields.status) && (
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
-            <ResponsibleAvatars ids={client.responsible_ids} profilesMap={profilesMap} size="xs" />
-            <Badge variant={client.status === 'ativo' ? 'active' : 'secondary'} className="text-[10px]">
-              {client.status.toUpperCase()}
-            </Badge>
+            {fields.responsavel && <ResponsibleAvatars ids={client.responsible_ids} profilesMap={profilesMap} size="xs" />}
+            {fields.status && (
+              <Badge variant={client.status === 'ativo' ? 'active' : 'secondary'} className="text-[10px]">
+                {client.status.toUpperCase()}
+              </Badge>
+            )}
           </div>
+          )}
         </div>
       </div>
     </Card>
@@ -943,6 +965,7 @@ export default function Clientes() {
   const [tab, setTab] = useState<'crm' | 'ativos' | 'encerrados'>('ativos')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
+  const { fields: cardFields, save: saveCardFields, reset: resetCardFields } = useCardFields('clientes', CLIENT_DEFAULT_VISIBLE)
   const [tableSortColumn, setTableSortColumn] = useState<'name' | 'type' | 'area' | 'phone' | 'email' | 'responsible' | 'status' | null>(null)
   const [tableSortDir, setTableSortDir] = useState<'asc' | 'desc'>('asc')
   const toggleTableSort = (col: typeof tableSortColumn) => {
@@ -1553,6 +1576,8 @@ export default function Clientes() {
             />
           </div>
           {tab !== 'crm' && (
+            <>
+            {viewMode === 'cards' && <CardFieldsButton className="h-9" defs={CLIENT_CARD_FIELDS} fields={cardFields} onChange={saveCardFields} onReset={resetCardFields} />}
             <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
               <Button variant={viewMode === 'cards' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
                 onClick={() => setViewMode('cards')}>
@@ -1564,6 +1589,7 @@ export default function Clientes() {
               </Button>
               <PinViewButton isPinned={pinnedView.isPinned} currentValue={viewMode} onPin={v => pinnedView.pin(v as any)} onUnpin={pinnedView.unpin} />
             </div>
+            </>
           )}
         </div>
       </div>
@@ -1646,7 +1672,7 @@ export default function Clientes() {
             </div>
           ) : (
             filteredClients.map(c => (
-              <ClientCard key={c.id} client={c} onEdit={() => setViewClient(c)} />
+              <ClientCard key={c.id} client={c} fields={cardFields} onEdit={() => setViewClient(c)} />
             ))
           )}
         </div>

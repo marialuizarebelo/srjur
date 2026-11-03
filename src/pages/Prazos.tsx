@@ -28,6 +28,8 @@ import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { SortableStageList, StageColorPicker, EXTENDED_STAGE_COLORS } from '@/components/StageManagerList'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
+import { useCardFields } from '@/hooks/useCardFields'
+import { CardFieldsButton } from '@/components/CardFieldsButton'
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { ProcessCombobox } from '@/components/ProcessCombobox'
 import { TipoPrazoCombobox } from '@/components/TipoPrazoCombobox'
@@ -81,12 +83,6 @@ const DEFAULT_VISIBLE: Record<string, boolean> = {
   data: true, dias: true, status: true, notes: false,
 }
 
-function getVisibleFields(): Record<string, boolean> {
-  try {
-    const saved = localStorage.getItem('prazos_card_fields')
-    return saved ? { ...DEFAULT_VISIBLE, ...JSON.parse(saved) } : DEFAULT_VISIBLE
-  } catch { return DEFAULT_VISIBLE }
-}
 
 // ── View Dialog ──
 function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggleStatus, stages, processes, clients, profilesMap }: {
@@ -247,8 +243,7 @@ export default function Prazos() {
   const [editing, setEditing] = useState<Deadline | null>(null)
   const [viewDeadline, setViewDeadline] = useState<Deadline | null>(null)
   const [stagesOpen, setStagesOpen] = useState(false)
-  const [fieldsOpen, setFieldsOpen] = useState(false)
-  const [visibleFields, setVisibleFields] = useState(getVisibleFields)
+  const { fields: visibleFields, save: saveVisibleFields, reset: resetVisibleFields } = useCardFields('prazos', DEFAULT_VISIBLE, 'prazos_card_fields')
 
   // Stage editor state
   const [stageEditing, setStageEditing] = useState<DeadlineStage | null>(null)
@@ -304,11 +299,6 @@ export default function Prazos() {
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [])
-
-  const saveVisibleFields = (fields: Record<string, boolean>) => {
-    setVisibleFields(fields)
-    localStorage.setItem('prazos_card_fields', JSON.stringify(fields))
-  }
 
   const filtered = useMemo(() => {
     return deadlines
@@ -761,9 +751,7 @@ export default function Prazos() {
             <Settings2 className="h-3.5 w-3.5 mr-1.5" />Etapas
           </Button>
           {viewMode === 'kanban' && (
-            <Button variant="outline" size="sm" onClick={() => setFieldsOpen(true)}>
-              <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />Campos
-            </Button>
+            <CardFieldsButton defs={CARD_FIELDS} fields={visibleFields} onChange={saveVisibleFields} onReset={resetVisibleFields} />
           )}
           <div className="flex items-center rounded-lg border p-0.5 bg-muted/30">
             <button
@@ -1073,30 +1061,6 @@ export default function Prazos() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Fields Dialog ── */}
-      <Dialog open={fieldsOpen} onOpenChange={setFieldsOpen}>
-        <DialogContent className="max-w-[380px] w-[96vw] p-6">
-          <DialogHeader>
-            <DialogTitle>Campos visíveis no card</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 pt-2">
-            {CARD_FIELDS.map(f => (
-              <div key={f.key} className="flex items-center gap-3">
-                <Checkbox
-                  id={f.key}
-                  checked={!!visibleFields[f.key]}
-                  onCheckedChange={v => saveVisibleFields({ ...visibleFields, [f.key]: !!v })}
-                />
-                <Label htmlFor={f.key} className="cursor-pointer">{f.label}</Label>
-              </div>
-            ))}
-          </div>
-          <DialogFooter className="pt-4">
-            <Button variant="outline" size="sm" onClick={() => saveVisibleFields(DEFAULT_VISIBLE)}>Restaurar padrão</Button>
-            <DialogClose render={<Button size="sm" />}>OK</DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
