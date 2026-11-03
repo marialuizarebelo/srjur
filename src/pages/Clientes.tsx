@@ -117,6 +117,7 @@ interface Lead {
   first_contact_at: string | null
   signed_at: string | null
   created_at: string
+  created_by: string | null
   // dados p/ qualificação (opcionais — dá pra gerar já em fase de lead)
   type: string | null
   gender: string | null
