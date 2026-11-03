@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { soft } from '@/lib/colors'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -64,6 +65,7 @@ interface Client {
   address: string | null
   portal_visible: boolean
   created_at: string
+  created_by: string | null
   // extra
   referred_by: string | null
   referral_fee_pct: number | null
@@ -119,6 +121,7 @@ interface Lead {
   referral_fee_pct: number | null
   first_contact_at: string | null
   created_at: string
+  created_by: string | null
 }
 
 // ── Types ──
@@ -815,7 +818,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
           </div>
 
           <div className="pt-2 border-t min-w-0">
-            <ActivityTimeline entityType="client" entityId={client.id} createdAt={client.created_at} externalEntries={activityExtras} />
+            <ActivityTimeline entityType="client" entityId={client.id} createdAt={client.created_at} createdBy={client.created_by} externalEntries={activityExtras} />
           </div>
         </div>
       </DialogContent>
@@ -969,6 +972,7 @@ function LeadViewDialog({ lead, open, onClose, onEdit, onDelete, onConvert, onMo
 }
 
 export default function Clientes() {
+  const { profile } = useAuth()
   const navigate = useNavigate()
   const profilesMap = useProfilesMap()
   const [clients, setClients] = useState<Client[]>([])
@@ -1246,7 +1250,7 @@ export default function Clientes() {
         logActivity('client', editingClient.id, `Status alterado para "${cf.status}"`)
       }
     } else {
-      const { data: newClient, error } = await supabase.from('clients').insert(payload).select('id').single()
+      const { data: newClient, error } = await supabase.from('clients').insert({ ...payload, created_by: profile?.id ?? null }).select('id').single()
       if (error) { toast.error('Erro ao criar cliente: ' + error.message); return }
       // If new client, create task to complete registration
       if (newClient) {
