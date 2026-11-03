@@ -25,12 +25,23 @@ import { useEventColors, EVENT_TYPES } from '@/lib/eventColors'
 import { NOTION_COLORS, ncStyle } from '@/lib/notionColors'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { usePinnedView } from '@/hooks/usePinnedView'
+import { useCardFields } from '@/hooks/useCardFields'
+import { CardFieldsButton } from '@/components/CardFieldsButton'
 import { PinViewButton } from '@/components/PinViewButton'
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { ProcessCombobox } from '@/components/ProcessCombobox'
 import { TipoPrazoCombobox } from '@/components/TipoPrazoCombobox'
 
 type ViewMode = 'mes' | 'semana' | 'dia'
+
+// O que aparece em cada evento do calendário (cada usuário escolhe; fica salvo no usuário).
+const CAL_FIELDS = [
+  { key: 'horario', label: 'Horário' },
+  { key: 'responsavel', label: 'Responsável' },
+  { key: 'processo', label: 'Processo vinculado (visão do dia)' },
+  { key: 'tipo', label: 'Tipo do evento (visão do dia)' },
+]
+const CAL_DEFAULT_VISIBLE: Record<string, boolean> = { horario: true, responsavel: true, processo: true, tipo: true }
 
 interface CalEvent {
   id: string
@@ -113,6 +124,7 @@ export default function Calendario() {
   const [cursor, setCursor]   = useState(new Date())
   const [selDate, setSelDate] = useState(toYMD(new Date()))
   const profilesMap = useProfilesMap()
+  const { fields: calFields, save: saveCalFields, reset: resetCalFields } = useCardFields('calendario', CAL_DEFAULT_VISIBLE)
 
   const [showT, setShowT] = useState(true)
   const [showP, setShowP] = useState(true)
@@ -419,10 +431,10 @@ export default function Calendario() {
           title={ev.title}
           onClick={e => { e.stopPropagation(); openEditEvent(ev) }}>
           <span className="truncate flex-1 min-w-0">
-            {!mini && ev.time && <span className="mr-1.5 opacity-60 font-normal">{ev.time.slice(0,5)}</span>}
+            {!mini && calFields.horario && ev.time && <span className="mr-1.5 opacity-60 font-normal">{ev.time.slice(0,5)}</span>}
             {ev.title}
           </span>
-          {personDot && <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: personDot }} />}
+          {calFields.responsavel && personDot && <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: personDot }} />}
         </div>
       </DraggableCard>
     )
@@ -602,7 +614,7 @@ export default function Calendario() {
         <div className={`flex items-start gap-4 p-4 rounded-2xl border border-border/50 transition-colors hover:bg-muted/20 cursor-pointer
           ${done ? 'opacity-40' : ''}`}
           onClick={() => openEditEvent(ev)}>
-          {ev.time && (
+          {calFields.horario && ev.time && (
             <div className="text-center min-w-[48px] shrink-0">
               <p className="text-sm font-semibold text-foreground">{ev.time.slice(0,5)}</p>
             </div>
@@ -614,17 +626,19 @@ export default function Calendario() {
             <p className={`text-sm font-medium ${done ? 'line-through' : ''} ${isOverdue ? 'text-red-600 dark:text-red-400' : 'text-foreground'}`}>
               {ev.title}
             </p>
-            {ev.processLabel && (
+            {calFields.processo && ev.processLabel && (
               <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
                 <Scale className="h-3 w-3 shrink-0" />{ev.processLabel}
               </p>
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full" style={{ backgroundColor: tcs.bg, color: tcs.text }}>
-              {labelOf(ev.subtype ?? ev.type)}
-            </span>
-            <ResponsibleAvatars ids={ev.responsibleIds} profilesMap={profilesMap} />
+            {calFields.tipo && (
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full" style={{ backgroundColor: tcs.bg, color: tcs.text }}>
+                {labelOf(ev.subtype ?? ev.type)}
+              </span>
+            )}
+            {calFields.responsavel && <ResponsibleAvatars ids={ev.responsibleIds} profilesMap={profilesMap} />}
           </div>
         </div>
       )
@@ -754,6 +768,7 @@ export default function Calendario() {
           <Button variant="secondary" size="sm" onClick={goToday}>Hoje</Button>
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
+            <CardFieldsButton className="h-8 rounded-full" defs={CAL_FIELDS} fields={calFields} onChange={saveCalFields} onReset={resetCalFields} />
             <div className="flex items-center gap-0.5 rounded-full border border-[var(--glass-border)] bg-[var(--glass-surface)] p-[3px]">
               {(['mes','semana','dia'] as const).map(v => (
                 <button key={v} onClick={() => setView(v)} className={`px-4 h-8 rounded-full text-[13px] font-bold transition-all ${view===v ? 'bg-[var(--glass-surface)] text-foreground shadow-[inset_0_0_0_1px_var(--glass-border)]' : 'text-muted-foreground hover:text-foreground'}`}>
