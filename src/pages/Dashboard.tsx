@@ -28,8 +28,9 @@ import { ClientFormDialog, emptyClientForm, type ClientFormData } from '@/compon
 import {
   Users, Scale, ClipboardList, AlertTriangle, ChevronRight,
   DollarSign, Bell,
-  Clock, Plus, ArrowRight, Loader2,
+  Clock, Plus, ArrowRight, Loader2, KeyRound,
 } from 'lucide-react'
+import { generateTOTP, secondsRemaining } from '@/lib/totp'
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer } from 'recharts'
 
 /* ---------- QuickView Modal ---------- */
@@ -336,6 +337,127 @@ function PortalActivityCard() {
             </div>
           )
         })}
+      </div>
+    </Card>
+  )
+}
+
+/* ---------- BirthdaysWidget ---------- */
+
+interface BirthdayClient { id: string; name: string; birth_date: string }
+
+function BirthdaysWidget() {
+  const [clients, setClients] = useState<BirthdayClient[]>([])
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('clients').select('id, name, birth_date').eq('status', 'ativo').not('birth_date', 'is', null)
+      const today = new Date()
+      const mm = String(today.getMonth() + 1).padStart(2, '0')
+      const dd = String(today.getDate()).padStart(2, '0')
+      const todays = (data ?? []).filter(c => {
+        const [, bMonth, bDay] = (c.birth_date as string).split('-')
+        return bMonth === mm && bDay === dd
+      })
+      setClients(todays as BirthdayClient[])
+    })()
+  }, [])
+
+  if (clients.length === 0) return null
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-base">🎂</span>
+        <span className="font-semibold text-sm">Aniversariantes de hoje</span>
+      </div>
+      <div className="space-y-1.5">
+        {clients.map(c => (
+          <button
+            key={c.id}
+            onClick={() => navigate(`/clientes?id=${c.id}`)}
+            className="w-full text-left rounded-lg px-2.5 py-2 hover:bg-muted/50 transition-colors text-sm font-medium"
+          >
+            {c.name}
+          </button>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+/* ---------- AuthenticatorWidget ---------- */
+
+interface AuthSystem { id: string; name: string; totp_secret: string | null; color: string | null }
+
+function AuthenticatorCode({ secret }: { secret: string }) {
+  const [code, setCode] = useState('------')
+  const [seconds, setSeconds] = useState(30)
+
+  useEffect(() => {
+    let active = true
+    async function tick() {
+      const c = await generateTOTP(secret)
+      if (active) { setCode(c); setSeconds(secondsRemaining()) }
+    }
+    tick()
+    const interval = setInterval(tick, 1000)
+    return () => { active = false; clearInterval(interval) }
+  }, [secret])
+
+  const pct = (seconds / 30) * 100
+
+  function copy() {
+    navigator.clipboard.writeText(code)
+    toast.success('Código copiado!')
+  }
+
+  return (
+    <button onClick={copy} className="w-full flex items-center gap-2.5 group rounded-lg px-1 py-1.5 hover:bg-muted/50 transition-colors" title="Copiar código">
+      <div className="relative h-8 w-8 shrink-0">
+        <svg className="h-8 w-8 -rotate-90" viewBox="0 0 36 36">
+          <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3" className="text-muted/30" />
+          <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3"
+            strokeDasharray={`${(pct / 100) * 97.4} 97.4`}
+            className={seconds <= 5 ? 'text-red-500' : 'text-primary'} strokeLinecap="round" />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold">{seconds}</span>
+      </div>
+      <div className="text-left min-w-0 flex-1">
+        <p className="text-sm font-mono font-bold tracking-widest group-hover:text-primary transition-colors">
+          <Sensitive>{code.slice(0, 3)} {code.slice(3)}</Sensitive>
+        </p>
+      </div>
+    </button>
+  )
+}
+
+function AuthenticatorWidget() {
+  const [systems, setSystems] = useState<AuthSystem[]>([])
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('electronic_systems').select('id, name, totp_secret, color').not('totp_secret', 'is', null).order('name')
+      setSystems((data as AuthSystem[]) ?? [])
+    })()
+  }, [])
+
+  if (systems.length === 0) return null
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <KeyRound className="h-4 w-4 text-primary" />
+        <span className="font-semibold text-sm">Códigos Authenticator</span>
+      </div>
+      <div className="space-y-2">
+        {systems.map(s => (
+          <div key={s.id}>
+            <p className="text-[10px] text-muted-foreground truncate mb-0.5" style={{ color: s.color ?? undefined }}>{s.name}</p>
+            <AuthenticatorCode secret={s.totp_secret!} />
+          </div>
+        ))}
       </div>
     </Card>
   )
@@ -1041,7 +1163,9 @@ export default function Dashboard() {
 
         {/* Right sidebar */}
         <div className="space-y-4 hidden xl:block">
+          <BirthdaysWidget />
           <PortalActivityCard />
+          <AuthenticatorWidget />
 
           <Card className="p-4">
             <div className="flex items-center justify-between gap-2 mb-3">
