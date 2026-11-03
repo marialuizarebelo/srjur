@@ -41,6 +41,8 @@ import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { SortableStageList, StageColorPicker, EXTENDED_STAGE_COLORS } from '@/components/StageManagerList'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
+import { useCardFields } from '@/hooks/useCardFields'
+import { CardFieldsButton } from '@/components/CardFieldsButton'
 import { ActivityTimeline } from '@/components/ActivityTimeline'
 import { logActivity } from '@/lib/activityLog'
 
@@ -178,6 +180,21 @@ function formatLabel(value: string): string {
 }
 
 // ── Main ──
+// Campos que o cartão do kanban mostra (cada usuário escolhe; fica salvo no usuário).
+const PROC_CARD_FIELDS = [
+  { key: 'numero', label: 'Número do processo' },
+  { key: 'cliente', label: 'Cliente' },
+  { key: 'responsavel', label: 'Responsável' },
+  { key: 'vara', label: 'Vara' },
+  { key: 'contraria', label: 'Parte contrária' },
+  { key: 'instancia', label: 'Instância' },
+  { key: 'area', label: 'Área' },
+  { key: 'tribunal', label: 'Botão do tribunal' },
+]
+const PROC_DEFAULT_VISIBLE: Record<string, boolean> = {
+  numero: true, cliente: true, responsavel: true, vara: true, contraria: true, instancia: true, area: true, tribunal: true,
+}
+
 export default function Processos() {
   const navigate = useNavigate()
   const { profile } = useAuth()
@@ -188,6 +205,7 @@ export default function Processos() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
+  const { fields: cardFields, save: saveCardFields, reset: resetCardFields } = useCardFields('processos', PROC_DEFAULT_VISIBLE)
 
   // ── Etapas do kanban (editáveis) ──
   const [judicialStages, setJudicialStages] = useState<StageOption[]>(DEFAULT_PHASES)
@@ -1080,6 +1098,7 @@ export default function Processos() {
               {AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
             </SelectContent>
           </Select>
+          {viewMode === 'kanban' && <CardFieldsButton className="h-8" defs={PROC_CARD_FIELDS} fields={cardFields} onChange={saveCardFields} onReset={resetCardFields} />}
           <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
             <Button variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
               onClick={() => setViewMode('kanban')}>
@@ -1120,31 +1139,33 @@ export default function Processos() {
                         <div className="p-3 rounded-lg border bg-background hover:shadow-md transition-shadow cursor-pointer"
                           onClick={() => openDetail(proc)}>
                           <p className="text-sm font-medium truncate">{proc.title}</p>
-                          {proc.number && <p className="text-xs text-muted-foreground font-mono mt-0.5">{proc.number}</p>}
+                          {cardFields.numero && proc.number && <p className="text-xs text-muted-foreground font-mono mt-0.5">{proc.number}</p>}
+                          {(cardFields.cliente || cardFields.responsavel) && (
                           <div className="flex items-center justify-between mt-2">
                             <span className="text-xs text-muted-foreground truncate">
-                              {getClientName(proc.client_id)}
+                              {cardFields.cliente && getClientName(proc.client_id)}
                             </span>
-                            <ResponsibleAvatars ids={proc.responsible_ids} profilesMap={profilesMap} size="xs" />
+                            {cardFields.responsavel && <ResponsibleAvatars ids={proc.responsible_ids} profilesMap={profilesMap} size="xs" />}
                           </div>
-                          {proc.court && (
+                          )}
+                          {cardFields.vara && proc.court && (
                             <p className="text-[11px] text-muted-foreground truncate mt-1">Vara: {proc.court}</p>
                           )}
-                          {(proc.opposing_party || proc.opposing_parties?.[0]?.name) && (
+                          {cardFields.contraria && (proc.opposing_party || proc.opposing_parties?.[0]?.name) && (
                             <p className="text-[11px] text-muted-foreground truncate">
                               Contra: {proc.opposing_party || proc.opposing_parties?.[0]?.name}
                             </p>
                           )}
-                          {proc.instance && (
+                          {cardFields.instancia && proc.instance && (
                             <p className="text-[11px] text-muted-foreground truncate">{proc.instance}</p>
                           )}
                           <div className="flex items-center justify-between mt-1.5 gap-1.5">
-                            {proc.area && (
+                            {cardFields.area && proc.area && (
                               <Badge variant="outline" className={`text-[10px] border-0 ${getAreaColor(proc.area).bg} ${getAreaColor(proc.area).text}`}>
                                 {proc.area}
                               </Badge>
                             )}
-                            {proc.court_url && (
+                            {cardFields.tribunal && proc.court_url && (
                               <Button
                                 variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] ml-auto shrink-0"
                                 onClick={e => { e.stopPropagation(); window.open(proc.court_url!, '_blank') }}
