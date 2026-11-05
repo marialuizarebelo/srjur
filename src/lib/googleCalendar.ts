@@ -35,6 +35,11 @@ export interface SyncResult {
   pulled?: number
   pushed?: number
   removed?: number
+  updatedFromGoogle?: number
+  pushedBack?: number
+  deletedInSystem?: number
+  deletedInGoogle?: number
+  calendars?: string[]
   candidatesFound?: number
   totalTasksInRange?: number
   totalDeadlinesInRange?: number
