@@ -1,0 +1,25 @@
+-- Leads: dados de qualificacao ja na fase de lead, data de fechamento, criado por, e responsavel padrao por follow-ups (igual ao Basic)
+alter table public.leads add column if not exists type text;
+alter table public.leads add column if not exists gender text;
+alter table public.leads add column if not exists nationality text;
+alter table public.leads add column if not exists marital_status text;
+alter table public.leads add column if not exists profession text;
+alter table public.leads add column if not exists rg_number text;
+alter table public.leads add column if not exists rg_issuer text;
+alter table public.leads add column if not exists cep text;
+alter table public.leads add column if not exists street text;
+alter table public.leads add column if not exists address_number text;
+alter table public.leads add column if not exists complement text;
+alter table public.leads add column if not exists neighborhood text;
+alter table public.leads add column if not exists city text;
+alter table public.leads add column if not exists state text;
+alter table public.leads add column if not exists rep_name text;
+alter table public.leads add column if not exists rep_cpf text;
+alter table public.leads add column if not exists rep_role text;
+alter table public.leads add column if not exists rep_document_type text;
+alter table public.leads add column if not exists rep_address text;
+alter table public.leads add column if not exists tags text;
+alter table public.leads add column if not exists birth_date date;
+alter table public.leads add column if not exists signed_at date;
+alter table public.leads add column if not exists created_by uuid references public.profiles(id) on delete set null;
+alter table public.office_settings add column if not exists default_lead_responsible_id uuid references public.profiles(id) on delete set null;
