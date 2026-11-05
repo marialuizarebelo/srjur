@@ -14,6 +14,7 @@ import {
 import { ChevronLeft, ChevronRight, Scale, RefreshCw, Loader2, Plus } from 'lucide-react'
 import { fmtDateLong } from '@/lib/format'
 import { syncGoogleCalendar, type SyncResult } from '@/lib/googleCalendar'
+import { ProcessRef } from '@/components/ProcessRef'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { toast } from 'sonner'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
@@ -54,6 +55,8 @@ interface CalEvent {
   status: string
   workflowStage: string
   processLabel?: string
+  processNumber?: string | null
+  processTitle?: string
 }
 
 const WORKFLOW_STAGES = [
@@ -292,6 +295,7 @@ export default function Calendario() {
       supabase.from('marketing_content').select('id,title,scheduled_date,scheduled_time,responsible_ids,status,platform').not('scheduled_date', 'is', null),
     ])
     const pm = Object.fromEntries((processes??[]).map(p=>[p.id, p.number ? `${p.number} — ${p.title}` : p.title]))
+    const pn = Object.fromEntries((processes??[]).map(p=>[p.id, { number: p.number as string | null, title: p.title as string }]))
     const evs: CalEvent[] = []
     for (const t of tasks??[]) {
       if (!t.due_date) continue
@@ -299,13 +303,15 @@ export default function Calendario() {
       evs.push({ id:`t-${t.id}`, type: isComp ? 'compromisso' : 'tarefa', subtype: t.type,
         title:t.title, date:t.due_date, time:t.due_time, responsibleIds: t.responsible_ids ?? [],
         status:t.status, workflowStage: t.workflow_stage ?? 'a_fazer',
-        processLabel: t.process_id ? pm[t.process_id] : undefined })
+        processLabel: t.process_id ? pm[t.process_id] : undefined,
+        processNumber: t.process_id ? pn[t.process_id]?.number : undefined, processTitle: t.process_id ? pn[t.process_id]?.title : undefined })
     }
     for (const d of deadlines??[]) {
       if (!d.due_date) continue
       evs.push({ id:`d-${d.id}`, type:'prazo', title:d.title, date:d.due_date,
         responsibleIds: d.responsible_ids ?? [], status:d.status, workflowStage: d.workflow_stage ?? 'a_fazer',
-        processLabel: d.process_id ? pm[d.process_id] : undefined })
+        processLabel: d.process_id ? pm[d.process_id] : undefined,
+        processNumber: d.process_id ? pn[d.process_id]?.number : undefined, processTitle: d.process_id ? pn[d.process_id]?.title : undefined })
     }
     for (const m of marketing??[]) {
       if (!m.scheduled_date) continue
@@ -641,10 +647,8 @@ export default function Calendario() {
             <p className={`text-sm font-medium ${done ? 'line-through' : ''} ${isOverdue ? 'text-red-600 dark:text-red-400' : 'text-foreground'}`}>
               {ev.title}
             </p>
-            {calFields.processo && ev.processLabel && (
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                <Scale className="h-3 w-3 shrink-0" />{ev.processLabel}
-              </p>
+            {calFields.processo && ev.processTitle && (
+              <ProcessRef number={ev.processNumber} title={ev.processTitle} className="text-[11px] text-muted-foreground mt-0.5" />
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
