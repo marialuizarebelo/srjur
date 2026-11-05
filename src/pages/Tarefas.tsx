@@ -27,6 +27,7 @@ import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/compone
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
+import { ProcessRefById } from '@/components/ProcessRef'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
 import { useCardFields } from '@/hooks/useCardFields'
@@ -169,10 +170,10 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
                 <p className="font-medium">{clientName}</p>
               </div>
             )}
-            {processTitle && (
-              <div>
+            {task.process_id && processes.some(p => p.id === task.process_id) && (
+              <div className="col-span-2">
                 <p className="text-[11px] text-muted-foreground">Processo</p>
-                <p className="font-medium">{processTitle}</p>
+                <ProcessRefById processes={processes} id={task.process_id} className="text-sm font-medium" wrap />
               </div>
             )}
           </div>
@@ -501,9 +502,7 @@ export default function Tarefas() {
               {getClientName(task.client_id) && (
                 <span className="text-[10px] text-muted-foreground">{getClientName(task.client_id)}</span>
               )}
-              {getProcessTitle(task.process_id) && (
-                <span className="text-[10px] text-muted-foreground">· {getProcessTitle(task.process_id)}</span>
-              )}
+              <ProcessRefById processes={processes} id={task.process_id} className="text-[10px] text-muted-foreground" />
             </div>
           </div>
         </div>
@@ -719,9 +718,7 @@ export default function Tarefas() {
                             {visibleFields.cliente && task.client_id && clients.find(c => c.id === task.client_id) && (
                               <p className="text-[11px] text-muted-foreground truncate">{clients.find(c => c.id === task.client_id)?.name}</p>
                             )}
-                            {visibleFields.processo && task.process_id && processes.find(p => p.id === task.process_id) && (
-                              <p className="text-[11px] text-muted-foreground truncate">{processes.find(p => p.id === task.process_id)?.title}</p>
-                            )}
+                            {visibleFields.processo && <ProcessRefById processes={processes} id={task.process_id} className="text-[11px] text-muted-foreground" />}
                             {visibleFields.descricao && task.description && (
                               <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{task.description}</p>
                             )}

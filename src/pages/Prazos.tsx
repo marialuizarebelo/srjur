@@ -26,6 +26,7 @@ import { fmtDate, getDaysDiff } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
+import { ProcessRef, ProcessRefById } from '@/components/ProcessRef'
 import { SortableStageList, StageColorPicker, EXTENDED_STAGE_COLORS } from '@/components/StageManagerList'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
@@ -166,7 +167,7 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
             {process && (
               <div className="col-span-2">
                 <p className="text-[11px] text-muted-foreground">Processo</p>
-                <p className="font-medium">{process.number ? `${process.title} — ${process.number}` : process.title}</p>
+                <ProcessRef number={process.number} title={process.title} className="text-sm font-medium" wrap />
               </div>
             )}
             {deadline.source && (
@@ -531,12 +532,7 @@ export default function Prazos() {
           <p className="text-[10px] text-muted-foreground truncate">{getClientLabel(deadline)}</p>
         )}
 
-        {visibleFields.processo && getProcessLabel(deadline.process_id) && (
-          <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1">
-            <Scale className="h-3 w-3 shrink-0" />
-            {getProcessLabel(deadline.process_id)}
-          </p>
-        )}
+        {visibleFields.processo && <ProcessRefById processes={processes} id={deadline.process_id} className="text-[10px] text-muted-foreground" />}
 
         {visibleFields.notes && deadline.notes && (
           <p className="text-[10px] text-muted-foreground line-clamp-2">{deadline.notes}</p>
@@ -633,12 +629,10 @@ export default function Prazos() {
                 </div>
               )}
             </div>
-            {(getClientLabel(deadline) || getProcessLabel(deadline.process_id)) && (
-              <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                <Scale className="h-3 w-3 inline mr-0.5" />
-                {[getClientLabel(deadline), getProcessLabel(deadline.process_id)].filter(Boolean).join(' — ')}
-              </p>
+            {getClientLabel(deadline) && (
+              <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{getClientLabel(deadline)}</p>
             )}
+            <ProcessRefById processes={processes} id={deadline.process_id} className="text-[10px] text-muted-foreground mt-0.5" />
           </div>
         </div>
 
