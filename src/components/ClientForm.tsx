@@ -145,11 +145,11 @@ export const emptyClientForm: ClientFormData = {
   rep_name: '', rep_cpf: '', rep_role: '', rep_document_type: 'Contrato Social', rep_address: '',
 }
 
-const GENDERS = ['Masculino', 'Feminino', 'Outro', 'Não informado']
-const MARITAL_STATUSES = ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável', 'Não informado']
-const REP_ROLES = ['Sócio-Administrador', 'Diretor', 'Procurador']
-const REP_DOCUMENT_TYPES = ['Contrato Social', 'Estatuto Social']
-const STATES = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
+export const GENDERS = ['Masculino', 'Feminino', 'Outro', 'Não informado']
+export const MARITAL_STATUSES = ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável', 'Não informado']
+export const REP_ROLES = ['Sócio-Administrador', 'Diretor', 'Procurador']
+export const REP_DOCUMENT_TYPES = ['Contrato Social', 'Estatuto Social']
+export const STATES = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
 const ORIGINS = ['Indicação', 'Google', 'Instagram', 'WhatsApp', 'Site', 'Evento', 'Outro']
 
 interface ClientFormDialogProps {
@@ -572,13 +572,13 @@ export function ClientFormDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label>Pasta no Google Drive</Label>
+              <Label>Pasta ou link de documentos</Label>
               <DriveFolderPicker
+                allowLink
                 value={{ folder_id: form.drive_folder_id, drive_url: form.drive_url }}
                 onChange={f => setForm(prev => ({ ...prev, drive_folder_id: f.folder_id, drive_url: f.drive_url }))}
                 folderNameSuggestion={form.name}
                 parentFolderId={driveRootFolderId}
-                allowLink
               />
               {form.drive_folder_id && (
                 <div className="rounded-xl border border-border/60 p-3 mt-2">
