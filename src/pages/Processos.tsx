@@ -60,6 +60,7 @@ interface Process {
   responsible: string | null
   responsible_ids: string[] | null
   court: string | null
+  procedural_class: string | null
   electronic_system: string | null
   notes: string | null
   portal_visible: boolean

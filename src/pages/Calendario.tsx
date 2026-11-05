@@ -132,6 +132,21 @@ export default function Calendario() {
   const [resp, setResp]   = useState('todos')
 
   useEffect(() => { load() }, [])
+  // Sincronização com o Google em segundo plano: ao abrir o calendário e a cada 5 minutos enquanto ele estiver aberto.
+  // Fica em silêncio se não houver conta conectada (quem quiser ver o relatório usa o botão Google Agenda).
+  useEffect(() => {
+    let alive = true
+    const run = async () => {
+      try {
+        const results = await syncGoogleCalendar()
+        const changed = results.some(r => ((r.pulled ?? 0) + (r.updatedFromGoogle ?? 0) + (r.deletedInSystem ?? 0)) > 0)
+        if (alive && changed) load()
+      } catch { /* sem conexão com o Google ou falha momentânea: tenta de novo no próximo ciclo */ }
+    }
+    run()
+    const timer = setInterval(run, 5 * 60_000)
+    return () => { alive = false; clearInterval(timer) }
+  }, [])
   // Listas usadas no cadastro rápido (cliente, processo e primeira etapa dos prazos)
   useEffect(() => {
     supabase.from('clients').select('id, name').order('name').then(({ data }) => setQClients((data as { id: string; name: string }[]) ?? []))
