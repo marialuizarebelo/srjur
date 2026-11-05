@@ -164,11 +164,69 @@ async function ensureFreshToken(conn: any) {
   return data.access_token
 }
 
-// ── Push de um item (task ou deadline) para uma conexão específica ──────
-async function pushItem(conn: any, token: string, sourceTable: 'tasks' | 'deadlines', item: any) {
-  const { data: link } = await adminClient.from('google_event_links').select('*')
-    .eq('source_table', sourceTable).eq('source_id', item.id).eq('connection_id', conn.id).maybeSingle()
+// ── Sincronização de verdade (dois sentidos) ─────────────────────────────
+// Google → sistema: TODAS as agendas em que a pessoa pode escrever (principal, criadas por ela e compartilhadas
+//   com edição) viram compromissos no sistema; mudanças e exclusões no Google chegam ao sistema.
+// Sistema → Google: o que é criado no sistema vai para a agenda principal; mudanças e exclusões no sistema chegam
+//   ao Google (inclusive nos eventos que vieram do Google).
+// Cada lado só é escrito quando o outro mudou DEPOIS da última sincronização do item (synced_at).
+const GCAL = 'https://www.googleapis.com/calendar/v3'
+const SYNC_PAST_DAYS = 30
+const SYNC_FUTURE_DAYS = 365
+const MAX_GOOGLE_DELETES_PER_RUN = 25
 
+const gh = (token: string) => ({ Authorization: `Bearer ${token}` })
+const after = (a?: string | null, b?: string | null) => !!a && !!b && new Date(a).getTime() > new Date(b).getTime()
+
+async function listWritableCalendars(token: string) {
+  const cals: { id: string; summary: string; primary: boolean }[] = []
+  let pageToken = ''
+  do {
+    const r = await fetch(`${GCAL}/users/me/calendarList?minAccessRole=writer&maxResults=250${pageToken ? `&pageToken=${pageToken}` : ''}`, { headers: gh(token) })
+    if (!r.ok) throw new Error('Falha ao listar as agendas do Google: ' + (await r.text()).slice(0, 200))
+    const j = await r.json()
+    for (const c of j.items ?? []) cals.push({ id: c.id, summary: c.summary ?? c.id, primary: !!c.primary })
+    pageToken = j.nextPageToken ?? ''
+  } while (pageToken)
+  return cals
+}
+
+// null = não foi possível ler esta agenda agora (nada deve ser apagado por causa disso)
+async function listEvents(token: string, calId: string, timeMin: string, timeMax: string) {
+  const items: any[] = []
+  let pageToken = ''
+  do {
+    const r = await fetch(`${GCAL}/calendars/${encodeURIComponent(calId)}/events?` + new URLSearchParams({
+      timeMin, timeMax, singleEvents: 'true', maxResults: '250', ...(pageToken ? { pageToken } : {}),
+    }), { headers: gh(token) })
+    if (!r.ok) return null
+    const j = await r.json()
+    items.push(...(j.items ?? []))
+    pageToken = j.nextPageToken ?? ''
+  } while (pageToken)
+  return items
+}
+
+function eventToFields(ev: any) {
+  const startDate: string | null = ev.start?.date ?? ev.start?.dateTime?.slice(0, 10) ?? null
+  const startTime: string | null = ev.start?.dateTime ? ev.start.dateTime.slice(11, 16) : null
+  let endDate: string | null = null
+  let endTime: string | null = null
+  if (ev.end?.dateTime) {
+    endTime = ev.end.dateTime.slice(11, 16)
+    const e = ev.end.dateTime.slice(0, 10)
+    if (e !== startDate) endDate = e
+  } else if (ev.end?.date && startDate) {
+    const d = new Date(`${ev.end.date}T00:00:00Z`)
+    d.setUTCDate(d.getUTCDate() - 1) // no Google o fim de um evento de dia inteiro é exclusivo
+    const e = d.toISOString().slice(0, 10)
+    if (e > startDate) endDate = e
+  }
+  return { startDate, startTime, endDate, endTime }
+}
+
+// ── Push de um item (task ou deadline) criado no sistema ─────────────────
+async function pushItem(conn: any, token: string, sourceTable: 'tasks' | 'deadlines', item: any, link: any | null) {
   const prefix = sourceTable === 'deadlines' ? '⚖️ Prazo: ' : ''
   const eventBody: any = {
     summary: `${prefix}${item.title}`,
@@ -187,27 +245,24 @@ async function pushItem(conn: any, token: string, sourceTable: 'tasks' | 'deadli
     eventBody.end = { date: item.due_date }
   }
 
+  const calId = link?.calendar_id ?? conn.calendar_id
   const method = link ? 'PATCH' : 'POST'
   const url = link
-    ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(conn.calendar_id)}/events/${link.google_event_id}`
-    : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(conn.calendar_id)}/events`
+    ? `${GCAL}/calendars/${encodeURIComponent(calId)}/events/${link.google_event_id}`
+    : `${GCAL}/calendars/${encodeURIComponent(conn.calendar_id)}/events`
 
   const res = await fetch(url, {
     method,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: { ...gh(token), 'Content-Type': 'application/json' },
     body: JSON.stringify(eventBody),
   })
   if (!res.ok) {
-    // 404/410 num PATCH = a usuária excluiu o evento direto no Google. Isso
-    // conta como "resolvido" pra ela — tratamos como concluído/cumprido no
-    // sistema também, em vez de deixar pendente (o que faria a próxima
-    // sincronização recriar um evento novo do zero, parecendo que "voltou
-    // sozinho"). Também evita o Google "ressuscitar" o evento antigo só por
-    // causa do PATCH em cima de algo já excluído.
+    // 404/410 num PATCH = a usuária excluiu o evento direto no Google. Isso conta como "resolvido" pra ela —
+    // tratamos como concluído/cumprido no sistema também, em vez de recriar o evento do zero.
     if (method === 'PATCH' && (res.status === 404 || res.status === 410)) {
       await adminClient.from(sourceTable)
         .update({ status: sourceTable === 'tasks' ? 'concluida' : 'cumprido' })
-        .eq('id', item.id)
+        .eq('id', item.id).eq('tenant_id', conn.tenant_id)
       await adminClient.from('google_event_links').delete()
         .eq('source_table', sourceTable).eq('source_id', item.id).eq('connection_id', conn.id)
       return { ok: true, autoCompleted: true }
@@ -217,95 +272,195 @@ async function pushItem(conn: any, token: string, sourceTable: 'tasks' | 'deadli
   }
 
   const created = await res.json()
-  await adminClient.from('google_event_links').upsert({
+  const { error } = await adminClient.from('google_event_links').upsert({
     source_table: sourceTable, source_id: item.id, connection_id: conn.id,
-    google_event_id: created.id, synced_at: new Date().toISOString(), origin: 'push',
+    google_event_id: created.id, calendar_id: calId, synced_at: new Date().toISOString(), origin: 'push',
   }, { onConflict: 'source_table,source_id,connection_id' })
+  if (error) return { ok: false, error: 'Evento criado no Google, mas o vínculo não foi salvo: ' + error.message, title: item.title }
   return { ok: true }
 }
 
 // ── Sincronização (pull + push) de uma conexão ───────────────────────────
 async function syncConnection(conn: any) {
   const token = await ensureFreshToken(conn)
-  const timeMin = new Date(Date.now() - 7 * 86400_000)
-  const timeMax = new Date(Date.now() + 180 * 86400_000)
+  const nowIso = () => new Date().toISOString()
+  const timeMin = new Date(Date.now() - SYNC_PAST_DAYS * 86400_000)
+  const timeMax = new Date(Date.now() + SYNC_FUTURE_DAYS * 86400_000)
   const dateMinStr = timeMin.toISOString().slice(0, 10)
   const dateMaxStr = timeMax.toISOString().slice(0, 10)
 
-  // ── PULL: eventos do Google → tasks (compromissos) ──
-  const listRes = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(conn.calendar_id)}/events?` +
-    new URLSearchParams({ timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString(), singleEvents: 'true', maxResults: '250' }),
-    { headers: { Authorization: `Bearer ${token}` } },
-  )
-  const list = await listRes.json()
-  let pulled = 0
+  const stats = { pulled: 0, updatedFromGoogle: 0, deletedInSystem: 0, pushed: 0, pushedBack: 0, removed: 0, deletedInGoogle: 0 }
+  const errors: { title: string; error: string }[] = []
 
-  if (list.items) {
-    for (const ev of list.items) {
+  // Todos os vínculos do escritório (qualquer conexão): um evento do Google vira UM item, mesmo que a mesma conta
+  // esteja ligada como "escritório" e como "pessoal".
+  const { data: allLinksData } = await adminClient.from('google_event_links').select('*')
+  const allLinks: any[] = allLinksData ?? []
+  const linkByEvent = new Map<string, any>()   // `${agenda}|${evento}` → vínculo (itens que vieram do Google)
+  const linkByGoogleId = new Map<string, any>() // `${conexão}|${evento}` → vínculo (itens criados no sistema)
+  for (const l of allLinks) {
+    if (l.origin === 'pull' && l.calendar_id) linkByEvent.set(`${l.calendar_id}|${l.google_event_id}`, l)
+    linkByGoogleId.set(`${l.connection_id}|${l.google_event_id}`, l)
+  }
+  const pulledIds = new Set(allLinks.filter(l => l.origin === 'pull').map(l => l.source_id))
+
+  // Itens do sistema que existem (para saber o que foi apagado no sistema)
+  async function loadByIds(table: 'tasks' | 'deadlines', ids: string[]) {
+    const out = new Map<string, any>()
+    for (let i = 0; i < ids.length; i += 150) {
+      const { data, error } = await adminClient.from(table).select('*').eq('tenant_id', conn.tenant_id).in('id', ids.slice(i, i + 150))
+      if (error) return null
+      for (const r of data ?? []) out.set(r.id, r)
+    }
+    return out
+  }
+  const myLinks = allLinks.filter(l => l.connection_id === conn.id)
+  const taskMap = await loadByIds('tasks', [...new Set(myLinks.filter(l => l.source_table === 'tasks').map(l => l.source_id))])
+  const deadlineMap = await loadByIds('deadlines', [...new Set(myLinks.filter(l => l.source_table === 'deadlines').map(l => l.source_id))])
+  const mapsOk = taskMap !== null && deadlineMap !== null
+
+  // ── PULL: TODAS as agendas editáveis do Google → compromissos ──
+  const calendars = await listWritableCalendars(token)
+  const seen = new Map<string, Set<string>>() // agenda → ids de evento vistos
+  const calendarNames: string[] = []
+
+  for (const cal of calendars) {
+    const items = await listEvents(token, cal.id, timeMin.toISOString(), timeMax.toISOString())
+    if (items === null) { errors.push({ title: `Agenda "${cal.summary}"`, error: 'não foi possível ler agora' }); continue }
+    calendarNames.push(cal.summary)
+    const ids = new Set<string>()
+    seen.set(cal.id, ids)
+
+    for (const ev of items) {
       if (ev.status === 'cancelled') continue
-      if (ev.extendedProperties?.private?.srjur_id) continue // evento que o próprio SRJUR criou
-
-      const { data: existingLink } = await adminClient.from('google_event_links')
-        .select('source_id').eq('connection_id', conn.id).eq('google_event_id', ev.id).maybeSingle()
-
-      const startDate = ev.start?.date ?? ev.start?.dateTime?.slice(0, 10)
-      const startTime = ev.start?.dateTime ? ev.start.dateTime.slice(11, 16) : null
-      if (!startDate) continue
-
-      const payload = {
-        title: ev.summary ?? '(sem título)',
-        due_date: startDate,
-        due_time: startTime,
-        type: 'compromisso',
-        responsible_ids: conn.owner_type === 'office' ? [] : [conn.profile_id],
-        responsible: conn.owner_type === 'office' ? null : (conn.responsibleName ?? null),
-        status: 'pendente',
+      const f = eventToFields(ev)
+      if (!f.startDate) continue
+      const own = ev.extendedProperties?.private
+      if (own?.srjur_id) {
+        // Evento criado a partir do sistema: se mudou no Google depois do último envio, a mudança volta para o sistema.
+        const link = linkByGoogleId.get(`${conn.id}|${ev.id}`)
+        if (!link || !mapsOk) continue
+        const rec = (link.source_table === 'tasks' ? taskMap : deadlineMap)!.get(link.source_id)
+        if (!rec) continue
+        const googleChanged = after(ev.updated, link.synced_at)
+        const systemChanged = after(rec.updated_at, link.synced_at)
+        if (googleChanged && !(systemChanged && after(rec.updated_at, ev.updated))) {
+          const title = link.source_table === 'deadlines' ? String(ev.summary ?? rec.title).replace(/^⚖️ Prazo: /, '') : (ev.summary ?? rec.title)
+          const patch: any = { title, due_date: f.startDate }
+          if (link.source_table === 'tasks') patch.due_time = f.startTime
+          const { error } = await adminClient.from(link.source_table).update(patch).eq('id', link.source_id).eq('tenant_id', conn.tenant_id)
+          if (!error) {
+            await adminClient.from('google_event_links').update({ synced_at: nowIso() }).eq('id', link.id)
+            link.synced_at = nowIso(); stats.updatedFromGoogle++
+          }
+        }
+        continue
       }
 
-      let taskId = existingLink?.source_id
-      if (taskId) {
-        await adminClient.from('tasks').update(payload).eq('id', taskId)
-      } else {
-        const { data: created } = await adminClient.from('tasks').insert(payload).select().single()
-        taskId = created?.id
-        pulled++
+      ids.add(ev.id)
+      const key = `${cal.id}|${ev.id}`
+      const link = linkByEvent.get(key)
+      if (!link) {
+        const { data: created, error } = await adminClient.from('tasks').insert({
+          tenant_id: conn.tenant_id,
+          title: ev.summary ?? '(sem título)',
+          description: ev.description ?? null,
+          due_date: f.startDate, due_time: f.startTime, end_date: f.endDate, end_time: f.endTime,
+          type: 'compromisso', status: 'pendente',
+          link: ev.htmlLink ?? null,
+          responsible_ids: conn.owner_type === 'office' ? [] : [conn.profile_id],
+          responsible: conn.owner_type === 'office' ? null : (conn.responsibleName ?? null),
+        }).select().single()
+        if (error || !created) { errors.push({ title: ev.summary ?? '(sem título)', error: error?.message ?? 'não foi possível criar o compromisso' }); continue }
+        const nl = {
+          source_table: 'tasks', source_id: created.id, connection_id: conn.id,
+          google_event_id: ev.id, calendar_id: cal.id, synced_at: nowIso(), origin: 'pull',
+        }
+        await adminClient.from('google_event_links').upsert(nl, { onConflict: 'source_table,source_id,connection_id' })
+        linkByEvent.set(key, nl); pulledIds.add(created.id); taskMap?.set(created.id, created)
+        stats.pulled++
+        continue
       }
-      if (taskId) {
-        await adminClient.from('google_event_links').upsert({
-          source_table: 'tasks', source_id: taskId, connection_id: conn.id,
-          google_event_id: ev.id, synced_at: new Date().toISOString(), origin: 'pull',
-        }, { onConflict: 'source_table,source_id,connection_id' })
+      // Já existe: só a conexão dona do vínculo cuida dele.
+      if (link.connection_id !== conn.id || !mapsOk) continue
+      const task = taskMap!.get(link.source_id)
+      if (!task) continue // apagado no sistema: tratado mais abaixo
+      const googleChanged = after(ev.updated, link.synced_at)
+      const systemChanged = after(task.updated_at, link.synced_at)
+      if (googleChanged && !(systemChanged && after(task.updated_at, ev.updated))) {
+        const { error } = await adminClient.from('tasks').update({
+          title: ev.summary ?? '(sem título)', due_date: f.startDate, due_time: f.startTime, end_date: f.endDate, end_time: f.endTime,
+        }).eq('id', task.id).eq('tenant_id', conn.tenant_id)
+        if (!error) {
+          await adminClient.from('google_event_links').update({ synced_at: nowIso() }).eq('id', link.id)
+          link.synced_at = nowIso(); stats.updatedFromGoogle++
+        }
       }
     }
   }
 
-  // ── PULL-CLEANUP: tarefa que só existe porque foi puxada de um evento do
-  // Google que a usuária excluiu direto lá (sem passar pelo sistema) — sem
-  // isso ela ficava pra sempre na agenda do sistema, "duplicada" na prática.
-  // Só mexe em vínculos origin='pull' — o que foi criado a partir do próprio
-  // sistema (origin='push') é tratado à parte, no CLEANUP do push abaixo.
-  const seenGoogleIds = new Set((list.items ?? []).filter((ev: any) => ev.status !== 'cancelled').map((ev: any) => ev.id))
-  const { data: pullLinks } = await adminClient.from('google_event_links')
-    .select('*').eq('connection_id', conn.id).eq('source_table', 'tasks').eq('origin', 'pull')
-  for (const link of pullLinks ?? []) {
-    if (seenGoogleIds.has(link.google_event_id)) continue
-    await adminClient.from('tasks').delete().eq('id', link.source_id)
-    await adminClient.from('google_event_links').delete().eq('id', link.id)
+  // ── Itens que vieram do Google ──
+  let googleDeletes = 0
+  for (const link of myLinks.filter(l => l.origin === 'pull')) {
+    if (!mapsOk) break
+    const task = taskMap!.get(link.source_id)
+    const calSeen = seen.get(link.calendar_id)
+    if (!task) {
+      // Apagado no sistema → apaga também no Google (vai para a lixeira do Google por 30 dias).
+      if (googleDeletes >= MAX_GOOGLE_DELETES_PER_RUN) continue
+      const r = await fetch(`${GCAL}/calendars/${encodeURIComponent(link.calendar_id)}/events/${link.google_event_id}`, { method: 'DELETE', headers: gh(token) })
+      if (r.ok || r.status === 404 || r.status === 410) {
+        await adminClient.from('google_event_links').delete().eq('id', link.id)
+        googleDeletes++; stats.deletedInGoogle++
+      }
+      continue
+    }
+    if (!calSeen) continue // agenda não lida agora: não mexe
+    if (!calSeen.has(link.google_event_id)) {
+      // Sumiu do Google (dentro do período lido) → apaga no sistema.
+      if (task.due_date < dateMinStr || task.due_date > dateMaxStr) continue
+      await adminClient.from('tasks').delete().eq('id', task.id).eq('tenant_id', conn.tenant_id)
+      await adminClient.from('google_event_links').delete().eq('id', link.id)
+      stats.deletedInSystem++
+      continue
+    }
+    // Mudou no sistema depois da última sincronização → volta para o Google (mantendo a duração do evento).
+    if (after(task.updated_at, link.synced_at) && task.status !== 'concluida' && task.status !== 'cancelada') {
+      const evUrl = `${GCAL}/calendars/${encodeURIComponent(link.calendar_id)}/events/${link.google_event_id}`
+      const cur = await fetch(evUrl, { headers: gh(token) })
+      if (!cur.ok) continue
+      const ev = await cur.json()
+      const patch: any = { summary: task.title }
+      if (ev.start?.dateTime && task.due_time) {
+        const oldStart = new Date(ev.start.dateTime).getTime()
+        const oldEnd = new Date(ev.end?.dateTime ?? ev.start.dateTime).getTime()
+        const dur = Math.max(oldEnd - oldStart, 15 * 60_000)
+        const hhmm = String(task.due_time).slice(0, 5)
+        const start = new Date(`${task.due_date}T${hhmm}:00-03:00`)
+        const end = new Date(start.getTime() + dur)
+        patch.start = { dateTime: `${task.due_date}T${hhmm}:00-03:00`, timeZone: 'America/Sao_Paulo' }
+        patch.end = { dateTime: end.toISOString(), timeZone: 'America/Sao_Paulo' }
+      } else if (ev.start?.date) {
+        const span = Math.max(1, Math.round((new Date(ev.end?.date ?? ev.start.date).getTime() - new Date(ev.start.date).getTime()) / 86400_000))
+        const endD = new Date(`${task.due_date}T00:00:00Z`); endD.setUTCDate(endD.getUTCDate() + span)
+        patch.start = { date: task.due_date }
+        patch.end = { date: endD.toISOString().slice(0, 10) }
+      }
+      const r = await fetch(evUrl, { method: 'PATCH', headers: { ...gh(token), 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
+      if (r.ok) {
+        await adminClient.from('google_event_links').update({ synced_at: nowIso() }).eq('id', link.id)
+        stats.pushedBack++
+      } else errors.push({ title: task.title, error: `${r.status} ${(await r.text()).slice(0, 200)}` })
+    }
   }
 
-  // ── PUSH: tasks + deadlines → Google ──
+  // ── PUSH: o que foi criado no sistema → Google ──
   // Regra: 1 responsável → agenda pessoal dele; 0 ou 2+ → agenda do escritório.
-  let pushed = 0
-
-  // Tarefa concluída/cancelada ou prazo cumprido/perdido não entra mais como
-  // candidato a push — assim o CLEANUP logo abaixo detecta que ela "não
-  // pertence mais" à agenda e apaga o evento do Google, em vez de continuar
-  // empurrando atualização (e mantendo o evento "vivo") pra algo já resolvido.
+  // Tarefa concluída/cancelada ou prazo cumprido/perdido não entra mais como candidato — o CLEANUP abaixo apaga o evento.
   const [{ data: allTasks }, { data: allDeadlines }] = await Promise.all([
-    adminClient.from('tasks').select('*').not('status', 'in', '(cancelada,concluida)')
+    adminClient.from('tasks').select('*').eq('tenant_id', conn.tenant_id).not('status', 'in', '(cancelada,concluida)')
       .gte('due_date', dateMinStr).lte('due_date', dateMaxStr),
-    adminClient.from('deadlines').select('*').eq('status', 'pendente')
+    adminClient.from('deadlines').select('*').eq('tenant_id', conn.tenant_id).eq('status', 'pendente')
       .gte('due_date', dateMinStr).lte('due_date', dateMaxStr),
   ])
 
@@ -315,58 +470,50 @@ async function syncConnection(conn: any) {
     return list.length === 1 && list[0] === conn.profile_id
   }
 
-  const tasks = (allTasks ?? []).filter(t => belongsToConnection(t.responsible_ids))
+  const tasks = (allTasks ?? []).filter(t => !pulledIds.has(t.id) && belongsToConnection(t.responsible_ids))
   const deadlines = (allDeadlines ?? []).filter(d => belongsToConnection(d.responsible_ids))
 
-  const pushErrors: { title: string; error: string }[] = []
-
-  for (const t of tasks) {
-    const r = await pushItem(conn, token, 'tasks', t)
-    if (r.ok) pushed++
-    else pushErrors.push({ title: r.title ?? t.title, error: r.error ?? 'erro desconhecido' })
+  const pushLinkOf = (table: string, id: string) => myLinks.find(l => l.source_table === table && l.source_id === id && l.origin !== 'pull') ?? null
+  for (const [table, list] of [['tasks', tasks], ['deadlines', deadlines]] as const) {
+    for (const item of list) {
+      const link = pushLinkOf(table, item.id)
+      // Já enviado e sem mudança desde a última sincronização: não precisa mexer no Google.
+      if (link && item.updated_at && !after(item.updated_at, link.synced_at)) continue
+      const r = await pushItem(conn, token, table, item, link)
+      if (r.ok) stats.pushed++
+      else errors.push({ title: r.title ?? item.title, error: r.error ?? 'erro desconhecido' })
+    }
   }
-  for (const d of deadlines) {
-    const r = await pushItem(conn, token, 'deadlines', d)
-    if (r.ok) pushed++
-    else pushErrors.push({ title: r.title ?? d.title, error: r.error ?? 'erro desconhecido' })
-  }
 
-  // ── CLEANUP: remove eventos que não pertencem mais a essa conexão ──
-  // (ex: responsável foi trocado, item foi excluído, ou caiu fora do período)
-  let removed = 0
-  const { data: existingLinks } = await adminClient.from('google_event_links')
-    .select('*').eq('connection_id', conn.id)
-
-  for (const link of existingLinks ?? []) {
+  // ── CLEANUP: remove eventos (criados pelo sistema) que não pertencem mais a essa conexão ──
+  const { data: existingLinks } = await adminClient.from('google_event_links').select('*').eq('connection_id', conn.id)
+  for (const link of (existingLinks ?? []).filter(l => l.origin !== 'pull')) {
     const stillBelongs = link.source_table === 'tasks'
       ? tasks.some(t => t.id === link.source_id)
       : deadlines.some(d => d.id === link.source_id)
     if (stillBelongs) continue
 
-    // Confere se o item ainda existe e se a falta de "pertencimento" é real
-    // (não apenas porque saiu da janela de datas considerada)
+    // Confere se o item ainda existe e se a falta de "pertencimento" é real (não só porque saiu do período)
     const { data: rec } = await adminClient.from(link.source_table)
-      .select('responsible_ids, status').eq('id', link.source_id).maybeSingle()
+      .select('responsible_ids, status').eq('id', link.source_id).eq('tenant_id', conn.tenant_id).maybeSingle()
     const isDone = rec && (link.source_table === 'tasks'
       ? (rec.status === 'concluida' || rec.status === 'cancelada')
       : (rec.status === 'cumprido' || rec.status === 'perdido'))
     const shouldBeGone = !rec || isDone || !belongsToConnection(rec.responsible_ids)
     if (!shouldBeGone) continue
 
-    await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(conn.calendar_id)}/events/${link.google_event_id}`,
-      { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
-    )
+    await fetch(`${GCAL}/calendars/${encodeURIComponent(link.calendar_id ?? conn.calendar_id)}/events/${link.google_event_id}`, { method: 'DELETE', headers: gh(token) })
     await adminClient.from('google_event_links').delete().eq('id', link.id)
-    removed++
+    stats.removed++
   }
 
-  await adminClient.from('google_calendar_connections').update({ last_synced_at: new Date().toISOString() }).eq('id', conn.id)
+  await adminClient.from('google_calendar_connections').update({ last_synced_at: nowIso() }).eq('id', conn.id)
 
   return {
-    pulled, pushed, removed,
+    ...stats,
+    calendars: calendarNames,
     candidatesFound: tasks.length + deadlines.length,
-    pushErrors,
+    pushErrors: errors,
     totalTasksInRange: (allTasks ?? []).length,
     totalDeadlinesInRange: (allDeadlines ?? []).length,
   }
