@@ -2,8 +2,9 @@
 // OAuth + sincronização de mão dupla com Google Agenda.
 // Regra: TUDO que tem data (tarefas, compromissos, prazos) sincroniza,
 // usando responsible_ids (vínculo real com profiles, não mais texto livre):
-//   - 1 responsável  → agenda PESSOAL dessa pessoa
+//   - 1 responsável  → agenda PESSOAL dessa pessoa (se ela não tem agenda pessoal conectada, vai para a do ESCRITÓRIO)
 //   - 0 ou 2+ responsáveis → agenda do ESCRITÓRIO (evento compartilhado)
+// A importação (Google → sistema) lê só as agendas que a própria conta é dona.
 // Cada item pode sincronizar com mais de uma agenda ao mesmo tempo
 // (rastreado em google_event_links, um vínculo por conexão).
 //
@@ -178,14 +179,20 @@ const MAX_GOOGLE_DELETES_PER_RUN = 25
 const gh = (token: string) => ({ Authorization: `Bearer ${token}` })
 const after = (a?: string | null, b?: string | null) => !!a && !!b && new Date(a).getTime() > new Date(b).getTime()
 
+// Só agendas que a PRÓPRIA conta é dona (a principal e as que ela criou, como "Audiências").
+// Agendas de outras pessoas compartilhadas com ela (ex.: a sócia) NÃO são importadas: senão a agenda particular
+// de uma apareceria no sistema da outra.
 async function listWritableCalendars(token: string) {
   const cals: { id: string; summary: string; primary: boolean }[] = []
   let pageToken = ''
   do {
-    const r = await fetch(`${GCAL}/users/me/calendarList?minAccessRole=writer&maxResults=250${pageToken ? `&pageToken=${pageToken}` : ''}`, { headers: gh(token) })
+    const r = await fetch(`${GCAL}/users/me/calendarList?minAccessRole=owner&maxResults=250${pageToken ? `&pageToken=${pageToken}` : ''}`, { headers: gh(token) })
     if (!r.ok) throw new Error('Falha ao listar as agendas do Google: ' + (await r.text()).slice(0, 200))
     const j = await r.json()
-    for (const c of j.items ?? []) cals.push({ id: c.id, summary: c.summary ?? c.id, primary: !!c.primary })
+    for (const c of j.items ?? []) {
+      if (c.accessRole !== 'owner') continue
+      cals.push({ id: c.id, summary: c.summary ?? c.id, primary: !!c.primary })
+    }
     pageToken = j.nextPageToken ?? ''
   } while (pageToken)
   return cals
@@ -294,7 +301,14 @@ async function syncConnection(conn: any) {
 
   // Todos os vínculos do escritório (qualquer conexão): um evento do Google vira UM item, mesmo que a mesma conta
   // esteja ligada como "escritório" e como "pessoal".
-  const { data: allLinksData } = await adminClient.from('google_event_links').select('*')
+  // Só os vínculos das conexões DESTE escritório (o banco pode ter mais de um escritório).
+  const { data: tenantConns } = await adminClient.from('google_calendar_connections').select('id, owner_type, profile_id').eq('tenant_id', conn.tenant_id)
+  const tenantConnIds = (tenantConns ?? []).map((c: any) => c.id)
+  // Quem tem agenda pessoal conectada: o que é só dessa pessoa vai para a agenda dela.
+  const personalProfileIds = new Set((tenantConns ?? []).filter((c: any) => c.owner_type === 'user' && c.profile_id).map((c: any) => c.profile_id))
+  const { data: allLinksData } = tenantConnIds.length
+    ? await adminClient.from('google_event_links').select('*').in('connection_id', tenantConnIds)
+    : { data: [] as any[] }
   const allLinks: any[] = allLinksData ?? []
   const linkByEvent = new Map<string, any>()   // `${agenda}|${evento}` → vínculo (itens que vieram do Google)
   const linkByGoogleId = new Map<string, any>() // `${conexão}|${evento}` → vínculo (itens criados no sistema)
@@ -466,7 +480,9 @@ async function syncConnection(conn: any) {
 
   function belongsToConnection(ids: string[] | null | undefined) {
     const list = ids ?? []
-    if (conn.owner_type === 'office') return list.length !== 1
+    // Escritório: itens de 0 ou 2+ responsáveis. E também o item de 1 responsável que NÃO tem agenda pessoal conectada
+    // (antes esse item nunca ia para o Google e a agenda parecia "não sincronizar").
+    if (conn.owner_type === 'office') return list.length !== 1 || !personalProfileIds.has(list[0])
     return list.length === 1 && list[0] === conn.profile_id
   }
 
