@@ -25,3 +25,18 @@ export async function logActivity(entityType: EntityType, entityId: string, text
     console.error('logActivity failed:', e)
   }
 }
+
+const same = (a: unknown, b: unknown) => {
+  const norm = (v: unknown) => Array.isArray(v) ? [...v].map(String).sort().join(',') : (v ?? '') === '' ? '' : String(v)
+  return norm(a) === norm(b)
+}
+
+// Registra no histórico quais campos mudaram numa edição ("Alterado: título, data"). Só compara os campos listados.
+export function logChanges(
+  entityType: EntityType, entityId: string,
+  before: Record<string, unknown>, after: Record<string, unknown>,
+  labels: Record<string, string>,
+) {
+  const mudou = Object.keys(labels).filter(k => k in after && !same(before[k], after[k])).map(k => labels[k])
+  if (mudou.length > 0) logActivity(entityType, entityId, 'Alterado: ' + mudou.join(', '))
+}

@@ -27,13 +27,14 @@ import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/compone
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
+import { EntityLink, entityPath } from '@/components/EntityLink'
 import { ProcessRefById } from '@/components/ProcessRef'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
 import { useCardFields } from '@/hooks/useCardFields'
 import { CardFieldsButton } from '@/components/CardFieldsButton'
 import { ActivityTimeline } from '@/components/ActivityTimeline'
-import { logActivity } from '@/lib/activityLog'
+import { logActivity, logChanges } from '@/lib/activityLog'
 
 // ── Types ──
 interface Task {
@@ -163,13 +164,14 @@ function TaskViewDialog({ task, open, onClose, onEdit, onDelete, onToggleComplet
             {clientName && (
               <div>
                 <p className="text-[11px] text-muted-foreground">Cliente</p>
-                <p className="font-medium">{clientName}</p>
+                {task.client_id ? <EntityLink to={entityPath.cliente(task.client_id)} className="font-medium">{clientName}</EntityLink> : <p className="font-medium">{clientName}</p>}
               </div>
             )}
             {task.process_id && processes.some(p => p.id === task.process_id) && (
               <div className="col-span-2">
                 <p className="text-[11px] text-muted-foreground">Processo</p>
                 <ProcessRefById processes={processes} id={task.process_id} className="text-sm font-medium" wrap />
+                <EntityLink to={entityPath.processo(task.process_id)} className="text-xs mt-0.5">Abrir processo</EntityLink>
               </div>
             )}
           </div>
@@ -411,6 +413,7 @@ export default function Tarefas() {
       if (editing) {
         const { error } = await supabase.from('tasks').update(payload).eq('id', editing.id)
         if (error) { toast.error('Erro ao salvar tarefa: ' + error.message); return }
+        logChanges('task', editing.id, editing as unknown as Record<string, unknown>, payload as unknown as Record<string, unknown>, { title: 'título', description: 'descrição', type: 'tipo', status: 'status', priority: 'prioridade', due_date: 'data', due_time: 'horário', start_date: 'data de início', responsible_ids: 'responsáveis', client_id: 'cliente', process_id: 'processo', workflow_stage: 'etapa' })
       } else {
         const { data: created, error } = await supabase.from('tasks').insert({ ...payload, created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null }).select().single()
         if (error) { toast.error('Erro ao salvar tarefa: ' + error.message); return }

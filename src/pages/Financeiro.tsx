@@ -1842,7 +1842,7 @@ export default function Financeiro() {
 
       {/* ── Projection (minimizável, com fixar visualização) ── */}
       <Card className="p-5">
-        <div className="flex items-center justify-between mb-4 gap-2">
+        <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
           <button className="flex items-center gap-2 min-w-0" onClick={projecaoSection.toggle}>
             <h3 className="font-semibold text-sm flex items-center gap-2 shrink-0">
               <Calendar className="h-4 w-4 text-primary" />Projeção Futura
