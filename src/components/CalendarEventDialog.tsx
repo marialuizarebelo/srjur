@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ComponentProps } from 'react'
 import { CheckCircle2, Circle, ExternalLink, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/integrations/supabase/client'
@@ -36,7 +36,7 @@ export function CalendarEventDialog({ kind, id, label, profilesMap, open, onClos
   kind: 'task' | 'deadline'
   id: string
   label: string
-  profilesMap: Record<string, { display_name: string | null; color: string | null; photo_url?: string | null }>
+  profilesMap: ComponentProps<typeof ResponsibleAvatars>['profilesMap']
   open: boolean
   onClose: () => void
   onEdit: () => void
