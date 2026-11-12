@@ -11,7 +11,9 @@ import {
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select'
-import { ChevronLeft, ChevronRight, Scale, RefreshCw, Loader2, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Scale, RefreshCw, Loader2, Plus, Circle, CheckCircle2 } from 'lucide-react'
+import { CalendarEventDialog } from '@/components/CalendarEventDialog'
+import { logActivity } from '@/lib/activityLog'
 import { fmtDateLong } from '@/lib/format'
 import { syncGoogleCalendar, type SyncResult } from '@/lib/googleCalendar'
 import { ProcessRef } from '@/components/ProcessRef'
@@ -206,6 +208,26 @@ export default function Calendario() {
     }
   }
 
+  // Pop-up de detalhes do evento (a edição abre só pelo botão "Editar" dele)
+  const [viewEv, setViewEv] = useState<CalEvent | null>(null)
+  function openViewEvent(ev: CalEvent) {
+    if (ev.type === 'marketing') { navigate('/marketing'); return }
+    setViewEv(ev)
+  }
+
+  // Bolinha: marca como feito / reabre direto da lista do dia
+  async function quickToggleDone(ev: CalEvent) {
+    if (ev.type === 'marketing') return
+    const rawId = ev.id.replace(/^[tdm]-/, '')
+    const isDeadline = ev.type === 'prazo'
+    const doneStatus = isDeadline ? 'cumprido' : 'concluida'
+    const next = ev.status === doneStatus ? 'pendente' : doneStatus
+    const { error } = await supabase.from(isDeadline ? 'deadlines' : 'tasks').update({ status: next }).eq('id', rawId)
+    if (error) { toast.error('Não foi possível atualizar: ' + error.message); return }
+    logActivity(isDeadline ? 'deadline' : 'task', rawId, `Status alterado para "${next === 'pendente' ? 'Pendente' : isDeadline ? 'Cumprido' : 'Concluída'}"`)
+    load()
+  }
+
   function openEditEvent(ev: CalEvent) {
     if (ev.type === 'marketing') { navigate('/marketing'); return }
     setEditTarget(ev)
@@ -231,6 +253,16 @@ export default function Calendario() {
         }).eq('id', rawId))
       }
       if (error) { toast.error('Não foi possível atualizar: ' + error.message); return }
+      {
+        // registra no histórico o que mudou, com data e hora (a linha do tempo mostra quando e por quem)
+        const mudou: string[] = []
+        if (ef.title !== editTarget.title) mudou.push(`título para "${ef.title}"`)
+        if (ef.date !== editTarget.date) mudou.push(`data para ${ef.date.split('-').reverse().join('/')}`)
+        if ((ef.time || '') !== (editTarget.time ?? '').slice(0, 5)) mudou.push(ef.time ? `horário para ${ef.time}` : 'horário removido')
+        if (ef.status !== editTarget.status) mudou.push(`status para "${ef.status}"`)
+        if ([...ef.responsible_ids].sort().join(',') !== [...editTarget.responsibleIds].sort().join(',')) mudou.push('responsáveis')
+        if (mudou.length > 0) logActivity(editTarget.type === 'prazo' ? 'deadline' : 'task', rawId, 'Alterado: ' + mudou.join(', '))
+      }
       toast.success('Atualizado!')
       setEditOpen(false)
       load()
@@ -392,7 +424,7 @@ export default function Calendario() {
                     return (
                       <DraggableCard key={ev.id} id={ev.id}>
                         <div className="p-2.5 rounded-lg border bg-background hover:shadow-md transition-shadow cursor-pointer"
-                          onClick={() => openEditEvent(ev)}>
+                          onClick={() => openViewEvent(ev)}>
                           <div className="flex items-center gap-1.5 mb-1">
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: tcs.bg, color: tcs.text }}>
                               {labelOf(ev.subtype ?? ev.type)}
@@ -450,7 +482,7 @@ export default function Calendario() {
           ${done ? 'opacity-40 line-through' : ''}`}
           style={{ backgroundColor: st.bg, color: st.text, borderColor: `color-mix(in srgb, ${st.dot} 38%, transparent)` }}
           title={ev.title}
-          onClick={e => { e.stopPropagation(); openEditEvent(ev) }}>
+          onClick={e => { e.stopPropagation(); openViewEvent(ev) }}>
           <span className="truncate flex-1 min-w-0">
             {!mini && calFields.horario && ev.time && <span className="mr-1.5 opacity-60 font-normal">{ev.time.slice(0,5)}</span>}
             {ev.title}
@@ -634,15 +666,27 @@ export default function Calendario() {
       return (
         <div className={`flex items-start gap-4 p-4 rounded-2xl border border-border/50 transition-colors hover:bg-muted/20 cursor-pointer
           ${done ? 'opacity-40' : ''}`}
-          onClick={() => openEditEvent(ev)}>
+          onClick={() => openViewEvent(ev)}>
           {calFields.horario && ev.time && (
             <div className="text-center min-w-[48px] shrink-0">
               <p className="text-sm font-semibold text-foreground">{ev.time.slice(0,5)}</p>
             </div>
           )}
-          <div className="flex items-center mt-0.5 shrink-0">
-            <div className="h-2.5 w-2.5 rounded-full" style={{backgroundColor: dotColor}} />
-          </div>
+          {ev.type === 'marketing' ? (
+            <div className="flex items-center mt-0.5 shrink-0">
+              <div className="h-2.5 w-2.5 rounded-full" style={{backgroundColor: dotColor}} />
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="shrink-0 mt-0 -ml-1 p-1"
+              title={done ? 'Reabrir' : 'Marcar como feito'}
+              aria-label={done ? 'Reabrir' : 'Marcar como feito'}
+              onClick={e => { e.stopPropagation(); void quickToggleDone(ev) }}
+            >
+              {done ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <Circle className="h-5 w-5" style={{ color: dotColor }} />}
+            </button>
+          )}
           <div className="flex-1 min-w-0">
             <p className={`text-sm font-medium ${done ? 'line-through' : ''} ${isOverdue ? 'text-red-600 dark:text-red-400' : 'text-foreground'}`}>
               {ev.title}
@@ -923,6 +967,19 @@ export default function Calendario() {
       )}
 
       {/* ── Edit event dialog ── */}
+      {viewEv && viewEv.type !== 'marketing' && (
+        <CalendarEventDialog
+          kind={viewEv.type === 'prazo' ? 'deadline' : 'task'}
+          id={viewEv.id.replace(/^[tdm]-/, '')}
+          label={labelOf(viewEv.subtype ?? viewEv.type)}
+          profilesMap={profilesMap}
+          open={!!viewEv}
+          onClose={() => setViewEv(null)}
+          onEdit={() => { const e = viewEv; setViewEv(null); if (e) openEditEvent(e) }}
+          onChanged={() => load()}
+        />
+      )}
+
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-[420px] w-[96vw] p-6">
           <DialogHeader>
