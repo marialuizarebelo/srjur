@@ -42,10 +42,11 @@ import { KanbanScrollRow } from '@/components/KanbanScrollRow'
 import { SortableStageList, StageColorPicker, EXTENDED_STAGE_COLORS } from '@/components/StageManagerList'
 import { usePinnedView } from '@/hooks/usePinnedView'
 import { PinViewButton } from '@/components/PinViewButton'
+import { EntityLink, entityPath } from '@/components/EntityLink'
 import { useCardFields } from '@/hooks/useCardFields'
 import { CardFieldsButton } from '@/components/CardFieldsButton'
 import { ActivityTimeline } from '@/components/ActivityTimeline'
-import { logActivity } from '@/lib/activityLog'
+import { logActivity, logChanges } from '@/lib/activityLog'
 
 // ── Types ──
 interface Process {
@@ -193,6 +194,14 @@ const PROC_DEFAULT_VISIBLE: Record<string, boolean> = {
   numero: true, cliente: true, responsavel: true, vara: true, contraria: true, instancia: true, area: true, tribunal: true,
 }
 
+// Busca sem acento e sem diferenciar maiúsculas
+const normText = (s?: string | null) => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+// Nome do cliente (parte autora) e das partes contrárias
+function matchesParty(p: { opposing_party: string | null; opposing_parties: { name: string; cpf: string; role: string }[] | null }, clientName: string, q: string) {
+  const nomes = [clientName, p.opposing_party, ...(p.opposing_parties ?? []).map(o => o.name)]
+  return nomes.some(n => normText(n).includes(normText(q)))
+}
+
 export default function Processos() {
   const navigate = useNavigate()
   const { profile } = useAuth()
@@ -282,12 +291,15 @@ export default function Processos() {
   }
   const pinnedView = usePinnedView('processos_view', 'kanban')
   useEffect(() => { if (pinnedView.loaded && pinnedView.isPinned) setViewMode(pinnedView.pinnedValue as any) }, [pinnedView.loaded])
-  const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set())
+  const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(() => {
+    try { return new Set<string>(JSON.parse(localStorage.getItem('processos-colunas-recolhidas') ?? '[]')) } catch { return new Set<string>() }
+  })
   const togglePhaseCollapsed = (value: string) => {
     setCollapsedPhases(prev => {
       const next = new Set(prev)
       if (next.has(value)) next.delete(value)
       else next.add(value)
+      try { localStorage.setItem('processos-colunas-recolhidas', JSON.stringify([...next])) } catch { /* sem armazenamento: só não lembra */ }
       return next
     })
   }
@@ -422,8 +434,8 @@ export default function Processos() {
       .filter(p => clientFilter === 'todos' || p.client_id === clientFilter)
       .filter(p => tagFilter === 'todos' || splitTags(p.tags).includes(tagFilter))
       .filter(p => !search || p.title.toLowerCase().includes(search.toLowerCase()) ||
-        p.number?.toLowerCase().includes(search.toLowerCase()) || (p.tags ?? '').toLowerCase().includes(search.toLowerCase()))
-  }, [processes, statusFilter, responsibleFilter, clientFilter, tagFilter, search])
+        p.number?.toLowerCase().includes(search.toLowerCase()) || matchesParty(p, clients.find(c => c.id === p.client_id)?.name ?? '', search) || (p.tags ?? '').toLowerCase().includes(search.toLowerCase()))
+  }, [processes, clients, statusFilter, responsibleFilter, clientFilter, tagFilter, search])
   const allTags = useMemo(() => [...new Set(processes.flatMap(p => splitTags(p.tags)))].sort(), [processes])
 
   const byPhase = useMemo(() => {
@@ -508,6 +520,7 @@ export default function Processos() {
       if (editing) {
         const { error } = await supabase.from('processes').update(payload).eq('id', editing.id)
         if (error) throw error
+        logChanges('process', editing.id, editing as unknown as Record<string, unknown>, payload as unknown as Record<string, unknown>, { title: 'título', number: 'número', client_id: 'cliente', type: 'tipo', area: 'área', responsible_ids: 'responsáveis', court: 'vara', procedural_class: 'classe processual', electronic_system: 'sistema eletrônico', notes: 'observações', tags: 'etiquetas' })
         if (editing.status !== pf.status) logActivity('process', editing.id, `Status alterado para "${formatLabel(pf.status)}"`)
         if (editing.phase !== pf.phase) logActivity('process', editing.id, `Fase alterada para "${pf.phase}"`)
       } else {
@@ -629,6 +642,7 @@ export default function Processos() {
 
   const updatePhase = async (processId: string, newPhase: string) => {
     await supabase.from('processes').update({ phase: newPhase, updated_at: new Date().toISOString() }).eq('id', processId)
+    logActivity('process', processId, `Fase alterada para "${allPhases.find(p => p.value === newPhase)?.label ?? newPhase}"`)
     loadData()
   }
 
@@ -717,6 +731,11 @@ export default function Processos() {
                   {detailProcess.access_key && (
                     <FieldWithCopy label="Chave de acesso (eProc)" value={detailProcess.access_key} onCopy={() => copyToClipboard(detailProcess.access_key!, 'Chave de acesso')} />
                   )}
+                  {dClient && (
+                    <EntityLink to={entityPath.cliente(dClient.id)} className="text-xs">Abrir ficha do cliente</EntityLink>
+
+                  )}
+
                   {dClient && (
                     <FieldWithCopy
                       label={`Cliente${detailProcess.client_role ? ` (${detailProcess.client_role === 'autor' ? 'Autor' : 'Réu'})` : ''}`}
@@ -854,7 +873,7 @@ export default function Processos() {
                   <p className="text-sm text-muted-foreground text-center py-8">Nenhuma tarefa vinculada a este processo</p>
                 ) : (
                   processTasks.map(t => (
-                    <div key={t.id} className="p-3 rounded-lg border flex items-center justify-between gap-2">
+                    <div key={t.id} className="p-3 rounded-lg border flex items-center justify-between gap-2 cursor-pointer hover:bg-muted/40" onClick={() => navigate(entityPath.tarefa(t.id))}>
                       <div className="min-w-0">
                         <p className={`text-sm font-medium truncate ${t.status === 'concluida' ? 'line-through opacity-60' : ''}`}>{t.title}</p>
                         {t.due_date && <p className="text-xs text-muted-foreground mt-0.5">{fmtDate(t.due_date)}</p>}
@@ -875,7 +894,7 @@ export default function Processos() {
                   <p className="text-sm text-muted-foreground text-center py-8">Nenhum prazo vinculado a este processo</p>
                 ) : (
                   processDeadlines.map(d => (
-                    <div key={d.id} className="p-3 rounded-lg border flex items-center justify-between gap-2">
+                    <div key={d.id} className="p-3 rounded-lg border flex items-center justify-between gap-2 cursor-pointer hover:bg-muted/40" onClick={() => navigate(entityPath.prazo(d.id))}>
                       <div className="min-w-0">
                         <p className={`text-sm font-medium truncate ${d.status === 'cumprido' ? 'line-through opacity-60' : ''}`}>{d.title}</p>
                         <div className="flex items-center gap-2 mt-0.5">
@@ -1037,7 +1056,7 @@ export default function Processos() {
         <div className="flex items-center gap-2 flex-1">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por título ou número..." value={search}
+            <Input placeholder="Buscar por título, número ou parte..." value={search}
               onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
           </div>
           <Select value={responsibleFilter} onValueChange={setResponsibleFilter}>
@@ -1097,12 +1116,12 @@ export default function Processos() {
               const phaseProcesses = byPhase.get(phase.value) ?? []
               const collapsed = collapsedPhases.has(phase.value)
               return (
-                <div key={phase.value} className="w-full md:min-w-[220px] md:w-[220px] shrink-0">
-                  <button className="flex items-center gap-2 mb-1 w-full md:cursor-default" onClick={() => togglePhaseCollapsed(phase.value)}>
+                <div key={phase.value} className={`w-full shrink-0 ${collapsed ? 'md:w-11' : 'md:min-w-[220px] md:w-[220px]'}`}>
+                  <button className={`flex items-center gap-2 mb-1 w-full ${collapsed ? 'md:flex-col md:mb-0 md:px-0 md:py-3 md:w-11 md:rounded-xl md:bg-muted/50 md:hover:bg-muted' : ''}`} title={collapsed ? 'Mostrar coluna' : 'Minimizar coluna'} onClick={() => togglePhaseCollapsed(phase.value)}>
                     <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: phase.color }} />
-                    <span className="text-sm font-semibold">{phase.label}</span>
-                    <Badge variant="secondary" className="text-[10px] ml-auto">{phaseProcesses.length}</Badge>
-                    {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+                    <span className={`text-sm font-semibold ${collapsed ? 'md:[writing-mode:vertical-rl] md:rotate-180 md:max-h-40 md:truncate' : ''}`}>{phase.label}</span>
+                    <Badge variant="secondary" className={`text-[10px] ml-auto ${collapsed ? 'md:ml-0' : ''}`}>{phaseProcesses.length}</Badge>
+                    {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                   </button>
                   <div className="mb-3" />
                   {!collapsed && (

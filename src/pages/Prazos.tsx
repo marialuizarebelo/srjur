@@ -26,6 +26,7 @@ import { fmtDate, getDaysDiff } from '@/lib/format'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { KanbanDndContext, DroppableColumn, DraggableCard } from '@/components/DndKanban'
 import { KanbanScrollRow } from '@/components/KanbanScrollRow'
+import { EntityLink, entityPath } from '@/components/EntityLink'
 import { ProcessRef, ProcessRefById } from '@/components/ProcessRef'
 import { SortableStageList, StageColorPicker, EXTENDED_STAGE_COLORS } from '@/components/StageManagerList'
 import { usePinnedView } from '@/hooks/usePinnedView'
@@ -37,7 +38,7 @@ import { ProcessCombobox } from '@/components/ProcessCombobox'
 import { TipoPrazoCombobox } from '@/components/TipoPrazoCombobox'
 import { getTagColor } from '@/lib/deadlineTypes'
 import { ActivityTimeline } from '@/components/ActivityTimeline'
-import { logActivity } from '@/lib/activityLog'
+import { logActivity, logChanges } from '@/lib/activityLog'
 
 interface Deadline {
   id: string
@@ -160,13 +161,14 @@ function DeadlineViewDialog({ deadline, open, onClose, onEdit, onDelete, onToggl
             {client && (
               <div className="col-span-2">
                 <p className="text-[11px] text-muted-foreground">Cliente</p>
-                <p className="font-medium">{client.name}</p>
+                <EntityLink to={entityPath.cliente(client.id)} className="font-medium">{client.name}</EntityLink>
               </div>
             )}
             {process && (
               <div className="col-span-2">
                 <p className="text-[11px] text-muted-foreground">Processo</p>
                 <ProcessRef number={process.number} title={process.title} className="text-sm font-medium" wrap />
+                <EntityLink to={entityPath.processo(process.id)} className="text-xs mt-0.5">Abrir processo</EntityLink>
               </div>
             )}
             {deadline.source && (
@@ -293,6 +295,17 @@ export default function Prazos() {
   // Abre o formulário de novo prazo quando vem de um atalho "+ Novo" (ex:
   // Dashboard, Intimações) — mesma tela em qualquer lugar que disparar isso,
   // em vez de cada atalho ter sua própria versão simplificada do formulário.
+  // Abre o pop-up do prazo quando vem de um link (?open=<id>) de outra tela
+  useEffect(() => {
+    if (loading) return
+    const openId = new URLSearchParams(window.location.search).get('open')
+    if (openId) {
+      const d = deadlines.find(x => x.id === openId)
+      if (d) setViewDeadline(d)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [loading])
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('new') === '1') {
@@ -380,6 +393,7 @@ export default function Prazos() {
       if (editing) {
         const { error } = await supabase.from('deadlines').update(payload).eq('id', editing.id)
         if (error) { toast.error('Erro ao salvar prazo: ' + error.message); return }
+        logChanges('deadline', editing.id, editing as unknown as Record<string, unknown>, payload as unknown as Record<string, unknown>, { title: 'título', tipo: 'tipo', due_date: 'data limite', start_date: 'data de início', client_id: 'cliente', process_id: 'processo', status: 'status', responsible_ids: 'responsáveis', notes: 'observações', stage_id: 'etapa' })
       } else {
         const { data: created, error } = await supabase.from('deadlines').insert({ ...payload, created_by: profile?.id ?? null }).select().single()
         if (error) { toast.error('Erro ao salvar prazo: ' + error.message); return }
