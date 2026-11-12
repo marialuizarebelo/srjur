@@ -157,7 +157,7 @@ export function DriveFolderPicker({ value, onChange, folderNameSuggestion, paren
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-2">
         <Button type="button" variant="outline" size="sm" onClick={openPicker} disabled={loading} className="flex-1">
           {loading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <FolderOpen className="h-3.5 w-3.5 mr-1.5" />}
           Selecionar pasta existente
