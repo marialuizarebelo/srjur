@@ -44,7 +44,7 @@ import { PinViewButton } from '@/components/PinViewButton'
 import { useCardFields } from '@/hooks/useCardFields'
 import { CardFieldsButton } from '@/components/CardFieldsButton'
 import { ActivityTimeline, type ExternalEntry } from '@/components/ActivityTimeline'
-import { logActivity } from '@/lib/activityLog'
+import { logActivity, logChanges } from '@/lib/activityLog'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 
 // ── Types ──
@@ -1145,6 +1145,18 @@ export default function Clientes() {
     })
   }, [])
 
+  // Abre a ficha do cliente quando vem de um link (?open=<id>, ou o antigo ?id=<id>) de outra tela
+  useEffect(() => {
+    if (loading) return
+    const sp = new URLSearchParams(window.location.search)
+    const openId = sp.get('open') ?? sp.get('id')
+    if (openId) {
+      const c = clients.find(x => x.id === openId)
+      if (c) setViewClient(c)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [loading])
+
   // Abre o formulário certo quando vem de um atalho "+ Novo" (ex: Dashboard)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -1369,6 +1381,7 @@ export default function Clientes() {
     if (editingClient) {
       const { error } = await supabase.from('clients').update(payload).eq('id', editingClient.id)
       if (error) { toast.error('Erro ao salvar cliente: ' + error.message); return }
+      logChanges('client', editingClient.id, editingClient as unknown as Record<string, unknown>, payload as unknown as Record<string, unknown>, { name: 'nome', email: 'e-mail', phone: 'telefone', cpf_cnpj: 'CPF/CNPJ', type: 'tipo', area: 'área', responsible_ids: 'responsáveis', notes: 'observações', address: 'endereço', tags: 'etiquetas', birth_date: 'data de nascimento' })
       if (editingClient.status !== cf.status) {
         logActivity('client', editingClient.id, `Status alterado para "${cf.status}"`)
       }
