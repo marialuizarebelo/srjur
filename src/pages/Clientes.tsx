@@ -1409,7 +1409,7 @@ export default function Clientes() {
       const linkErr = await syncClientPartnerLink(editingClient.id, cf.origin === 'Indicação' ? cf : { ...cf, partner_id: '' })
       if (linkErr) toast.error('Cliente salvo, mas a parceria não: ' + linkErr)
       if (editingClient.status !== cf.status) {
-        logActivity('client', editingClient.id, `Status alterado para "${cf.status}"`)
+        logActivity('client', editingClient.id, `Status alterado para "${({ ativo: 'Ativo', inativo: 'Encerrado', prospecto: 'Prospecto' } as Record<string, string>)[cf.status] ?? cf.status}"`)
       }
     } else {
       const { data: newClient, error } = await supabase.from('clients').insert({ ...payload, created_by: profile?.id ?? null }).select('id').single()
