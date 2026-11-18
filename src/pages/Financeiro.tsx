@@ -32,7 +32,7 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
   Tooltip as RTooltip, ResponsiveContainer, LineChart, Line, Area, AreaChart,
 } from 'recharts'
-import { fmtBRL, fmtDate, getDaysDiff } from '@/lib/format'
+import { fmtBRL, fmtDate, getDaysDiff, parseBRL } from '@/lib/format'
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { useCollapsibleSection } from '@/hooks/useCollapsibleSection'
 import { PinViewButton } from '@/components/PinViewButton'
@@ -596,7 +596,7 @@ export default function Financeiro() {
     return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(n)
   }
   function parseBRLValue(v: string) {
-    return parseFloat(v.replace(/\./g, '').replace(',', '.')) || 0
+    return parseBRL(v) ?? 0
   }
 
   // View state
