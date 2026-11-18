@@ -382,7 +382,7 @@ export default function Tarefas() {
     else if (task.status === 'concluida') payload.status = 'pendente'
     const { error } = await supabase.from('tasks').update(payload).eq('id', task.id)
     if (error) { toast.error('Erro ao mover tarefa: ' + error.message); return }
-    logActivity('task', task.id, `Movida para a etapa "${stage}"`)
+    logActivity('task', task.id, `Movida para a etapa "${WORKFLOW_STAGES.find(s => s.value === stage)?.label ?? stage}"`)
     loadData()
   }
 
