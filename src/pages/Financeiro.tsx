@@ -243,6 +243,23 @@ function paidAmount(row: FinanceRow, paymentsMap: Record<string, FinancePayment[
   return row.paid ? Number(row.value) : 0
 }
 
+// Quanto da linha foi pago DENTRO do período. Pagamento parcial conta no dia em que foi feito (não no mês de vencimento
+// da parcela); lançamento pago de uma vez conta no mês do lançamento, como sempre foi. O que passa do valor não conta.
+function paidInPeriod(row: FinanceRow, paymentsMap: Record<string, FinancePayment[]>, inPeriod: (d: string) => boolean) {
+  const pays = paymentsMap[row.id]
+  if (pays && pays.length > 0) {
+    let acumulado = 0
+    let dentro = 0
+    for (const p of [...pays].sort((a, b) => a.payment_date.localeCompare(b.payment_date))) {
+      const contado = Math.min(Number(p.amount), Math.max(Number(row.value) - acumulado, 0))
+      acumulado += Number(p.amount)
+      if (inPeriod(p.payment_date.slice(0, 10))) dentro += contado
+    }
+    return dentro
+  }
+  return row.paid && inPeriod(row.date.slice(0, 10)) ? Number(row.value) : 0
+}
+
 function rowStatus(row: FinanceRow, paymentsMap: Record<string, FinancePayment[]> = {}) {
   const paid = paidAmount(row, paymentsMap)
   if (paid >= Number(row.value)) return 'pago'
@@ -292,13 +309,14 @@ function StatusLabel({ row, paymentsMap }: { row: FinanceRow; paymentsMap: Recor
 }
 
 // ── Detail Drawer ──
-function DetailDrawer({ title, rows, onClose, clients, onEdit, paymentsMap }: {
+function DetailDrawer({ title, rows, onClose, clients, onEdit, paymentsMap, amountOf }: {
   title: string; rows: FinanceRow[]; onClose: () => void; clients: ClientOption[]
+  amountOf?: (row: FinanceRow) => number
   onEdit: (row: FinanceRow) => void
   paymentsMap: Record<string, FinancePayment[]>
 }) {
   const getClientName = (id: string | null) => clients.find(c => c.id === id)?.name ?? '—'
-  const total = rows.reduce((s, r) => s + Number(r.value), 0)
+  const total = rows.reduce((s, r) => s + (amountOf ? amountOf(r) : Number(r.value)), 0)
   const sorted = [...rows].sort((a, b) => b.date.localeCompare(a.date))
 
   return (
@@ -333,7 +351,7 @@ function DetailDrawer({ title, rows, onClose, clients, onEdit, paymentsMap }: {
                   rowStatus(row, paymentsMap) === 'parcial' ? 'text-blue-500' :
                   rowStatus(row, paymentsMap) === 'atrasado' ? 'text-red-500' : 'text-amber-500'
                 }`}>
-                  {row.type === 'receita' ? '+' : '-'}{fmtBRL(Number(row.value))}
+                  {row.type === 'receita' ? '+' : '-'}{fmtBRL(amountOf ? amountOf(row) : Number(row.value))}
                 </p>
                 <StatusLabel row={row} paymentsMap={paymentsMap} />
               </div>
@@ -346,8 +364,10 @@ function DetailDrawer({ title, rows, onClose, clients, onEdit, paymentsMap }: {
 }
 
 // ── Saldo Drawer (compacto, só valores realizados, Entradas/Saídas, abas Total/Período) ──
-function SaldoDrawer({ totalRows, periodRows, onClose, clients, onEdit, paymentsMap, defaultTab }: {
+function SaldoDrawer({ totalRows, periodRows, onClose, clients, onEdit, paymentsMap, defaultTab, periodPaidOf }: {
   totalRows: FinanceRow[]; periodRows: FinanceRow[]
+  /** quanto cada linha foi paga dentro do período (aba "Período") */
+  periodPaidOf?: (row: FinanceRow) => number
   onClose: () => void; clients: ClientOption[]
   onEdit: (row: FinanceRow) => void
   paymentsMap: Record<string, FinancePayment[]>
@@ -358,15 +378,17 @@ function SaldoDrawer({ totalRows, periodRows, onClose, clients, onEdit, payments
 
   // Só o que já foi de fato pago/recebido, e que impacta caixa — "previsto"/
   // pendente e "não impacta caixa" não fazem parte do saldo.
+  const paidOfTab = (r: FinanceRow) => tab === 'total' || !periodPaidOf ? paidAmount(r, paymentsMap) : periodPaidOf(r)
   const realized = (tab === 'total' ? totalRows : periodRows).filter(r => {
     if (r.impacts_cash === false) return false
+    if (tab !== 'total' && periodPaidOf) return periodPaidOf(r) > 0
     const status = rowStatus(r, paymentsMap)
     return status === 'pago' || status === 'parcial'
   })
   const entradas = realized.filter(r => r.type === 'receita').sort((a, b) => b.date.localeCompare(a.date))
   const saidas = realized.filter(r => r.type === 'despesa').sort((a, b) => b.date.localeCompare(a.date))
-  const totalEntradas = entradas.reduce((s, r) => s + paidAmount(r, paymentsMap), 0)
-  const totalSaidas = saidas.reduce((s, r) => s + paidAmount(r, paymentsMap), 0)
+  const totalEntradas = entradas.reduce((s, r) => s + paidOfTab(r), 0)
+  const totalSaidas = saidas.reduce((s, r) => s + paidOfTab(r), 0)
 
   function Row({ row }: { row: FinanceRow }) {
     return (
@@ -381,7 +403,7 @@ function SaldoDrawer({ totalRows, periodRows, onClose, clients, onEdit, payments
           </p>
         </div>
         <p className={`text-[13px] font-semibold shrink-0 ${row.type === 'receita' ? 'text-green-600' : 'text-slate-500'}`}>
-          {row.type === 'receita' ? '+' : '-'}{fmtBRL(paidAmount(row, paymentsMap))}
+          {row.type === 'receita' ? '+' : '-'}{fmtBRL(paidOfTab(row))}
         </p>
       </div>
     )
@@ -792,6 +814,24 @@ export default function Financeiro() {
     })
   }, [rows, typeFilter, clientFilter, responsibleFilter, categoryFilter, paymentMethodFilter, viewMode, viewMonth, viewYear, customStart, customEnd])
 
+  // Mesmos filtros, mas SEM o recorte de período: o "recebido/pago" do período precisa enxergar pagamentos
+  // feitos dentro dele para parcelas que vencem em outro mês.
+  const inPeriodStr = (d: string) => {
+    if (viewMode === 'mes') return d.slice(0, 7) === `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
+    if (viewMode === 'ano') return d.slice(0, 4) === String(viewYear)
+    if (customStart && d < customStart) return false
+    if (customEnd && d > customEnd) return false
+    return true
+  }
+  const filteredNoPeriod = useMemo(() => rows.filter(r => {
+    if (typeFilter !== 'todos' && r.type !== typeFilter) return false
+    if (clientFilter !== 'todos' && r.client_id !== clientFilter) return false
+    if (responsibleFilter !== 'todos' && r.responsible !== responsibleFilter) return false
+    if (categoryFilter !== 'todos' && r.category !== categoryFilter) return false
+    if (paymentMethodFilter !== 'todos' && r.payment_method !== paymentMethodFilter) return false
+    return true
+  }), [rows, typeFilter, clientFilter, responsibleFilter, categoryFilter, paymentMethodFilter])
+
   const sortedFiltered = useMemo(() => {
     if (!sortColumn) return filtered
     const dir = sortDir === 'asc' ? 1 : -1
@@ -824,9 +864,9 @@ export default function Financeiro() {
   const despesasNaoCaixa = despesas.filter(r => r.impacts_cash === false)
   const totalDespesas = despesasCaixa.reduce((s, r) => s + Number(r.value), 0)
   const totalDespesasNaoCaixa = despesasNaoCaixa.reduce((s, r) => s + Number(r.value), 0)
-  const receitasPagas = receitasCaixa.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
+  const receitasPagas = filteredNoPeriod.filter(r => r.type === 'receita' && r.impacts_cash !== false).reduce((s, r) => s + paidInPeriod(r, paymentsMap, inPeriodStr), 0)
   const receitasPendentes = receitasCaixa.reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
-  const despesasPagas = despesasCaixa.reduce((s, r) => s + Math.min(paidAmount(r, paymentsMap), Number(r.value)), 0)
+  const despesasPagas = filteredNoPeriod.filter(r => r.type === 'despesa' && r.impacts_cash !== false).reduce((s, r) => s + paidInPeriod(r, paymentsMap, inPeriodStr), 0)
   const despesasPendentes = despesasCaixa.reduce((s, r) => s + Math.max(Number(r.value) - paidAmount(r, paymentsMap), 0), 0)
   // "Saldo" (do período filtrado, ex: só o mês selecionado) é diferente de
   // "Saldo total" (todo o histórico) — o escritório não zera/consome todo o
@@ -1230,7 +1270,7 @@ export default function Financeiro() {
   const getCardRows = () => {
     switch (activeCard) {
       case 'receitas': return receitas
-      case 'receitas-pagas': return receitasCaixa.filter(r => r.paid)
+      case 'receitas-pagas': return filteredNoPeriod.filter(r => r.type === 'receita' && r.impacts_cash !== false && paidInPeriod(r, paymentsMap, inPeriodStr) > 0)
       case 'receitas-pendentes': return receitasCaixa.filter(r => !r.paid)
       case 'despesas': return despesasCaixa
       case 'despesas-nao-caixa': return despesasNaoCaixa
@@ -1256,7 +1296,8 @@ export default function Financeiro() {
       {(activeCard === 'saldo-periodo' || activeCard === 'saldo-total') && (
         <SaldoDrawer
           totalRows={rows}
-          periodRows={filtered}
+          periodRows={filteredNoPeriod}
+          periodPaidOf={r => paidInPeriod(r, paymentsMap, inPeriodStr)}
           defaultTab={activeCard === 'saldo-total' ? 'total' : 'periodo'}
           onClose={() => setActiveCard(null)}
           clients={clients}
@@ -1272,6 +1313,7 @@ export default function Financeiro() {
           clients={clients}
           onEdit={setViewRow}
           paymentsMap={paymentsMap}
+          amountOf={activeCard === 'receitas-pagas' ? (r => paidInPeriod(r, paymentsMap, inPeriodStr)) : undefined}
         />
       )}
 
