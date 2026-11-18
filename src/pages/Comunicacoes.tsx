@@ -672,8 +672,8 @@ export default function Comunicacoes() {
             <DialogTitle>{editing ? 'Editar' : 'Novo'} template</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-3 space-y-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-3 space-y-1.5">
                 <Label>Nome do template</Label>
                 <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="Ex: Lembrete de audiência" className="h-10" />
