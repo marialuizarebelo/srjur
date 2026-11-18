@@ -28,7 +28,7 @@ import {
   Repeat, X, RefreshCw,
   ArrowUp, ArrowDown, ArrowUpDown, CheckCircle2, ChevronDown, ChevronUp,
 } from 'lucide-react'
-import { fmtBRL, fmtDate, getDaysDiff } from '@/lib/format'
+import { fmtBRL, fmtDate, getDaysDiff, parseBRL } from '@/lib/format'
 import { RECEITA_CATEGORIES } from '@/lib/partners'
 import { ClientCombobox } from '@/components/ClientCombobox'
 import { useCollapsibleSection } from '@/hooks/useCollapsibleSection'
@@ -596,7 +596,7 @@ export default function Financeiro() {
     return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(n)
   }
   function parseBRLValue(v: string) {
-    return parseFloat(v.replace(/\./g, '').replace(',', '.')) || 0
+    return parseBRL(v) ?? 0
   }
 
   // View state
