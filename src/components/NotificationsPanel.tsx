@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Bell, AlertTriangle, Clock, CheckCircle2, Scale, ClipboardList, X, CheckCheck } from 'lucide-react'
+import { Bell, AlertTriangle, Clock, CheckCircle2, Scale, ClipboardList, X, CheckCheck, AtSign } from 'lucide-react'
+import { fetchPendingMentions, getMyProfileId } from '@/lib/mentions'
 
 interface Notif {
   id: string
-  type: 'prazo_atrasado' | 'prazo_hoje' | 'prazo_amanha' | 'tarefa_atrasada'
+  type: 'prazo_atrasado' | 'prazo_hoje' | 'prazo_amanha' | 'tarefa_atrasada' | 'mencao'
   title: string
   subtitle?: string
   date: string
@@ -74,7 +75,17 @@ async function loadNotifs(): Promise<Notif[]> {
       notifs.push({ id, type: 'tarefa_atrasada', title: tk.title, subtitle: tk.type ?? undefined, date: tk.due_date, href: '/tarefas' })
   })
 
-  notifs.sort((a, b) => a.date.localeCompare(b.date))
+  // menções que a pessoa ainda não viu
+  const meId = await getMyProfileId()
+  if (meId) {
+    for (const m of await fetchPendingMentions(meId, 10)) {
+      const id = `m-${m.id}`
+      if (!isDismissed(id)) notifs.push({ id, type: 'mencao', title: `${m.author ?? 'Alguém'}: ${m.text}`, subtitle: `${m.label} · ${m.title}`, date: m.created_at.slice(0, 10), href: m.path })
+    }
+  }
+
+  // menções primeiro (são o aviso mais recente e o que alguém espera ver), depois o resto por data
+  notifs.sort((a, b) => (a.type === 'mencao' ? 0 : 1) - (b.type === 'mencao' ? 0 : 1) || a.date.localeCompare(b.date))
   return notifs
 }
 
@@ -83,6 +94,7 @@ const TYPE_CONFIG = {
   prazo_hoje:     { icon: Clock,         color: 'text-amber-700 dark:text-amber-300',  bg: 'bg-amber-50 dark:bg-amber-950/30', label: 'Vence hoje'      },
   prazo_amanha:   { icon: Clock,         color: 'text-blue-700 dark:text-blue-300',   bg: 'bg-blue-50 dark:bg-blue-950/30',   label: 'Vence amanhã'    },
   tarefa_atrasada:{ icon: ClipboardList, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-950/30',label: 'Tarefa atrasada'},
+  mencao:         { icon: AtSign,        color: 'text-primary',    bg: 'bg-primary/10',                     label: 'Mencionou você'  },
 }
 
 function fmtDate(s: string) {
