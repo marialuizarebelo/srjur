@@ -15,7 +15,7 @@ import { ClientCombobox } from '@/components/ClientCombobox'
 import { useProfilesMap, getAdminProfiles } from '@/components/ResponsibleSelect'
 import { Send, Receipt, Clock, CheckCircle2, XCircle, Check, X, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
-import { fmtBRL, fmtDate } from '@/lib/format'
+import { fmtBRL, fmtDate, parseBRL } from '@/lib/format'
 
 const CATEGORIES_RECEITA = ['Honorários Iniciais', 'Mensalidade', 'Acordo', 'Consultoria', 'Êxito', 'Outros']
 const CATEGORIES_DESPESA = ['Operacional', 'Pessoal', 'Pró-labore/Salário', 'Impostos', 'Software', 'Marketing', 'Aluguel', 'Outros']
@@ -146,7 +146,7 @@ export default function SolicitacoesFinanceiras() {
 
   const submit = async () => {
     if (!form.description.trim()) { toast.error('Preencha a descrição'); return }
-    const value = parseFloat(form.value.replace(',', '.'))
+    const value = parseBRL(form.value) ?? NaN
     if (!value || value <= 0) { toast.error('Preencha um valor válido'); return }
     const myPct = parseFloat(form.my_pct.replace(',', '.'))
     if (isNaN(myPct) || myPct < 0 || myPct > 100) { toast.error('Sua % precisa estar entre 0 e 100'); return }
@@ -555,7 +555,7 @@ export default function SolicitacoesFinanceiras() {
           if (numInst <= 1) return null
           const isCard = form.payment_method === 'Cartão de Crédito'
           const isCardLumpSumPreview = isCard && form.recurrence === 'Única'
-          const gross = parseFloat(form.value.replace(',', '.')) || 0
+          const gross = parseBRL(form.value) ?? 0
 
           if (isCardLumpSumPreview) {
             return (
