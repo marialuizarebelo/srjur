@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { MentionTextarea, MentionText } from '@/components/MentionTextarea'
 import { MessageSquare, Send, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EntityType } from '@/lib/activityLog'
@@ -53,6 +53,7 @@ export function ActivityTimeline({ entityType, entityId, createdAt, createdBy, e
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
   const [text, setText] = useState('')
+  const [mentionIds, setMentionIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [open, setOpen] = useState(defaultOpen)
 
@@ -85,17 +86,23 @@ export function ActivityTimeline({ entityType, entityId, createdAt, createdBy, e
   async function addComment() {
     if (!text.trim() || saving) return
     setSaving(true)
-    const { error } = await supabase.from('activity_log').insert({
+    const base = {
       entity_type: entityType,
       entity_id: entityId,
       kind: 'comment',
       text: text.trim(),
       author: profile?.nickname || profile?.display_name || 'Usuária',
       user_id: profile?.id ?? null,
-    })
+    }
+    const ids = mentionIds.filter(id => id !== profile?.id)
+    let { error } = await supabase.from('activity_log').insert((ids.length > 0 ? { ...base, mentions: ids } : base) as never)
+    // banco ainda sem a coluna de menções: salva o comentário sem elas
+    if (error && /mentions/i.test(error.message)) ({ error } = await supabase.from('activity_log').insert(base))
     setSaving(false)
     if (error) { toast.error('Erro ao adicionar comentário: ' + error.message); return }
+    if (ids.length > 0) toast.success(ids.length === 1 ? 'Pessoa mencionada vai ser avisada' : 'Pessoas mencionadas vão ser avisadas')
     setText('')
+    setMentionIds([])
     load()
   }
 
@@ -123,13 +130,14 @@ export function ActivityTimeline({ entityType, entityId, createdAt, createdBy, e
       {open && (
         <>
           <div className="flex gap-2 min-w-0">
-            <Textarea
+            <MentionTextarea
               value={text}
-              onChange={e => setText(e.target.value)}
-              placeholder="Adicionar um comentário..."
+              onChange={(v, ids) => { setText(v); setMentionIds(ids) }}
+              onSubmit={addComment}
+              selfId={profile?.id}
+              placeholder="Adicionar um comentário... (use @ para mencionar alguém)"
               rows={2}
               className="flex-1 min-w-0 text-sm"
-              onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) addComment() }}
             />
             <Button size="icon" className="h-10 w-10 shrink-0 self-end" onClick={addComment} disabled={!text.trim() || saving}>
               <Send className="h-4 w-4" />
@@ -193,7 +201,7 @@ export function ActivityTimeline({ entityType, entityId, createdAt, createdBy, e
                       className="h-6 w-6 text-[10px] mt-0.5 shrink-0"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm break-words ${e.kind === 'activity' ? 'text-muted-foreground italic' : ''}`}>{e.text}</p>
+                      <p className={`text-sm break-words ${e.kind === 'activity' ? 'text-muted-foreground italic' : ''}`}>{e.kind === 'comment' ? <MentionText text={e.text} /> : e.text}</p>
                       <p className="text-[10px] text-muted-foreground mt-0.5 break-words">
                         {authorName ? `${authorName} · ` : 'Sistema · '}{fmtWhen(e.created_at)}
                       </p>

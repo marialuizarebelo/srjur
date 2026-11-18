@@ -24,6 +24,7 @@ import { ResponsibleSelect, useProfilesMap } from '@/components/ResponsibleSelec
 import { toast } from 'sonner'
 import { fmtBRL, fmtDate, fmtDateLong, getDaysDiff } from '@/lib/format'
 import { ClientCombobox } from '@/components/ClientCombobox'
+import { MentionsCard } from '@/components/MentionsCard'
 import { ClientFormDialog, emptyClientForm, type ClientFormData } from '@/components/ClientForm'
 import {
   Users, Scale, ClipboardList, AlertTriangle, ChevronRight,
@@ -893,6 +894,8 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <QuickViewModal state={modal} onClose={() => setModal(CLOSED_MODAL)} />
+
+      <MentionsCard />
 
       {/* Diálogos dos atalhos "+ Novo" — abrem aqui mesmo, sem sair do painel */}
       <Dialog open={leadDialogOpen} onOpenChange={setLeadDialogOpen}>
