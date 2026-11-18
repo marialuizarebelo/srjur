@@ -655,17 +655,30 @@ export default function Dashboard() {
         // "Saldo do mês" precisa ser calculado igual ao Financeiro (recebido - pago,
         // olhando pagamento parcial via finance_payments), senão os dois números
         // nunca batem mesmo mostrando "a mesma coisa" pro olho da usuária.
-        const ids = finDataThisMonth.map(f => f.id)
-        const { data: paysData } = ids.length > 0
-          ? await supabase.from('finance_payments').select('finance_id, amount').in('finance_id', ids)
-          : { data: [] as { finance_id: string; amount: number }[] }
-        const paidMap: Record<string, number> = {}
-        for (const p of paysData ?? []) paidMap[p.finance_id] = (paidMap[p.finance_id] ?? 0) + Number(p.amount)
-        const paidAmountOf = (f: typeof finDataThisMonth[number]) =>
-          paidMap[f.id] !== undefined ? paidMap[f.id] : (f.paid ? Number(f.value) : 0)
+        // Pagamento parcial conta no dia em que foi feito (igual ao Financeiro); lançamento pago de uma vez, no mês do lançamento.
+        const caixa = (finData ?? []).filter(f => f.impacts_cash !== false)
+        const { data: paysData } = caixa.length > 0
+          ? await supabase.from('finance_payments').select('finance_id, amount, payment_date').in('finance_id', caixa.map(f => f.id))
+          : { data: [] as { finance_id: string; amount: number; payment_date: string }[] }
+        const paysBy: Record<string, { amount: number; payment_date: string }[]> = {}
+        for (const p of paysData ?? []) (paysBy[p.finance_id] ??= []).push({ amount: Number(p.amount), payment_date: p.payment_date })
+        const pagoNoMes = (f: typeof caixa[number]) => {
+          const ps = paysBy[f.id]
+          if (ps && ps.length > 0) {
+            let acumulado = 0
+            let dentro = 0
+            for (const p of [...ps].sort((x, y) => x.payment_date.localeCompare(y.payment_date))) {
+              const contado = Math.min(p.amount, Math.max(Number(f.value) - acumulado, 0))
+              acumulado += p.amount
+              if (p.payment_date.slice(0, 7) === currentMonthStr) dentro += contado
+            }
+            return dentro
+          }
+          return f.paid && f.date.slice(0, 7) === currentMonthStr ? Number(f.value) : 0
+        }
 
-        const recebido = finDataThisMonth.filter(f => f.type === 'receita').reduce((s, f) => s + Math.min(paidAmountOf(f), Number(f.value)), 0)
-        const pago = finDataThisMonth.filter(f => f.type === 'despesa').reduce((s, f) => s + Math.min(paidAmountOf(f), Number(f.value)), 0)
+        const recebido = caixa.filter(f => f.type === 'receita').reduce((s, f) => s + pagoNoMes(f), 0)
+        const pago = caixa.filter(f => f.type === 'despesa').reduce((s, f) => s + pagoNoMes(f), 0)
 
         setFinance({ receitas, despesas, inadimplencia, saldoMes: recebido - pago })
       }

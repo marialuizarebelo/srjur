@@ -101,6 +101,8 @@ export async function fetchAllSafe<T>(table: string, baseCols: string, optionalC
 //  - em aberto = valor − pago
 //  - "caixa" = lançamentos que impactam o caixa (os demais são só registro)
 export interface FinRow {
+  /** tem pagamentos parciais cadastrados (contam no dia em que foram feitos) */
+  temParcial?: boolean
   id: string
   type: 'receita' | 'despesa'
   category: string | null
@@ -157,7 +159,7 @@ export function useFinanceData() {
         const eventos = ps && ps.length > 0
           ? ps.map(p => ({ date: p.payment_date.slice(0, 10), amount: p.amount }))
           : (r.paid ? [{ date: (r.payment_date ?? r.date).slice(0, 10), amount: value }] : [])
-        return { ...r, value, intragrupo: r.intragrupo === true, cost_type: r.cost_type ?? null, pago, aberto: Math.max(value - pago, 0), eventos } as FinRow
+        return { ...r, value, intragrupo: r.intragrupo === true, cost_type: r.cost_type ?? null, pago, aberto: Math.max(value - pago, 0), eventos, temParcial: !!(ps && ps.length > 0) } as FinRow
       }))
       setLoading(false)
     })()
@@ -184,7 +186,20 @@ export function filtraFin(rows: FinRow[], unidade: '' | 'advocacia' | 'saas') {
 /** Saldo em caixa: o que entrou menos o que saiu (só lançamentos de caixa, pelo valor efetivamente pago). */
 export const saldoDe = (rows: FinRow[]) => sum(rows.filter(isCaixa).map(r => (r.type === 'receita' ? r.pago : -r.pago)))
 
-/** Os mesmos totais da tela Financeiro para um conjunto de lançamentos e um período (por data do lançamento). */
+/** Quanto foi pago no período: pagamento parcial conta no dia em que foi feito; o resto, no mês do lançamento (como na tela Financeiro). */
+function pagoNoPeriodo(r: FinRow, start: string, end: string) {
+  if (!r.temParcial) return inRange(r.date, start, end) ? r.pago : 0
+  let acumulado = 0
+  let dentro = 0
+  for (const e of [...r.eventos].sort((a, b) => a.date.localeCompare(b.date))) {
+    const contado = Math.min(e.amount, Math.max(r.value - acumulado, 0))
+    acumulado += e.amount
+    if (inRange(e.date, start, end)) dentro += contado
+  }
+  return dentro
+}
+
+/** Os mesmos totais da tela Financeiro para um conjunto de lançamentos e um período (por data do lançamento; pagamentos parciais, por data do pagamento). */
 export function resumoFin(rows: FinRow[], start: string, end: string, hoje: string) {
   const noPeriodo = rows.filter(r => inRange(r.date, start, end))
   const rec = noPeriodo.filter(r => r.type === 'receita')
@@ -195,8 +210,8 @@ export function resumoFin(rows: FinRow[], start: string, end: string, hoje: stri
     receitas: sum(rec.map(r => r.value)),
     despesas: sum(despCaixa.map(r => r.value)),
     despesasNaoCaixa: sum(desp.filter(r => !isCaixa(r)).map(r => r.value)),
-    recebido: sum(recCaixa.map(r => r.pago)),
-    pago: sum(despCaixa.map(r => r.pago)),
+    recebido: sum(rows.filter(r => r.type === 'receita' && isCaixa(r)).map(r => pagoNoPeriodo(r, start, end))),
+    pago: sum(rows.filter(r => r.type === 'despesa' && isCaixa(r)).map(r => pagoNoPeriodo(r, start, end))),
     aReceber: sum(recCaixa.map(r => r.aberto)),
     aPagar: sum(despCaixa.map(r => r.aberto)),
     previstoReceitas: sum(rec.filter(r => r.nature === 'previsto').map(r => r.value)),
