@@ -422,7 +422,7 @@ export default function Calendario() {
                   {stageEvs.map(ev => {
                     const tcs = styleOf(ev.subtype ?? ev.type)
                     return (
-                      <DraggableCard key={ev.id} id={ev.id}>
+                      <DraggableCard key={ev.id} id={ev.id} noTouchDrag>
                         <div className="p-2.5 rounded-lg border bg-background hover:shadow-md transition-shadow cursor-pointer"
                           onClick={() => openViewEvent(ev)}>
                           <div className="flex items-center gap-1.5 mb-1">
@@ -477,12 +477,25 @@ export default function Calendario() {
     const personDot = singleProfile?.color ?? (ev.responsibleIds.length > 1 ? '#8577C9' : null)
 
     return (
-      <DraggableCard id={ev.id}>
+      <DraggableCard id={ev.id} noTouchDrag>
         <div className={`flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[11px] font-semibold leading-5 cursor-pointer hover:brightness-95 transition-all
           ${done ? 'opacity-40 line-through' : ''}`}
           style={{ backgroundColor: st.bg, color: st.text, borderColor: `color-mix(in srgb, ${st.dot} 38%, transparent)` }}
           title={ev.title}
           onClick={e => { e.stopPropagation(); openViewEvent(ev) }}>
+          {!mini && ev.type !== 'marketing' && (
+            <button
+              type="button"
+              data-bolinha
+              className="shrink-0 -ml-0.5"
+              title={done ? 'Reabrir' : 'Marcar como feito'}
+              aria-label={done ? 'Reabrir' : 'Marcar como feito'}
+              onPointerDown={e => e.stopPropagation()}
+              onClick={e => { e.stopPropagation(); void quickToggleDone(ev) }}
+            >
+              {done ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" /> : <Circle className="h-3.5 w-3.5" />}
+            </button>
+          )}
           <span className="truncate flex-1 min-w-0">
             {!mini && calFields.horario && ev.time && <span className="mr-1.5 opacity-60 font-normal">{ev.time.slice(0,5)}</span>}
             {ev.title}
