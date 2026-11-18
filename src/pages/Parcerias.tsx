@@ -19,6 +19,8 @@ import { downloadPartnerReceipt, type PartnerReceipt } from '@/lib/partnerReceip
 import { PARTNER_KINDS, DEFAULT_PARTNER_CATEGORIES, categoriesLabel, type Partner, type PartnerLink } from '@/lib/partners'
 import { CategoryChips } from '@/components/CategoryChips'
 import { StackTable } from '@/components/StackTable'
+import { PartnerReferrals } from '@/components/PartnerReferrals'
+import { QuickClientDialog } from '@/components/QuickClientDialog'
 
 interface Commission {
   id: string; partner_id: string; link_id: string | null; client_id: string | null; source_finance_id: string | null
@@ -40,6 +42,8 @@ const emptyPartner = {
   name: '', kind: 'pessoa', document: '', oab: '', email: '', phone: '', pix_key: '', bank_info: '', notes: '',
   status: 'ativo', started_at: '', drive_url: '', client_id: '', default_pct: '', default_categories: DEFAULT_PARTNER_CATEGORIES as string[], payment_days: '5',
   valid_from: '', valid_until: '',
+  direction: 'paga' as 'paga' | 'recebe' | 'ambos',
+  receive_pct: '',
 }
 type PartnerForm = typeof emptyPartner
 
@@ -226,7 +230,7 @@ export default function Parcerias() {
                   const s = perPartner(p.id)
                   return (
                     <TableRow key={p.id} className="cursor-pointer" onClick={() => setOpenId(p.id)}>
-                      <TableCell className="font-medium">{p.name}</TableCell>
+                      <TableCell className="font-medium">{p.name}{p.direction !== 'paga' && <Badge variant="outline" className="text-[10px] ml-2">{p.direction === 'ambos' ? 'Comissão nos dois sentidos' : 'Recebemos comissão'}</Badge>}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{PARTNER_KINDS.find(k => k.value === p.kind)?.label ?? p.kind}</TableCell>
                       <TableCell className="text-sm"><span className="block max-w-[220px] truncate" title={categoriesLabel(p.default_categories)}>{p.default_pct != null ? `${pctStr(p.default_pct)}% · ${categoriesLabel(p.default_categories)}` : '—'}</span></TableCell>
                       <TableCell className="text-right text-sm">{s.clientes}</TableCell>
@@ -293,7 +297,7 @@ export default function Parcerias() {
           statusOf={statusOf} statusBadge={statusBadge} dueOf={dueOf} receiptOf={receiptOf}
           onClose={() => setOpenId(null)}
           onChanged={load}
-          onCreated={id => { load(); setOpenId(id) }}
+          onCreated={async id => { await load(); setOpenId(id) }}
         />
       )}
     </div>
@@ -318,12 +322,14 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
   onCreated: (id: string) => void
 }) {
   const isNew = !partner
-  const [tab, setTab] = useState<'dados' | 'clientes' | 'comissoes'>('dados')
+  const [tab, setTab] = useState<'dados' | 'clientes' | 'comissoes' | 'indicacoes'>('dados')
   const [form, setForm] = useState<PartnerForm>(() => partner ? {
     name: partner.name, kind: partner.kind, document: partner.document ?? '', oab: partner.oab ?? '', email: partner.email ?? '',
     phone: partner.phone ?? '', pix_key: partner.pix_key ?? '', bank_info: partner.bank_info ?? '', notes: partner.notes ?? '',
     status: partner.status, started_at: partner.started_at ?? '', drive_url: partner.drive_url ?? '', client_id: partner.client_id ?? '',
     default_pct: pctStr(partner.default_pct), default_categories: partner.default_categories ?? DEFAULT_PARTNER_CATEGORIES, payment_days: String(partner.payment_days ?? 5), valid_from: partner.valid_from ?? '', valid_until: partner.valid_until ?? '',
+    direction: partner.direction ?? 'paga',
+    receive_pct: pctStr(partner.receive_pct),
   } : { ...emptyPartner })
   const [saving, setSaving] = useState(false)
   // O parceiro que também é cliente já tem dados cadastrados: traz o que estiver vazio.
@@ -343,6 +349,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
   const [hf, setHf] = useState({ unit: 'advocacia' as 'advocacia' | 'saas', client_id: '', source: '', base: '', pct: '', amount: '', received_at: '', paid_at: '', notes: '', createLink: true })
   const [histPayments, setHistPayments] = useState<PaidReceita[]>([])
   const [linkOpen, setLinkOpen] = useState(false)
+  const [quickClientOpen, setQuickClientOpen] = useState(false)
   const [lf, setLf] = useState({ unit: '' as '' | 'advocacia' | 'saas', client_id: '', process_id: '', pct: '', categories: DEFAULT_PARTNER_CATEGORIES as string[], valid_from: todayISO(), valid_until: '', indeterminate: true, notes: '' })
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null)
 
@@ -355,7 +362,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
     const payload = {
       name: form.name.trim(), kind: form.kind, document: form.document || null, oab: form.oab || null, email: form.email || null,
       phone: form.phone || null, pix_key: form.pix_key || null, bank_info: form.bank_info || null, notes: form.notes || null,
-      status: form.status, started_at: form.started_at || null, drive_url: form.drive_url || null, client_id: form.client_id || null,
+      status: form.status, direction: form.direction, receive_pct: form.receive_pct.trim() ? parsePct(form.receive_pct) : null, started_at: form.started_at || null, drive_url: form.drive_url || null, client_id: form.client_id || null,
       default_pct: pct, default_categories: form.default_categories, payment_days: Math.max(0, parseInt(form.payment_days) || 0), valid_from: form.valid_from || null, valid_until: form.valid_until || null,
     }
     setSaving(true)
@@ -482,7 +489,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
   }
 
   const clientProcesses = processes.filter(p => p.client_id === lf.client_id)
-  const tabs: [typeof tab, string][] = isNew ? [['dados', 'Dados']] : [['dados', 'Dados e regra'], ['clientes', `Clientes (${links.length})`], ['comissoes', `Comissões (${commissions.length})`]]
+  const tabs: [typeof tab, string][] = isNew ? [['dados', 'Dados']] : [['dados', form.direction === 'recebe' ? 'Dados' : 'Dados e regra'], ...(form.direction !== 'recebe' ? [['clientes', `Clientes (${links.length})`], ['comissoes', `Comissões (${commissions.length})`]] as [typeof tab, string][] : []), ...(form.direction !== 'paga' ? [['indicacoes', 'Indicações enviadas']] as [typeof tab, string][] : [])]
 
   return (
     <Dialog open onOpenChange={v => { if (!v) onClose() }}>
@@ -516,6 +523,29 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                     <SelectContent><SelectItem value="ativo">Ativo</SelectItem><SelectItem value="encerrado">Encerrado</SelectItem></SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Tipo de parceria</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {([['paga', 'Parceiro nos indica clientes', 'Pagamos comissão'], ['recebe', 'Indicamos clientes ao parceiro', 'Recebemos comissão']] as const).map(([k, titulo, sub]) => {
+                      const ativo = k === 'paga' ? form.direction !== 'recebe' : form.direction !== 'paga'
+                      return (
+                        <button key={k} type="button"
+                          onClick={() => {
+                            const paga = k === 'paga' ? !ativo : form.direction !== 'recebe'
+                            const recebe = k === 'recebe' ? !ativo : form.direction !== 'paga'
+                            if (!paga && !recebe) return // ao menos um sentido
+                            set('direction', paga && recebe ? 'ambos' : paga ? 'paga' : 'recebe')
+                          }}
+                          className={`flex items-start gap-2.5 rounded-lg border p-3 text-left transition-colors ${ativo ? 'border-primary/40 bg-primary/5' : 'hover:bg-muted/40'}`}>
+                          <span className={`mt-0.5 h-4 w-4 shrink-0 rounded border flex items-center justify-center ${ativo ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40'}`}>
+                            {ativo && <CheckCircle2 className="h-3 w-3" />}
+                          </span>
+                          <span className="min-w-0"><span className="block text-sm font-medium">{titulo}</span><span className="block text-[11px] text-muted-foreground">{sub}</span></span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
                 <div className="space-y-1.5"><Label>CPF / CNPJ</Label><Input value={form.document} onChange={e => set('document', e.target.value)} className="h-10" /></div>
                 {form.kind === 'advogado' && <div className="space-y-1.5"><Label>OAB</Label><Input value={form.oab} onChange={e => set('oab', e.target.value)} placeholder="Ex: OAB/RS 12345" className="h-10" /></div>}
                 <div className="space-y-1.5"><Label>E-mail</Label><Input type="email" value={form.email} onChange={e => set('email', e.target.value)} className="h-10" /></div>
@@ -529,6 +559,7 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                 </div>
               </div>
 
+              {form.direction !== 'recebe' && (
               <div className="space-y-3 rounded-xl border p-4 bg-muted/30">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Regra padrão da parceria</p>
                 <p className="text-xs text-muted-foreground -mt-1">Vem pré-selecionada ao vincular um cliente; dá para ajustar por cliente quando o acordo for diferente.</p>
@@ -558,6 +589,21 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                   </div>
                 </div>
               </div>
+              )}
+
+              {form.direction !== 'paga' && (
+              <div className="space-y-3 rounded-xl border p-4 bg-muted/30">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Indicações enviadas ao parceiro</p>
+                <p className="text-xs text-muted-foreground -mt-1">A porcentagem é preenchida em cada indicação e pode ser ajustada individualmente.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>% de comissão a receber</Label>
+                    <div className="relative"><Input value={form.receive_pct} onChange={e => set('receive_pct', e.target.value)} placeholder="Ex: 20" className="h-10 pr-8" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span></div>
+                  </div>
+                </div>
+              </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5"><Label>Contrato / pasta (link)</Label><Input value={form.drive_url} onChange={e => set('drive_url', e.target.value)} placeholder="Link do contrato da parceria" className="h-10" /></div>
@@ -573,6 +619,10 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
                 </div>
               </div>
             </>
+          )}
+
+          {tab === 'indicacoes' && partner && (
+            <PartnerReferrals partner={partner} clients={clients} onClientsChanged={onChanged} />
           )}
 
           {tab === 'clientes' && partner && (
@@ -725,7 +775,10 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
             <DialogHeader><DialogTitle>{editingLinkId ? 'Editar vínculo' : 'Vincular cliente'}</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label>Cliente</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Cliente</Label>
+                  <button type="button" className="text-xs text-primary hover:underline" onClick={() => setQuickClientOpen(true)}>+ Novo cliente</button>
+                </div>
                 <ClientCombobox clients={clients} value={lf.client_id} onChange={v => setLf(f => ({ ...f, client_id: v, process_id: '' }))} allowNone={false} placeholder="Escolha o cliente" />
               </div>
               {lf.client_id && clientProcesses.length > 0 && (
@@ -772,6 +825,8 @@ function PartnerDialog({ partner, links, commissions, receipts, clients, process
             </div>
           </DialogContent>
         </Dialog>
+
+        <QuickClientDialog open={quickClientOpen} onClose={() => setQuickClientOpen(false)} onCreated={id => { setQuickClientOpen(false); onChanged(); setLf(f => ({ ...f, client_id: id, process_id: '' })) }} />
       </DialogContent>
     </Dialog>
   )

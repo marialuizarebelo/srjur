@@ -35,6 +35,10 @@ export interface Partner {
   payment_days: number
   valid_from: string | null
   valid_until: string | null
+  /** 'paga' = pagamos comissão; 'recebe' = recebemos comissão (indicamos clientes a ele); 'ambos' = os dois sentidos */
+  direction: 'paga' | 'recebe' | 'ambos'
+  /** % combinada sobre os honorários do parceiro, nas indicações que enviamos */
+  receive_pct: number | null
 }
 
 export interface PartnerLink {
