@@ -1394,7 +1394,7 @@ export default function Clientes() {
       if (error) { toast.error('Erro ao salvar cliente: ' + error.message); return }
       logChanges('client', editingClient.id, editingClient as unknown as Record<string, unknown>, payload as unknown as Record<string, unknown>, { name: 'nome', email: 'e-mail', phone: 'telefone', cpf_cnpj: 'CPF/CNPJ', type: 'tipo', area: 'área', responsible_ids: 'responsáveis', notes: 'observações', address: 'endereço', tags: 'etiquetas', birth_date: 'data de nascimento' })
       if (editingClient.status !== cf.status) {
-        logActivity('client', editingClient.id, `Status alterado para "${cf.status}"`)
+        logActivity('client', editingClient.id, `Status alterado para "${({ ativo: 'Ativo', inativo: 'Encerrado', prospecto: 'Prospecto' } as Record<string, string>)[cf.status] ?? cf.status}"`)
       }
     } else {
       const { data: newClient, error } = await supabase.from('clients').insert({ ...payload, created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null }).select('id').single()

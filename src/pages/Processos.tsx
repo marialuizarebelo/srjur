@@ -542,7 +542,7 @@ export default function Processos() {
         if (error) throw error
         logChanges('process', editing.id, editing as unknown as Record<string, unknown>, payload as unknown as Record<string, unknown>, { title: 'título', number: 'número', client_id: 'cliente', type: 'tipo', area: 'área', responsible_ids: 'responsáveis', court: 'vara', procedural_class: 'classe processual', electronic_system: 'sistema eletrônico', notes: 'observações', tags: 'etiquetas' })
         if (editing.status !== pf.status) logActivity('process', editing.id, `Status alterado para "${formatLabel(pf.status)}"`)
-        if (editing.phase !== pf.phase) logActivity('process', editing.id, `Fase alterada para "${pf.phase}"`)
+        if (editing.phase !== pf.phase) logActivity('process', editing.id, `Fase alterada para "${allPhases.find(p => p.value === pf.phase)?.label ?? pf.phase}"`)
         if (entrandoNaFaseFinal) {
           await supabase.from('tasks').insert({
             title: `Verificar êxito — ${pf.title}`,
