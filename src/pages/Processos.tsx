@@ -28,7 +28,7 @@ import {
 import { getAreaColor } from '@/lib/areaColors'
 import { TagChips, splitTags } from '@/components/TagChips'
 import { getTagColor } from '@/lib/deadlineTypes'
-import { fmtDate, fmtBRL } from '@/lib/format'
+import { fmtDate, fmtBRL, parseBRL } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ClientCombobox } from '@/components/ClientCombobox'
@@ -201,6 +201,8 @@ function matchesParty(p: { opposing_party: string | null; opposing_parties: { na
   const nomes = [clientName, p.opposing_party, ...(p.opposing_parties ?? []).map(o => o.name)]
   return nomes.some(n => normText(n).includes(normText(q)))
 }
+
+const fmtCampoBRL = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function Processos() {
   const navigate = useNavigate()
@@ -465,7 +467,7 @@ export default function Processos() {
       procedural_class: p.procedural_class ?? '',
       electronic_system: p.electronic_system ?? '', notes: p.notes ?? '',
       portal_visible: p.portal_visible,
-      access_key: p.access_key ?? '', cause_value: p.cause_value ? String(p.cause_value) : '',
+      access_key: p.access_key ?? '', cause_value: p.cause_value ? fmtCampoBRL(p.cause_value) : '',
       court_url: p.court_url ?? '', drive_url: p.drive_url ?? '', drive_folder_id: p.drive_folder_id ?? '', tags: p.tags ?? '',
       client_role: p.client_role ?? 'autor',
       opposing_parties: (p.opposing_parties && p.opposing_parties.length > 0)
@@ -491,6 +493,7 @@ export default function Processos() {
 
   const saveProcess = async () => {
     if (!pf.title.trim()) { toast.error('Preencha o título do processo'); return }
+    if (pf.cause_value.trim() && parseBRL(pf.cause_value) === null) { toast.error('Valor da causa inválido: digite só números, por exemplo 27459,79'); return }
     if (saving) return
     setSaving(true)
     const payload = {
@@ -506,7 +509,7 @@ export default function Processos() {
       electronic_system: pf.electronic_system || null, notes: pf.notes || null,
       portal_visible: pf.portal_visible, updated_at: new Date().toISOString(),
       access_key: pf.access_key || null,
-      cause_value: pf.cause_value ? parseFloat(pf.cause_value.replace(',', '.')) : null,
+      cause_value: parseBRL(pf.cause_value),
       court_url: pf.court_url || null, drive_url: pf.drive_url || null, drive_folder_id: pf.drive_folder_id || null,
       tags: pf.tags || null,
       opposing_parties: pf.opposing_parties.filter(op => op.name.trim() || op.cpf.trim()),

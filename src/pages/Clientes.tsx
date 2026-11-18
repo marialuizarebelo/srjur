@@ -26,7 +26,7 @@ import {
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight, X, ExternalLink, Scale, ClipboardList, FileText,
   ArrowUp, ArrowDown, ArrowUpDown, Copy,
 } from 'lucide-react'
-import { fmtBRL, fmtDate } from '@/lib/format'
+import { fmtBRL, fmtDate, parseBRL } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ClientFormDialog, emptyClientForm, type ClientFormData, GENDERS, MARITAL_STATUSES, REP_ROLES, REP_DOCUMENT_TYPES, STATES } from '@/components/ClientForm'
@@ -1401,7 +1401,7 @@ export default function Clientes() {
       origin: cf.origin || null, referred_by: cf.referred_by || null,
       referral_fee_pct: cf.referral_fee_pct ? parseFloat(cf.referral_fee_pct) : null,
       signed_at: cf.signed_at || null, first_contact_at: cf.first_contact_at || null,
-      potential_value: cf.potential_value ? parseFloat(cf.potential_value.replace(',', '.')) : null,
+      potential_value: parseBRL(cf.potential_value),
       drive_url: cf.drive_url || null, drive_folder_id: cf.drive_folder_id || null, tags: cf.tags || null,
       is_incarcerated: cf.is_incarcerated,
       incarceration_facility: cf.is_incarcerated ? (cf.incarceration_facility || null) : null,
@@ -1473,7 +1473,7 @@ export default function Clientes() {
       const payload = {
         name: lf.name, email: lf.email || null, phone: lf.phone || null,
         cpf_cnpj: lf.cpf_cnpj || null, source: lf.source || null, status: lf.status,
-        potential_value: lf.potential_value ? parseFloat(lf.potential_value.replace(',', '.')) : null,
+        potential_value: parseBRL(lf.potential_value),
         notes: lf.notes || null,
         responsible_ids: lf.responsible_ids,
         responsible: lf.responsible_ids.length > 1
