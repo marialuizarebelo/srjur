@@ -38,6 +38,34 @@ function fmtWhen(iso: string) {
   return `${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
 }
 
+// Nomes legíveis para códigos internos que ficaram gravados no histórico (ex.: "em_elaboracao_pre_protocolo").
+const ROTULOS: Record<string, string> = {
+  pendente: 'Pendente', em_andamento: 'Em andamento', concluida: 'Concluída', concluido: 'Concluído', cumprido: 'Cumprido',
+  perdido: 'Perdido', cancelada: 'Cancelada', suspenso: 'Suspenso', arquivado: 'Arquivado', encerrado: 'Encerrado',
+  ativo: 'Ativo', inativo: 'Encerrado', prospecto: 'Prospecto', backlog: 'Backlog', a_fazer: 'A fazer', fazendo: 'Fazendo',
+  aguardando: 'Aguardando', inicial: 'Inicial', citacao: 'Citação', instrucao: 'Instrução', audiencia: 'Audiência',
+  recurso: 'Recurso', execucao: 'Execução', notificacao: 'Notificação enviada', aguardando_resposta: 'Aguardando resposta',
+  negociacao: 'Negociação', acordo: 'Acordo fechado', sem_acordo: 'Sem acordo / vai a juízo',
+}
+let etapasCache: Record<string, string> | null = null
+function useEtapas() {
+  const [map, setMap] = useState<Record<string, string>>(etapasCache ?? {})
+  useEffect(() => {
+    if (etapasCache) return
+    supabase.from('process_stages').select('value, name').then(({ data }) => {
+      etapasCache = Object.fromEntries(((data ?? []) as { value: string; name: string }[]).map(s => [s.value, s.name]))
+      setMap(etapasCache)
+    })
+  }, [])
+  return map
+}
+function bonito(text: string, etapas: Record<string, string>) {
+  return text.replace(/"([a-z][a-z0-9_]*)"/g, (m, token: string) => {
+    const nome = etapas[token] ?? ROTULOS[token] ?? (token.includes('_') ? token.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()) : null)
+    return nome ? `"${nome}"` : m
+  })
+}
+
 export function ActivityTimeline({ entityType, entityId, createdAt, createdBy, externalEntries, title = 'Histórico e comentários', defaultOpen = true }: {
   entityType: EntityType
   entityId: string
@@ -56,6 +84,7 @@ export function ActivityTimeline({ entityType, entityId, createdAt, createdBy, e
   const [mentionIds, setMentionIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [open, setOpen] = useState(defaultOpen)
+  const etapas = useEtapas()
 
   // Dados antigos (andamentos importados, etc.) às vezes guardam o e-mail no
   // campo "author" em vez do nome — se o e-mail bater com o de uma usuária
@@ -201,7 +230,7 @@ export function ActivityTimeline({ entityType, entityId, createdAt, createdBy, e
                       className="h-6 w-6 text-[10px] mt-0.5 shrink-0"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm break-words ${e.kind === 'activity' ? 'text-muted-foreground italic' : ''}`}>{e.kind === 'comment' ? <MentionText text={e.text} /> : e.text}</p>
+                      <p className={`text-sm break-words ${e.kind === 'activity' ? 'text-muted-foreground italic' : ''}`}>{e.kind === 'comment' ? <MentionText text={e.text} /> : bonito(e.text, etapas)}</p>
                       <p className="text-[10px] text-muted-foreground mt-0.5 break-words">
                         {authorName ? `${authorName} · ` : 'Sistema · '}{fmtWhen(e.created_at)}
                       </p>
