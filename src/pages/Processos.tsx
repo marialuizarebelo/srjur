@@ -331,6 +331,8 @@ export default function Processos() {
 
   // Detail view (andamentos)
   const [detailProcess, setDetailProcess] = useState<Process | null>(null)
+  // Lançamentos do Financeiro vinculados ao processo
+  const [processFinance, setProcessFinance] = useState<{ id: string; description: string | null; value: number; due_date: string | null; paid: boolean; type: string; current_installment: number | null; installments: number | null }[]>([])
   const [updates, setUpdates] = useState<ProcessUpdate[]>([])
   const [newUpdate, setNewUpdate] = useState('')
   const [newUpdatePortal, setNewUpdatePortal] = useState(false)
@@ -498,6 +500,10 @@ export default function Processos() {
     loadUpdates(p.id)
     loadProcessTasks(p.id)
     loadProcessDeadlines(p.id)
+    setProcessFinance([])
+    supabase.from('finance').select('id, description, value, due_date, paid, type, current_installment, installments')
+      .eq('process_id', p.id).order('due_date', { ascending: true })
+      .then(({ data }) => setProcessFinance((data as typeof processFinance) ?? []))
   }
 
   const saveProcess = async () => {
@@ -845,6 +851,25 @@ export default function Processos() {
                   <div><p className="text-[11px] text-muted-foreground">Cadastrado em</p><p className="font-medium">{fmtDateBR(detailProcess.created_at)}</p></div>
                   <div><p className="text-[11px] text-muted-foreground">Atualizado em</p><p className="font-medium">{fmtDateBR(detailProcess.updated_at)}</p></div>
                 </div>
+
+                {processFinance.length > 0 && (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground mb-1">Financeiro deste processo</p>
+                    <div className="rounded-lg border divide-y text-sm">
+                      {processFinance.map(f => (
+                        <div key={f.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{f.description ?? '—'}</p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {f.due_date ? `Vence em ${fmtDate(f.due_date)}` : 'Sem vencimento'} · {f.paid ? 'Pago' : 'Em aberto'}
+                            </p>
+                          </div>
+                          <p className={`shrink-0 font-semibold ${f.type === 'despesa' ? 'text-red-600' : 'text-emerald-600'}`}>{fmtBRL(f.value)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {detailProcess.notes && (
                   <div>
