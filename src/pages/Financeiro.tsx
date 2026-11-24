@@ -1,3 +1,4 @@
+import { hideInternalTags, internalTagsOf } from '@/lib/internalTags'
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
@@ -77,6 +78,8 @@ interface FinanceRow {
 }
 
 interface ClientOption { id: string; name: string }
+interface ProcessOption { id: string; title: string; number: string | null; client_id: string | null }
+const processLabel = (p: ProcessOption) => `${p.title}${p.number ? ` — ${p.number}` : ''}`
 
 interface FinancePayment {
   id: string
@@ -465,17 +468,19 @@ function SaldoDrawer({ totalRows, periodRows, onClose, clients, onEdit, payments
 }
 
 // ── View Dialog ──
-function FinanceViewDialog({ row, open, onClose, onEdit, onDelete, clients, paymentsMap }: {
+function FinanceViewDialog({ row, open, onClose, onEdit, onDelete, clients, processes, paymentsMap }: {
   row: FinanceRow | null
   open: boolean
   onClose: () => void
   onEdit: () => void
   onDelete: () => void
   clients: ClientOption[]
+  processes: ProcessOption[]
   paymentsMap: Record<string, FinancePayment[]>
 }) {
   if (!row) return null
   const clientName = clients.find(c => c.id === row.client_id)?.name
+  const linkedProcess = processes.find(p => p.id === row.process_id)
   const payments = paymentsMap[row.id] ?? []
   const status = rowStatus(row, paymentsMap)
 
@@ -524,6 +529,12 @@ function FinanceViewDialog({ row, open, onClose, onEdit, onDelete, clients, paym
                 <p className="font-medium">{clientName}</p>
               </div>
             )}
+            {linkedProcess && (
+              <div className="col-span-2">
+                <p className="text-[11px] text-muted-foreground">Processo</p>
+                <p className="font-medium">{processLabel(linkedProcess)}</p>
+              </div>
+            )}
             {row.payment_method && (
               <div>
                 <p className="text-[11px] text-muted-foreground">Forma de pagamento</p>
@@ -550,10 +561,10 @@ function FinanceViewDialog({ row, open, onClose, onEdit, onDelete, clients, paym
             )}
           </div>
 
-          {row.notes && (
+          {hideInternalTags(row.notes) && (
             <div>
               <p className="text-[11px] text-muted-foreground mb-1">Observações</p>
-              <p className="text-sm whitespace-pre-wrap">{row.notes}</p>
+              <p className="text-sm whitespace-pre-wrap">{hideInternalTags(row.notes)}</p>
             </div>
           )}
 
@@ -593,6 +604,7 @@ export default function Financeiro() {
   const profilesMap = useProfilesMap()
   const [rows, setRows] = useState<FinanceRow[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
+  const [processes, setProcesses] = useState<ProcessOption[]>([])
   const [paymentsMap, setPaymentsMap] = useState<Record<string, FinancePayment[]>>({})
   const [newPayAmount, setNewPayAmount] = useState('')
   const [newPayDate, setNewPayDate] = useState(new Date().toISOString().slice(0, 10))
@@ -669,6 +681,7 @@ export default function Financeiro() {
     paid: false,
     payment_date: '',
     client_id: '',
+    process_id: '',
     impacts_cash: true,
     nature: 'real' as 'real' | 'previsto',
     responsible: '',
@@ -682,11 +695,15 @@ export default function Financeiro() {
     card_fee_percent: '',
   })
 
+  // Marcas internas das observações (ex.: [espelho:...]): ficam escondidas no formulário e voltam ao salvar.
+  const [notesTags, setNotesTags] = useState('')
+
   const resetForm = () => {
+    setNotesTags('')
     setForm({
       type: 'receita', description: '', value: '',
       date: new Date().toISOString().slice(0, 10), due_date: '', category: '',
-      origin: '', paid: false, payment_date: '', client_id: '',
+      origin: '', paid: false, payment_date: '', client_id: '', process_id: '',
       impacts_cash: true, nature: 'real', responsible: '', responsible_ids: [], notes: '',
       portal_visible: false, payment_method: '', installments: '1',
       recurrence: 'Única', payment_link: '', card_fee_percent: '',
@@ -760,6 +777,8 @@ export default function Financeiro() {
     setRows((data as FinanceRow[]) ?? [])
     const { data: cl } = await supabase.from('clients').select('id, name').eq('status', 'ativo').order('name')
     setClients((cl as ClientOption[]) ?? [])
+    const { data: pr } = await supabase.from('processes').select('id, title, number, client_id').order('title')
+    setProcesses((pr as ProcessOption[]) ?? [])
     const { data: pays } = await supabase.from('finance_payments').select('*').order('payment_date', { ascending: true })
     const map: Record<string, FinancePayment[]> = {}
     for (const p of (pays as FinancePayment[]) ?? []) {
@@ -993,11 +1012,12 @@ export default function Financeiro() {
       paid: form.paid,
       payment_date: autoPayDate,
       client_id: form.client_id || null,
+      process_id: form.process_id || null,
       impacts_cash: form.impacts_cash,
       nature: autoNature,
       responsible: form.responsible || null,
       responsible_ids: form.responsible_ids,
-      notes: form.notes || null,
+      notes: (notesTags + form.notes).trim() || null,
       portal_visible: form.portal_visible,
       payment_method: form.payment_method || null,
       recurrence: form.recurrence === 'Única' ? null : form.recurrence,
@@ -1155,6 +1175,7 @@ export default function Financeiro() {
   }
 
   const handleEdit = (row: FinanceRow) => {
+    setNotesTags(internalTagsOf(row.notes))
     setForm({
       type: row.type,
       description: row.description,
@@ -1166,11 +1187,12 @@ export default function Financeiro() {
       paid: row.paid,
       payment_date: row.payment_date ?? '',
       client_id: row.client_id ?? '',
+      process_id: row.process_id ?? '',
       impacts_cash: row.impacts_cash,
       nature: (row.nature ?? 'real') as 'real' | 'previsto',
       responsible: row.responsible ?? '',
       responsible_ids: row.responsible_ids ?? [],
-      notes: row.notes ?? '',
+      notes: hideInternalTags(row.notes),
       portal_visible: row.portal_visible,
       payment_method: row.payment_method ?? '',
       installments: String(row.installments ?? 1),
@@ -1328,6 +1350,7 @@ export default function Financeiro() {
         onEdit={() => { const r = viewRow; setViewRow(null); if (r) handleEdit(r) }}
         onDelete={() => { if (viewRow) { handleDelete(viewRow.id); setViewRow(null) } }}
         clients={clients}
+        processes={processes}
         paymentsMap={paymentsMap}
       />
 
@@ -1560,7 +1583,7 @@ export default function Financeiro() {
                 'Parcela': r.current_installment && r.installments ? `${r.current_installment}/${r.installments}` : '',
                 'Impacta Caixa': r.impacts_cash ? 'Sim' : 'Não',
                 'Portal Visível': r.portal_visible ? 'Sim' : 'Não',
-                'Observações': r.notes ?? '',
+                'Observações': hideInternalTags(r.notes),
               }))
               exportExcel(exRows, `financeiro_${new Date().toISOString().slice(0,10)}`)
             }}
@@ -1707,8 +1730,28 @@ export default function Financeiro() {
                   </div>
                   <div className="space-y-2">
                     <Label>Cliente</Label>
-                    <ClientCombobox clients={clients} value={form.client_id} onChange={id => setForm(f => ({ ...f, client_id: id }))} />
+                    <ClientCombobox clients={clients} value={form.client_id} onChange={id => setForm(f => ({ ...f, client_id: id, process_id: '' }))} />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Processo (opcional)</Label>
+                  <Select value={form.process_id} onValueChange={v => setForm(f => ({ ...f, process_id: v ?? '' }))}>
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Nenhum">
+                        {form.process_id
+                          ? (() => { const p = processes.find(pr => pr.id === form.process_id); return p ? processLabel(p) : 'Nenhum' })()
+                          : 'Nenhum'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Nenhum</SelectItem>
+                      {processes
+                        .filter(p => !form.client_id || p.client_id === form.client_id)
+                        .map(p => <SelectItem key={p.id} value={p.id}>{processLabel(p)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">Escolha o cliente primeiro para ver só os processos dele. O lançamento passa a aparecer também na ficha do processo.</p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
