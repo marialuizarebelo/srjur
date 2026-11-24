@@ -41,6 +41,8 @@ function addDaysToDate(dateStr: string, days: number): string {
 }
 
 interface ClientOption { id: string; name: string }
+interface ProcessOption { id: string; title: string; number: string | null; client_id: string | null }
+const processLabel = (p: { title: string; number: string | null }) => `${p.title}${p.number ? ` — ${p.number}` : ''}`
 
 interface FinanceRequest {
   id: string
@@ -49,6 +51,8 @@ interface FinanceRequest {
   description: string
   value: number
   client_id: string | null
+  process_id: string | null
+  process_title: string | null
   due_date: string | null
   payment_method: string | null
   notes: string | null
@@ -83,6 +87,7 @@ export default function SolicitacoesFinanceiras() {
   const { profile } = useAuth()
   const profilesMap = useProfilesMap()
   const [clients, setClients] = useState<ClientOption[]>([])
+  const [processes, setProcesses] = useState<ProcessOption[]>([])
   const [requests, setRequests] = useState<FinanceRequest[]>([])
   const [partnershipFinance, setPartnershipFinance] = useState<FinanceRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -118,19 +123,21 @@ export default function SolicitacoesFinanceiras() {
   const myName = (profile && profilesMap[profile.tenant_id ?? '']?.display_name) || 'você'
 
   const [form, setForm] = useState({
-    type: 'receita', category: '', description: '', value: '', client_id: '',
+    type: 'receita', category: '', description: '', value: '', client_id: '', process_id: '',
     due_date: '', payment_method: '', notes: '', my_pct: '50',
     recurrence: 'Única', installments: '1', card_fee_percent: '',
   })
 
   const loadData = async () => {
     setLoading(true)
-    const [{ data: c }, { data: r }, { data: pf }] = await Promise.all([
+    const [{ data: c }, { data: r }, { data: pf }, { data: pr }] = await Promise.all([
       supabase.from('clients').select('id, name').order('name'),
       supabase.from('finance_requests').select('*').order('created_at', { ascending: false }),
       supabase.from('finance').select('id, type, value, paid, due_date').eq('category', PARTNERSHIP_CATEGORY),
+      supabase.from('processes').select('id, title, number, client_id').order('title'),
     ])
     setClients((c as ClientOption[]) ?? [])
+    setProcesses((pr as ProcessOption[]) ?? [])
     setRequests((r as FinanceRequest[]) ?? [])
     setPartnershipFinance((pf as FinanceRow[]) ?? [])
     setLoading(false)
@@ -139,7 +146,7 @@ export default function SolicitacoesFinanceiras() {
   useEffect(() => { loadData() }, [])
 
   const resetForm = () => setForm({
-    type: 'receita', category: '', description: '', value: '', client_id: '',
+    type: 'receita', category: '', description: '', value: '', client_id: '', process_id: '',
     due_date: '', payment_method: '', notes: '', my_pct: '50',
     recurrence: 'Única', installments: '1', card_fee_percent: '',
   })
@@ -157,6 +164,8 @@ export default function SolicitacoesFinanceiras() {
       const { error } = await supabase.from('finance_requests').insert({
         type: form.type, category: form.category || null, description: form.description,
         value, client_id: form.client_id || null, due_date: form.due_date || null,
+        process_id: form.process_id || null,
+        process_title: (() => { const pr = processes.find(x => x.id === form.process_id); return pr ? processLabel(pr) : null })(),
         payment_method: form.payment_method || null, notes: form.notes || null,
         giovanna_pct: myPct, created_by: profile?.id ?? null, tenant_id: profile?.tenant_id ?? null,
         recurrence: form.recurrence === 'Única' ? null : form.recurrence,
@@ -213,6 +222,8 @@ export default function SolicitacoesFinanceiras() {
         // valor cheio da ocorrência (o que o cliente de fato paga) — é o que o portal exibe
         portal_value: r.client_id ? occurrenceTotal : null,
         client_id: r.client_id, due_date: occurrenceDate, date: occurrenceDate,
+        // Só vincula se esta parte enxerga o processo (o processo pode ser só de quem pediu).
+        process_id: r.process_id && processes.some(pr => pr.id === r.process_id) ? r.process_id : null,
         payment_method: r.payment_method, notes: [r.notes, splitNote].filter(Boolean).join('\n\n'),
         responsible: `Solicitado por ${requesterName}`,
         tenant_id: profile?.tenant_id ?? null,
@@ -363,6 +374,9 @@ export default function SolicitacoesFinanceiras() {
             <Row label="Tipo">{r.type === 'receita' ? 'Receita' : 'Despesa'}{r.category ? ` · ${r.category}` : ''}</Row>
             <Row label="Enviada por">{fromName}</Row>
             <Row label="Cliente">{client?.name ?? '—'}</Row>
+            {(r.process_title || r.process_id) && (
+              <Row label="Processo">{r.process_title ?? processes.find(pr => pr.id === r.process_id)?.title ?? 'Processo vinculado'}</Row>
+            )}
             <Row label="1º vencimento">{r.due_date ? fmtDate(r.due_date) : '—'}</Row>
             <Row label="Forma de pagamento">{r.payment_method ?? '—'}</Row>
             <Row label="Como será cobrado">{modo}</Row>
@@ -487,8 +501,28 @@ export default function SolicitacoesFinanceiras() {
           </div>
           <div className="space-y-2">
             <Label>Cliente</Label>
-            <ClientCombobox clients={clients} value={form.client_id} onChange={id => setForm(f => ({ ...f, client_id: id }))} />
+            <ClientCombobox clients={clients} value={form.client_id} onChange={id => setForm(f => ({ ...f, client_id: id, process_id: '' }))} />
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Processo (opcional)</Label>
+          <Select value={form.process_id} onValueChange={v => setForm(f => ({ ...f, process_id: v ?? '' }))}>
+            <SelectTrigger className="h-10">
+              <SelectValue placeholder="Nenhum">
+                {form.process_id
+                  ? (() => { const pr = processes.find(x => x.id === form.process_id); return pr ? processLabel(pr) : 'Nenhum' })()
+                  : 'Nenhum'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Nenhum</SelectItem>
+              {processes
+                .filter(pr => !form.client_id || pr.client_id === form.client_id)
+                .map(pr => <SelectItem key={pr.id} value={pr.id}>{processLabel(pr)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] text-muted-foreground">Escolha o cliente primeiro para ver só os processos dele. O lançamento fica ligado ao processo no financeiro de quem pediu.</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
