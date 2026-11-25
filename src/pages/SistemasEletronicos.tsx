@@ -271,7 +271,7 @@ export default function SistemasEletronicos() {
       number: i.numero_processo_mascara ?? '',
       title: i.orgao ? `${i.tipo_comunicacao ?? 'Processo'} — ${i.orgao}` : 'Novo processo',
       court: i.orgao ?? '',
-      type: 'judicial',
+      type: 'contencioso',
       electronic_system: (i.tribunal && SISTEMA_POR_TRIBUNAL[i.tribunal]) ?? '',
       _intimacaoId: i.id, _intimacaoTipo: i.tipo_comunicacao ?? '', _intimacaoText: i.texto ?? '',
     }))
