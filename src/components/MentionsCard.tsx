@@ -15,11 +15,10 @@ function quando(iso: string) {
 
 // Painel inicial: o que mencionaram para esta pessoa e ela ainda não viu, com acesso ao histórico completo
 // (recebidas e enviadas). Sem pendências, fica só um atalho discreto para o histórico.
-export function MentionsCard() {
+export function MentionsCard({ historyOpen, onHistoryOpenChange }: { historyOpen: boolean; onHistoryOpenChange: (v: boolean) => void }) {
   const navigate = useNavigate()
   const [me, setMe] = useState<string | null>(null)
   const [items, setItems] = useState<PendingMention[]>([])
-  const [historico, setHistorico] = useState(false)
 
   const load = useCallback(async (profileId: string) => setItems(await fetchPendingMentions(profileId)), [])
 
@@ -37,18 +36,10 @@ export function MentionsCard() {
   }
 
   if (!me) return null
-  const dialogo = <MentionsHistoryDialog me={me} open={historico} onClose={() => setHistorico(false)} onChanged={() => void load(me)} />
+  const dialogo = <MentionsHistoryDialog me={me} open={historyOpen} onClose={() => onHistoryOpenChange(false)} onChanged={() => void load(me)} />
 
-  if (items.length === 0) {
-    return (
-      <div className="flex justify-end -mb-3">
-        <button type="button" onClick={() => setHistorico(true)} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-          <AtSign className="h-3.5 w-3.5" />Histórico de menções
-        </button>
-        {dialogo}
-      </div>
-    )
-  }
+  // sem menções pendentes não aparece nada aqui; o histórico abre pelo botão "Menções" do cabeçalho do painel
+  if (items.length === 0) return dialogo
 
   return (
     <Card className="p-4 border-primary/40">
@@ -56,7 +47,7 @@ export function MentionsCard() {
         <AtSign className="h-4 w-4 text-primary" />
         <p className="font-semibold text-sm">Menções para você</p>
         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary text-primary-foreground">{items.length}</span>
-        <button type="button" onClick={() => setHistorico(true)} className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+        <button type="button" onClick={() => onHistoryOpenChange(true)} className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
           <History className="h-3.5 w-3.5" />Histórico
         </button>
       </div>
