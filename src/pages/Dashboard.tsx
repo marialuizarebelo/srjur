@@ -30,7 +30,7 @@ import { syncClientPartnerLink } from '@/lib/partners'
 import {
   Users, Scale, ClipboardList, AlertTriangle, ChevronRight,
   DollarSign, Bell,
-  Clock, Plus, ArrowRight, Loader2, KeyRound, Eye, EyeOff,
+  Clock, Plus, ArrowRight, Loader2, KeyRound, Eye, EyeOff, AtSign,
 } from 'lucide-react'
 import { generateTOTP, secondsRemaining } from '@/lib/totp'
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer } from 'recharts'
@@ -489,6 +489,7 @@ export default function Dashboard() {
   const [chartData, setChartData] = useState<{ month: string; receitas: number; despesas: number }[]>([])
   const [nextTasks, setNextTasks] = useState<{ id: string; title: string; responsible?: string; due_date?: string; priority?: string }[]>([])
   const [modal, setModal] = useState<QuickViewState>(CLOSED_MODAL)
+  const [mentionsHistory, setMentionsHistory] = useState(false)
   const [clientOptions, setClientOptions] = useState<{ id: string; name: string }[]>([])
   const profilesMap = useProfilesMap()
 
@@ -919,7 +920,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       <QuickViewModal state={modal} onClose={() => setModal(CLOSED_MODAL)} />
 
-      <MentionsCard />
+      <MentionsCard historyOpen={mentionsHistory} onHistoryOpenChange={setMentionsHistory} />
 
       {/* Diálogos dos atalhos "+ Novo" — abrem aqui mesmo, sem sair do painel */}
       <Dialog open={leadDialogOpen} onOpenChange={setLeadDialogOpen}>
@@ -1055,6 +1056,9 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground">{todayStr} · Sua central de operação</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setMentionsHistory(true)}>
+            <AtSign className="h-3 w-3 mr-1" />Menções
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setLeadDialogOpen(true)}>
             <Plus className="h-3 w-3 mr-1" />Lead
           </Button>
