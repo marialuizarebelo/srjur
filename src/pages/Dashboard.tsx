@@ -29,7 +29,7 @@ import { ClientFormDialog, emptyClientForm, type ClientFormData } from '@/compon
 import {
   Users, Scale, ClipboardList, AlertTriangle, ChevronRight,
   DollarSign, Bell,
-  Clock, Plus, ArrowRight, Loader2, KeyRound,
+  Clock, Plus, ArrowRight, Loader2, KeyRound, Eye, EyeOff,
 } from 'lucide-react'
 import { generateTOTP, secondsRemaining } from '@/lib/totp'
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer } from 'recharts'
@@ -392,7 +392,7 @@ function BirthdaysWidget() {
 
 interface AuthSystem { id: string; name: string; totp_secret: string | null; color: string | null }
 
-function AuthenticatorCode({ secret }: { secret: string }) {
+function AuthenticatorCode({ secret, revealed }: { secret: string; revealed: boolean }) {
   const [code, setCode] = useState('------')
   const [seconds, setSeconds] = useState(30)
 
@@ -415,7 +415,9 @@ function AuthenticatorCode({ secret }: { secret: string }) {
   }
 
   return (
-    <button onClick={copy} className="w-full flex items-center gap-2.5 group rounded-lg px-1 py-1.5 hover:bg-muted/50 transition-colors" title="Copiar código">
+    <button type="button" onClick={revealed ? copy : undefined} disabled={!revealed}
+      className={`w-full flex items-center gap-2.5 group rounded-lg px-1 py-1.5 transition-colors ${revealed ? 'hover:bg-muted/50' : 'cursor-default'}`}
+      title={revealed ? 'Copiar código' : 'Código oculto — clique no olho para mostrar'}>
       <div className="relative h-8 w-8 shrink-0">
         <svg className="h-8 w-8 -rotate-90" viewBox="0 0 36 36">
           <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3" className="text-muted/30" />
@@ -427,7 +429,7 @@ function AuthenticatorCode({ secret }: { secret: string }) {
       </div>
       <div className="text-left min-w-0 flex-1">
         <p className="text-sm font-mono font-bold tracking-widest group-hover:text-primary transition-colors">
-          <Sensitive>{code.slice(0, 3)} {code.slice(3)}</Sensitive>
+          {revealed ? <Sensitive>{code.slice(0, 3)} {code.slice(3)}</Sensitive> : <span aria-label="Código oculto">••• •••</span>}
         </p>
       </div>
     </button>
@@ -436,6 +438,8 @@ function AuthenticatorCode({ secret }: { secret: string }) {
 
 function AuthenticatorWidget() {
   const [systems, setSystems] = useState<AuthSystem[]>([])
+  // Por regra os códigos começam ocultos; só aparecem quando a pessoa pede (olhinho) e voltam a ocultar ao recarregar.
+  const [revealed, setRevealed] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -450,13 +454,18 @@ function AuthenticatorWidget() {
     <Card className="p-4">
       <div className="flex items-center gap-2 mb-3">
         <KeyRound className="h-4 w-4 text-primary" />
-        <span className="font-semibold text-sm">Códigos Authenticator</span>
+        <span className="font-semibold text-sm flex-1">Códigos Authenticator</span>
+        <button type="button" onClick={() => setRevealed(v => !v)}
+          className="h-7 w-7 rounded-lg hover:bg-muted flex items-center justify-center"
+          title={revealed ? 'Ocultar códigos' : 'Mostrar códigos'} aria-label={revealed ? 'Ocultar códigos' : 'Mostrar códigos'}>
+          {revealed ? <Eye className="h-4 w-4 text-muted-foreground" /> : <EyeOff className="h-4 w-4 text-muted-foreground" />}
+        </button>
       </div>
       <div className="space-y-2">
         {systems.map(s => (
           <div key={s.id}>
             <p className="text-[10px] text-muted-foreground truncate mb-0.5" style={{ color: s.color ?? undefined }}>{s.name}</p>
-            <AuthenticatorCode secret={s.totp_secret!} />
+            <AuthenticatorCode secret={s.totp_secret!} revealed={revealed} />
           </div>
         ))}
       </div>
@@ -1167,8 +1176,8 @@ export default function Dashboard() {
         {/* Right sidebar */}
         <div className="space-y-4 hidden xl:block">
           <BirthdaysWidget />
-          <PortalActivityCard />
           <AuthenticatorWidget />
+          <PortalActivityCard />
 
           <Card className="p-4">
             <div className="flex items-center justify-between gap-2 mb-3">
