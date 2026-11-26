@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner'
 import { ImageUploadCrop } from '@/components/ImageUploadCrop'
 import { connectGoogle, disconnectGoogle } from '@/lib/googleCalendar'
+import { useModuleAccess } from '@/lib/modules'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
 import { subscribeToPush, getNotificationStatus } from '@/hooks/usePushNotifications'
 import { applyThemeColor, ACCENT_THEMES } from '@/lib/themeColor'
@@ -76,7 +77,10 @@ const TABS = [
 
 export default function Configuracoes() {
   const { profile, user, session, refreshProfile } = useAuth()
-  const [tab, setTab] = useState<typeof TABS[number]['key']>('escritorio')
+  // Quem tem acesso LIMITADO só mexe na própria senha e preferências: escritório, usuários e integrações são só de quem tem acesso total.
+  const { full } = useModuleAccess()
+  const visibleTabs = full ? TABS : TABS.filter(t => t.key === 'seguranca' || t.key === 'aparencia')
+  const [tab, setTab] = useState<typeof TABS[number]['key']>(full ? 'escritorio' : 'seguranca')
   const [notifStatus, setNotifStatus] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('default')
   const [enablingNotif, setEnablingNotif] = useState(false)
 
@@ -301,7 +305,7 @@ export default function Configuracoes() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 bg-muted rounded-xl p-1 overflow-x-auto w-full md:w-fit">
-        {TABS.map(t => {
+        {visibleTabs.map(t => {
           const Icon = t.icon
           return (
             <button key={t.key} onClick={() => setTab(t.key)}
