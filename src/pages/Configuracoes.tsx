@@ -294,6 +294,26 @@ export default function Configuracoes() {
     }
   }
 
+  async function deleteUser(u: ProfileRow) {
+    if (!confirm(`Excluir ${u.display_name ?? 'esta pessoa'}? Ela perde o acesso ao sistema. O que ela cadastrou (clientes, processos, tarefas...) continua no sistema.`)) return
+    try {
+      const { data: { session: s } } = await supabase.auth.getSession()
+      const { data, error } = await supabase.functions.invoke('delete-team-user', {
+        body: { profile_id: u.id },
+        headers: s ? { Authorization: `Bearer ${s.access_token}` } : undefined,
+      })
+      if (error || data?.error) {
+        let msg: string | undefined = data?.error
+        if (!msg && error) { try { msg = (await (error as any).context?.json?.())?.error } catch { /* corpo ilegível */ } }
+        throw new Error(msg ?? error?.message ?? 'Falha ao excluir')
+      }
+      toast.success('Usuário excluído.')
+      loadData()
+    } catch (err: any) {
+      toast.error('Erro: ' + (err?.message ?? String(err)))
+    }
+  }
+
   async function changePassword() {
     if (newPassword.length < 6) { toast.error('A senha deve ter ao menos 6 caracteres'); return }
     if (newPassword !== confirmPassword) { toast.error('As senhas não coincidem'); return }
@@ -470,6 +490,11 @@ export default function Configuracoes() {
                   <button onClick={() => openEditUser(u)} className="h-8 w-8 rounded-lg hover:bg-muted flex items-center justify-center">
                     <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
+                  {full && !u.is_support && u.user_id !== user?.id && (
+                    <button onClick={() => deleteUser(u)} title="Excluir usuário" aria-label="Excluir usuário" className="h-8 w-8 rounded-lg hover:bg-muted flex items-center justify-center">
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
+                    </button>
+                  )}
                 </div>
 
                 {u.role === 'admin' && (
