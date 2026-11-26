@@ -28,6 +28,8 @@ import {
 } from 'lucide-react'
 import { fmtBRL, fmtDate, parseBRL } from '@/lib/format'
 import { useModuleAccess } from '@/lib/modules'
+import { DataGrid, type GridColumn } from '@/components/DataGrid'
+import { Table2 } from 'lucide-react'
 import { AreaTags } from '@/components/AreaTags'
 import { loadClientPartnerLink, syncClientPartnerLink } from '@/lib/partners'
 import { ClientPartnerInfo } from '@/components/ClientPartnerInfo'
@@ -1066,7 +1068,9 @@ export default function Clientes() {
   const [tab, setTab] = useState<'crm' | 'ativos' | 'encerrados'>('ativos')
   const [search, setSearch] = useState('')
   const [tagFilter, setTagFilter] = useState('todos')
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
+  const [viewMode, setViewMode] = useState<'cards' | 'table' | 'sheet'>('cards')
+  const [crmSheet, setCrmSheet] = useState(false)
+  const [ufFilter, setUfFilter] = useState('todos')
   const { fields: cardFields, save: saveCardFields, reset: resetCardFields } = useCardFields('clientes', CLIENT_DEFAULT_VISIBLE)
   const [tableSortColumn, setTableSortColumn] = useState<'name' | 'type' | 'area' | 'phone' | 'email' | 'responsible' | 'status' | 'signed_at' | null>(null)
   const [tableSortDir, setTableSortDir] = useState<'asc' | 'desc'>('asc')
@@ -1252,6 +1256,7 @@ export default function Clientes() {
     let list = clients
       .filter(c => c.status === statusFilter)
       .filter(c => tagFilter === 'todos' || splitTags(c.tags).includes(tagFilter))
+      .filter(c => ufFilter === 'todos' || c.state === ufFilter)
       .filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || (c.tags ?? '').toLowerCase().includes(search.toLowerCase()))
     if (tableSortColumn) {
       const dir = tableSortDir === 'asc' ? 1 : -1
@@ -1270,7 +1275,7 @@ export default function Clientes() {
       })
     }
     return list
-  }, [clients, tab, search, tagFilter, tableSortColumn, tableSortDir])
+  }, [clients, tab, search, tagFilter, ufFilter, tableSortColumn, tableSortDir])
   const allClientTags = useMemo(() => [...new Set(clients.flatMap(c => splitTags(c.tags)))].sort(), [clients])
 
   // Período do CRM: filtra o funil (kanban + resumo "no período"). Lead com
@@ -1812,6 +1817,11 @@ export default function Clientes() {
           )}
           {tab !== 'crm' && (
             <>
+            <select value={ufFilter} onChange={e => setUfFilter(e.target.value)} title="Filtrar por estado"
+              className="h-9 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus:ring-1 focus:ring-primary/50">
+              <option value="todos">Estado</option>
+              {[...new Set(clients.map(c => c.state).filter((x): x is string => !!x))].sort().map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
             {viewMode === 'cards' && <CardFieldsButton className="h-9" defs={CLIENT_CARD_FIELDS} fields={cardFields} onChange={saveCardFields} onReset={resetCardFields} />}
             <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
               <Button variant={viewMode === 'cards' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
@@ -1821,6 +1831,10 @@ export default function Clientes() {
               <Button variant={viewMode === 'table' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
                 onClick={() => setViewMode('table')}>
                 <List className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant={viewMode === 'sheet' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" title="Planilha"
+                onClick={() => setViewMode('sheet')}>
+                <Table2 className="h-3.5 w-3.5" />
               </Button>
               <PinViewButton isPinned={pinnedView.isPinned} currentValue={viewMode} onPin={v => pinnedView.pin(v as any)} onUnpin={pinnedView.unpin} />
             </div>
@@ -1832,6 +1846,14 @@ export default function Clientes() {
       {/* CRM: filtro de período */}
       {tab === 'crm' && (
         <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
+            <Button variant={!crmSheet ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" title="Quadro" onClick={() => setCrmSheet(false)}>
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant={crmSheet ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" title="Planilha" onClick={() => setCrmSheet(true)}>
+              <Table2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
           <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
             {([['', 'As duas'], ['advocacia', 'Advocacia'], ['saas', 'Sistema']] as const).map(([k, l]) => (
               <Button key={k} variant={crmUnit === k ? 'default' : 'ghost'} size="sm" className="h-8" onClick={() => setCrmUnit(k)}>{l}</Button>
@@ -1932,47 +1954,72 @@ export default function Clientes() {
         </div>
       )}
       {tab === 'crm' && (
-        <KanbanDndContext onDropOnColumn={(leadId, stageValue) => {
-          const lead = leadsAll.find(l => l.id === leadId)
-          if (lead && lead.status !== stageValue) updateLeadStatus(leadId, stageValue)
-        }}>
-          <KanbanScrollRow className="gap-3 md:gap-4 pb-4">
-            {stages.filter(s => s.show_in_kanban).map(stage => {
-              const stageLeads = leadsByStage.get(stage.value) ?? []
-              const collapsed = collapsedStages.has(stage.value)
-              return (
-                <div key={stage.value} className="md:min-w-[260px] md:w-[260px] md:shrink-0 rounded-lg border md:border-none p-2 md:p-0">
-                  <button
-                    className="flex items-center gap-2 mb-1 w-full md:cursor-default"
-                    onClick={() => toggleStageCollapsed(stage.value)}
-                  >
-                    <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
-                    <span className="text-sm font-semibold">{stage.label}</span>
-                    <Badge variant="secondary" className="text-[10px] ml-auto">{stageLeads.length}</Badge>
-                    {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
-                  </button>
-                  <p className="text-xs text-green-600 font-medium mb-3 pl-[18px]">
-                    {fmtBRL(stageLeads.reduce((s, l) => s + (l.potential_value ?? 0), 0))}
-                  </p>
-                  {!collapsed && (
-                    <DroppableColumn id={stage.value} className="space-y-2 min-h-[60px] p-1 -m-1">
-                      {stageLeads.map(lead => (
-                        <DraggableCard key={lead.id} id={lead.id}>
-                          <LeadCard lead={lead} onClick={() => setViewLead(lead)} onStatusChange={updateLeadStatus} stages={stages} displaySignedAt={effectiveSignedAt(lead)} />
-                        </DraggableCard>
-                      ))}
-                      {stageLeads.length === 0 && (
-                        <div className="p-4 rounded-lg border border-dashed text-center">
-                          <p className="text-xs text-muted-foreground">Nenhum lead</p>
-                        </div>
-                      )}
-                    </DroppableColumn>
-                  )}
-                </div>
-              )
-            })}
-          </KanbanScrollRow>
-        </KanbanDndContext>
+        crmSheet ? (
+          <DataGrid<Lead>
+            id="crm"
+            rows={filteredLeads}
+            getId={l => l.id}
+            onRowClick={l => setViewLead(l)}
+            columns={[
+              { key: 'name', label: 'Nome', value: l => l.name, width: 230 },
+              { key: 'stage', label: 'Etapa', value: l => stages.find(s => s.value === l.status)?.label ?? l.status, kind: 'select', width: 160 },
+              { key: 'phone', label: 'Telefone', value: l => l.phone, width: 140 },
+              { key: 'email', label: 'E-mail', value: l => l.email, width: 200, hidden: true },
+              { key: 'source', label: 'Origem', value: l => l.source, kind: 'select', width: 120 },
+              { key: 'state', label: 'UF', value: l => l.state, kind: 'select', width: 80 },
+              { key: 'city', label: 'Cidade', value: l => l.city, kind: 'select', width: 140 },
+              { key: 'value', label: 'Potencial (R$)', value: l => l.potential_value, kind: 'money', sum: true, width: 150 },
+              { key: 'responsible', label: 'Responsável', value: l => l.responsible, kind: 'select', width: 140 },
+              { key: 'followup', label: 'Próximo contato', value: l => l.next_followup, kind: 'date', width: 150 },
+              { key: 'first', label: 'Primeiro contato', value: l => l.first_contact_at, kind: 'date', width: 150, hidden: true },
+              { key: 'created', label: 'Cadastrado em', value: l => l.created_at, kind: 'date', width: 150, hidden: true },
+              { key: 'referred', label: 'Indicado por', value: l => l.referred_by, width: 160, hidden: true },
+              { key: 'notes', label: 'Observações', value: l => l.notes, width: 240, hidden: true },
+            ] as GridColumn<Lead>[]}
+          />
+        ) : (
+          <KanbanDndContext onDropOnColumn={(leadId, stageValue) => {
+            const lead = leadsAll.find(l => l.id === leadId)
+            if (lead && lead.status !== stageValue) updateLeadStatus(leadId, stageValue)
+          }}>
+            <KanbanScrollRow className="gap-3 md:gap-4 pb-4">
+              {stages.filter(s => s.show_in_kanban).map(stage => {
+                const stageLeads = leadsByStage.get(stage.value) ?? []
+                const collapsed = collapsedStages.has(stage.value)
+                return (
+                  <div key={stage.value} className="md:min-w-[260px] md:w-[260px] md:shrink-0 rounded-lg border md:border-none p-2 md:p-0">
+                    <button
+                      className="flex items-center gap-2 mb-1 w-full md:cursor-default"
+                      onClick={() => toggleStageCollapsed(stage.value)}
+                    >
+                      <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
+                      <span className="text-sm font-semibold">{stage.label}</span>
+                      <Badge variant="secondary" className="text-[10px] ml-auto">{stageLeads.length}</Badge>
+                      {collapsed ? <ChevronDown className="h-4 w-4 md:hidden" /> : <ChevronUp className="h-4 w-4 md:hidden" />}
+                    </button>
+                    <p className="text-xs text-green-600 font-medium mb-3 pl-[18px]">
+                      {fmtBRL(stageLeads.reduce((s, l) => s + (l.potential_value ?? 0), 0))}
+                    </p>
+                    {!collapsed && (
+                      <DroppableColumn id={stage.value} className="space-y-2 min-h-[60px] p-1 -m-1">
+                        {stageLeads.map(lead => (
+                          <DraggableCard key={lead.id} id={lead.id}>
+                            <LeadCard lead={lead} onClick={() => setViewLead(lead)} onStatusChange={updateLeadStatus} stages={stages} displaySignedAt={effectiveSignedAt(lead)} />
+                          </DraggableCard>
+                        ))}
+                        {stageLeads.length === 0 && (
+                          <div className="p-4 rounded-lg border border-dashed text-center">
+                            <p className="text-xs text-muted-foreground">Nenhum lead</p>
+                          </div>
+                        )}
+                      </DroppableColumn>
+                    )}
+                  </div>
+                )
+              })}
+            </KanbanScrollRow>
+          </KanbanDndContext>
+        )
       )}
 
       {/* Clients Grid */}
@@ -1989,6 +2036,41 @@ export default function Clientes() {
             ))
           )}
         </div>
+      )}
+
+      {/* Planilha de clientes */}
+      {tab !== 'crm' && viewMode === 'sheet' && (
+        <DataGrid<Client>
+          id="clientes"
+          rows={filteredClients}
+          getId={c => c.id}
+          onRowClick={c => setViewClient(c)}
+          columns={[
+            { key: 'name', label: 'Nome', value: c => c.name, width: 230 },
+            { key: 'type', label: 'Tipo', value: c => (c.type === 'pessoa_juridica' ? 'Pessoa jurídica' : 'Pessoa física'), kind: 'select', width: 120 },
+            { key: 'doc', label: 'CPF / CNPJ', value: c => c.cpf_cnpj, width: 150 },
+            { key: 'status', label: 'Status', value: c => ({ ativo: 'Ativo', inativo: 'Encerrado', prospecto: 'Prospecto' } as Record<string, string>)[c.status] ?? c.status, kind: 'select', width: 100 },
+            { key: 'state', label: 'UF', value: c => c.state, kind: 'select', width: 80 },
+            { key: 'city', label: 'Cidade', value: c => c.city, kind: 'select', width: 140 },
+            { key: 'area', label: 'Área', value: c => c.area, width: 150 },
+            { key: 'phone', label: 'Telefone', value: c => c.phone, width: 140 },
+            { key: 'email', label: 'E-mail', value: c => c.email, width: 200, hidden: true },
+            { key: 'responsible', label: 'Responsável', value: c => c.responsible, kind: 'select', width: 140 },
+            { key: 'origin', label: 'Origem', value: c => c.origin, kind: 'select', width: 120, hidden: true },
+            { key: 'signed', label: 'Assinatura', value: c => c.signed_at, kind: 'date', width: 150, hidden: true },
+            { key: 'potential', label: 'Potencial (R$)', value: c => c.potential_value, kind: 'money', sum: true, width: 150, hidden: true },
+            { key: 'cep', label: 'CEP', value: c => c.cep, width: 100, hidden: true },
+            { key: 'address', label: 'Endereço', value: c => [c.street, c.address_number, c.complement, c.neighborhood].filter(Boolean).join(', '), width: 240, hidden: true },
+            { key: 'first', label: 'Primeiro contato', value: c => c.first_contact_at, kind: 'date', width: 150, hidden: true },
+            { key: 'birth', label: 'Nascimento', value: c => c.birth_date, kind: 'date', width: 150, hidden: true },
+            { key: 'profession', label: 'Profissão', value: c => c.profession, width: 140, hidden: true },
+            { key: 'marital', label: 'Estado civil', value: c => c.marital_status, kind: 'select', width: 130, hidden: true },
+            { key: 'referred', label: 'Indicado por', value: c => c.referred_by, width: 160, hidden: true },
+            { key: 'tags', label: 'Etiquetas', value: c => c.tags, width: 160, hidden: true },
+            { key: 'created', label: 'Cadastrado em', value: c => c.created_at, kind: 'date', width: 150, hidden: true },
+            { key: 'notes', label: 'Observações', value: c => c.notes, width: 240, hidden: true },
+          ] as GridColumn<Client>[]}
+        />
       )}
 
       {/* Clients Table */}

@@ -20,7 +20,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select'
 import {
-  Plus, Search, Scale, LayoutGrid, List, Pencil, Trash2,
+  Plus, Search, Scale, LayoutGrid, List, Table2, Pencil, Trash2,
   FileText, ChevronDown, ChevronUp, ExternalLink, Send,
   Clock, User, Calendar, Copy, ClipboardList, CircleDollarSign,
   Mail, Phone, IdCard, FolderOpen, ArrowRight, Loader2, Sparkles,
@@ -32,6 +32,8 @@ import { fmtDate, fmtBRL, parseBRL } from '@/lib/format'
 import { exportExcel, exportPDF, fmtDateBR } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ClientCombobox } from '@/components/ClientCombobox'
+import { DataGrid, type GridColumn } from '@/components/DataGrid'
+import { UFS, ufFromCnj } from '@/lib/uf'
 import { ResponsibleSelect, ResponsibleAvatars, useProfilesMap } from '@/components/ResponsibleSelect'
 import { searchDjen, stripHtml } from '@/lib/djen'
 import { DriveFolderPicker } from '@/components/DriveFolderPicker'
@@ -83,6 +85,7 @@ interface Process {
   instance: string | null
   confidential: boolean
   closed_date: string | null
+  state: string | null
 }
 
 interface ProcessUpdate {
@@ -212,7 +215,8 @@ export default function Processos() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
-  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
+  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'sheet'>('kanban')
+  const [ufFilter, setUfFilter] = useState('todos')
   const { fields: cardFields, save: saveCardFields, reset: resetCardFields } = useCardFields('processos', PROC_DEFAULT_VISIBLE)
 
   // ── Etapas do kanban (editáveis) ──
@@ -313,7 +317,7 @@ export default function Processos() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Process | null>(null)
   const [pf, setPf] = useState({
-    title: '', number: '', client_id: '', type: 'consultivo',
+    title: '', number: '', client_id: '', state: '', type: 'consultivo',
     area: '', status: 'em_andamento', phase: 'inicial', responsible_ids: [] as string[],
     court: '', procedural_class: '', electronic_system: '', notes: '', portal_visible: true,
     access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
@@ -336,7 +340,7 @@ export default function Processos() {
   const [detailTab, setDetailTab] = useState<'dados' | 'tarefas' | 'prazos' | 'andamentos'>('dados')
 
   const resetPf = () => {
-    setPf({ title: '', number: '', client_id: '', type: 'consultivo',
+    setPf({ title: '', number: '', client_id: '', state: '', type: 'consultivo',
       area: '', status: 'em_andamento', phase: 'inicial', responsible_ids: [],
       court: '', procedural_class: '', electronic_system: '', notes: '', portal_visible: true,
       access_key: '', cause_value: '', court_url: '', drive_url: '', drive_folder_id: '', tags: '',
@@ -434,9 +438,10 @@ export default function Processos() {
       .filter(p => responsibleFilter === 'todos' || (p.responsible_ids ?? []).includes(responsibleFilter))
       .filter(p => clientFilter === 'todos' || p.client_id === clientFilter)
       .filter(p => tagFilter === 'todos' || splitTags(p.tags).includes(tagFilter))
+      .filter(p => ufFilter === 'todos' || p.state === ufFilter)
       .filter(p => !search || p.title.toLowerCase().includes(search.toLowerCase()) ||
         p.number?.toLowerCase().includes(search.toLowerCase()) || matchesParty(p, clients.find(c => c.id === p.client_id)?.name ?? '', search) || (p.tags ?? '').toLowerCase().includes(search.toLowerCase()))
-  }, [processes, clients, statusFilter, responsibleFilter, clientFilter, tagFilter, search])
+  }, [processes, clients, statusFilter, responsibleFilter, clientFilter, tagFilter, ufFilter, search])
   const allTags = useMemo(() => [...new Set(processes.flatMap(p => splitTags(p.tags)))].sort(), [processes])
 
   const byPhase = useMemo(() => {
@@ -460,7 +465,7 @@ export default function Processos() {
   // ── CRUD ──
   const openEdit = (p: Process) => {
     setPf({
-      title: p.title, number: p.number ?? '', client_id: p.client_id ?? '',
+      title: p.title, number: p.number ?? '', client_id: p.client_id ?? '', state: p.state ?? '',
       type: p.type, area: p.area ?? '', status: p.status, phase: p.phase,
       responsible_ids: p.responsible_ids ?? [], court: p.court ?? '',
       procedural_class: p.procedural_class ?? '',
@@ -504,6 +509,7 @@ export default function Processos() {
         ? pf.responsible_ids.map(id => profilesMap[id]?.display_name).filter(Boolean).join(' e ')
         : (profilesMap[pf.responsible_ids[0]]?.display_name ?? null),
       court: pf.court || null,
+      state: pf.state || ufFromCnj(pf.number) || null,
       procedural_class: pf.procedural_class || null,
       electronic_system: pf.electronic_system || null, notes: pf.notes || null,
       portal_visible: pf.portal_visible, updated_at: new Date().toISOString(),
@@ -1171,6 +1177,11 @@ export default function Processos() {
               {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
+          <select value={ufFilter} onChange={e => setUfFilter(e.target.value)} title="Filtrar por estado"
+            className="h-9 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus:ring-1 focus:ring-primary/50">
+            <option value="todos">Estado</option>
+            {[...new Set(processes.map(p => p.state).filter((x): x is string => !!x))].sort().map(u => <option key={u} value={u}>{u}</option>)}
+          </select>
           {viewMode === 'kanban' && <CardFieldsButton className="h-8" defs={PROC_CARD_FIELDS} fields={cardFields} onChange={saveCardFields} onReset={resetCardFields} />}
           {allTags.length > 0 && (
             <Select value={tagFilter} onValueChange={v => setTagFilter(v ?? 'todos')}>
@@ -1192,10 +1203,47 @@ export default function Processos() {
               onClick={() => setViewMode('list')}>
               <List className="h-3.5 w-3.5" />
             </Button>
+            <Button variant={viewMode === 'sheet' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" title="Planilha"
+              onClick={() => setViewMode('sheet')}>
+              <Table2 className="h-3.5 w-3.5" />
+            </Button>
           </div>
           <PinViewButton isPinned={pinnedView.isPinned} currentValue={viewMode} onPin={v => pinnedView.pin(v as any)} onUnpin={pinnedView.unpin} />
         </div>
       </div>
+
+      {/* Planilha */}
+      {viewMode === 'sheet' && (
+        <DataGrid<Process>
+          id="processos"
+          rows={filtered}
+          getId={p => p.id}
+          onRowClick={openDetail}
+          columns={[
+            { key: 'title', label: 'Título', value: p => p.title, width: 240 },
+            { key: 'number', label: 'Número', value: p => p.number, width: 190 },
+            { key: 'client', label: 'Cliente(s)', value: p => getClientName(p.client_id), width: 200 },
+            { key: 'state', label: 'UF', value: p => p.state, kind: 'select', width: 80 },
+            { key: 'type', label: 'Tipo', value: p => formatLabel(p.type), kind: 'select', width: 120 },
+            { key: 'area', label: 'Área', value: p => p.area, kind: 'select', width: 130 },
+            { key: 'status', label: 'Status', value: p => STATUS_MAP[p.status]?.label ?? p.status, kind: 'select', width: 120 },
+            { key: 'phase', label: 'Fase', value: p => allPhases.find(x => x.value === p.phase)?.label ?? p.phase, kind: 'select', width: 130 },
+            { key: 'court', label: 'Vara / órgão', value: p => p.court, width: 220, hidden: true },
+            { key: 'system', label: 'Sistema', value: p => p.electronic_system, kind: 'select', width: 120, hidden: true },
+            { key: 'class', label: 'Classe', value: p => p.procedural_class, width: 180, hidden: true },
+            { key: 'cause', label: 'Valor da causa', value: p => p.cause_value, kind: 'money', sum: true, width: 150 },
+            { key: 'filing', label: 'Distribuição', value: p => p.filing_date, kind: 'date', width: 150, hidden: true },
+            { key: 'citation', label: 'Citação', value: p => p.citation_date, kind: 'date', width: 150, hidden: true },
+            { key: 'instance', label: 'Instância', value: p => p.instance, kind: 'select', width: 110, hidden: true },
+            { key: 'opposing', label: 'Parte contrária', value: p => p.opposing_party, width: 200, hidden: true },
+            { key: 'responsible', label: 'Responsável', value: p => p.responsible, kind: 'select', width: 140 },
+            { key: 'tags', label: 'Etiquetas', value: p => p.tags, width: 160, hidden: true },
+            { key: 'created', label: 'Cadastrado em', value: p => p.created_at, kind: 'date', width: 150, hidden: true },
+            { key: 'updated', label: 'Atualizado em', value: p => p.updated_at, kind: 'date', width: 150, hidden: true },
+            { key: 'closed', label: 'Encerrado em', value: p => p.closed_date, kind: 'date', width: 150, hidden: true },
+          ] as GridColumn<Process>[]}
+        />
+      )}
 
       {/* Kanban */}
       {viewMode === 'kanban' && (
@@ -1347,9 +1395,18 @@ export default function Processos() {
             </div>
 
             <div className="space-y-2">
+              <Label>Estado (UF)</Label>
+              <select value={pf.state} onChange={e => setPf(f => ({ ...f, state: e.target.value }))}
+                className="h-10 w-full rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus:ring-1 focus:ring-primary/50">
+                <option value="">Identificado pelo número do processo</option>
+                {UFS.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-2">
               <Label>Número do processo</Label>
               <div className="flex gap-2">
-                <Input value={pf.number} onChange={e => setPf(f => ({ ...f, number: e.target.value }))} placeholder="0000000-00.0000.0.00.0000" className="h-10" />
+                <Input value={pf.number} onChange={e => { const v = e.target.value; setPf(f => { const uf = ufFromCnj(v); return { ...f, number: v, state: uf && (!f.state || f.state === ufFromCnj(f.number)) ? uf : f.state } }) }} placeholder="0000000-00.0000.0.00.0000" className="h-10" />
                 <Button type="button" variant="outline" className="h-10 shrink-0" disabled={djenSearching || !pf.number.trim()} onClick={buscarDadosDjen}>
                   {djenSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   <span className="hidden sm:inline ml-1.5">Buscar no DJEN</span>
