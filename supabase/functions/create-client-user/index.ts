@@ -12,6 +12,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
+// Acesso LIMITADO (módulos marcados em Configurações) vale também aqui no servidor.
+// allowed_modules vazio/nulo = acesso total; o suporte do SRJUR também.
+const hasModule = (p: any, keys: string[]) => !!p && (p.is_support || !p.allowed_modules || p.allowed_modules.length === 0 || keys.some((k: string) => p.allowed_modules.includes(k)))
+const isFullAccess = (p: any) => !!p && (p.is_support || !p.allowed_modules || p.allowed_modules.length === 0)
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -37,9 +42,12 @@ Deno.serve(async (req) => {
 
     // Confere se quem chamou é admin
     const { data: callerProfile } = await callerClient
-      .from('profiles').select('role').eq('user_id', caller.id).maybeSingle()
+      .from('profiles').select('role, allowed_modules').eq('user_id', caller.id).maybeSingle()
     if (callerProfile?.role !== 'admin') {
       return new Response(JSON.stringify({ error: 'Apenas administradoras podem criar acesso de cliente' }), { status: 403, headers: corsHeaders })
+    }
+    if (!hasModule(callerProfile, ['clientes', 'portal-admin'])) {
+      return new Response(JSON.stringify({ error: 'Seu acesso é limitado: sem permissão para criar acesso de cliente.' }), { status: 403, headers: corsHeaders })
     }
 
     const { email, password, display_name, client_id } = await req.json()
