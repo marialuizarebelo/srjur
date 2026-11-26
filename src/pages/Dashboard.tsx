@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { useModuleAccess } from '@/lib/modules'
 import { supabase } from '@/integrations/supabase/client'
 import { useEventColors } from '@/lib/eventColors'
 import { ncStyle, ncGlass } from '@/lib/notionColors'
@@ -477,6 +478,7 @@ function AuthenticatorWidget() {
 
 export default function Dashboard() {
   const { profile } = useAuth()
+  const { can, canAny } = useModuleAccess()
   const navigate = useNavigate()
   const [stats, setStats] = useState({ clients: 0, processes: 0, consultivos: 0, tasks: 0, overdueDeadlines: 0 })
   const [finance, setFinance] = useState({ receitas: 0, despesas: 0, inadimplencia: 0, saldoMes: 0 })
@@ -1048,18 +1050,26 @@ export default function Dashboard() {
           <Button variant="outline" size="sm" onClick={() => setMentionsHistory(true)}>
             <AtSign className="h-3 w-3 mr-1" />Menções
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setLeadDialogOpen(true)}>
-            <Plus className="h-3 w-3 mr-1" />Lead
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setClientDialogOpen(true)}>
-            <Plus className="h-3 w-3 mr-1" />Cliente
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setProcessDialogOpen(true)}>
-            <Plus className="h-3 w-3 mr-1" />Processo
-          </Button>
-          <Button size="sm" onClick={() => setTaskDialogOpen(true)}>
-            <Plus className="h-3 w-3 mr-1" />Tarefa
-          </Button>
+          {can('clientes') && (
+            <Button variant="outline" size="sm" onClick={() => setLeadDialogOpen(true)}>
+              <Plus className="h-3 w-3 mr-1" />Lead
+            </Button>
+          )}
+          {can('clientes') && (
+            <Button variant="outline" size="sm" onClick={() => setClientDialogOpen(true)}>
+              <Plus className="h-3 w-3 mr-1" />Cliente
+            </Button>
+          )}
+          {can('processos') && (
+            <Button variant="outline" size="sm" onClick={() => setProcessDialogOpen(true)}>
+              <Plus className="h-3 w-3 mr-1" />Processo
+            </Button>
+          )}
+          {can('tarefas') && (
+            <Button size="sm" onClick={() => setTaskDialogOpen(true)}>
+              <Plus className="h-3 w-3 mr-1" />Tarefa
+            </Button>
+          )}
         </div>
 
       </div>
@@ -1070,39 +1080,47 @@ export default function Dashboard() {
         <div className="space-y-6">
           {/* Stat cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <StatCard
-              title="Clientes Ativos"
-              color="yellow"
-              value={stats.clients}
-              icon={Users}
-              onClick={openClients}
-            />
-            <StatCard
-              title="Processos Ativos"
-              color="purple"
-              value={stats.processes}
-              subtitle={stats.processes > 0 ? `${stats.processes - stats.consultivos} contenciosos · ${stats.consultivos} consultivos` : undefined}
-              icon={Scale}
-              onClick={openProcesses}
-            />
-            <StatCard
-              title="Tarefas Pendentes"
-              color="green"
-              value={stats.tasks}
-              subtitle={overdueTasks.length > 0 ? `${overdueTasks.length} atrasadas` : undefined}
-              tone="pending"
-              icon={ClipboardList}
-              onClick={openTasks}
-            />
-            <StatCard
-              title="Prazos Atrasados"
-              color="red"
-              value={stats.overdueDeadlines}
-              subtitle={stats.overdueDeadlines > 0 ? 'atenção' : undefined}
-              tone="overdue"
-              icon={AlertTriangle}
-              onClick={openDeadlines}
-            />
+            {can('clientes') && (
+              <StatCard
+                title="Clientes Ativos"
+                color="yellow"
+                value={stats.clients}
+                icon={Users}
+                onClick={openClients}
+              />
+            )}
+            {can('processos') && (
+              <StatCard
+                title="Processos Ativos"
+                color="purple"
+                value={stats.processes}
+                subtitle={stats.processes > 0 ? `${stats.processes - stats.consultivos} contenciosos · ${stats.consultivos} consultivos` : undefined}
+                icon={Scale}
+                onClick={openProcesses}
+              />
+            )}
+            {canAny(['tarefas', 'calendario']) && (
+              <StatCard
+                title="Tarefas Pendentes"
+                color="green"
+                value={stats.tasks}
+                subtitle={overdueTasks.length > 0 ? `${overdueTasks.length} atrasadas` : undefined}
+                tone="pending"
+                icon={ClipboardList}
+                onClick={openTasks}
+              />
+            )}
+            {can('prazos') && (
+              <StatCard
+                title="Prazos Atrasados"
+                color="red"
+                value={stats.overdueDeadlines}
+                subtitle={stats.overdueDeadlines > 0 ? 'atenção' : undefined}
+                tone="overdue"
+                icon={AlertTriangle}
+                onClick={openDeadlines}
+              />
+            )}
           </div>
 
           {/* Week agenda section */}
@@ -1122,51 +1140,55 @@ export default function Dashboard() {
           </div>
 
           {/* Finance summary cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { label: 'Receitas (mês)', value: fmtBRL(finance.receitas), color: 'text-green-700 dark:text-green-300', nc: 'green' },
-              { label: 'Despesas (mês)', value: fmtBRL(finance.despesas), color: 'text-red-700 dark:text-red-300', nc: 'red' },
-              { label: 'Saldo do mês', value: fmtBRL(finance.saldoMes), color: finance.saldoMes >= 0 ? 'text-purple-700 dark:text-purple-300' : 'text-red-700 dark:text-red-300', nc: finance.saldoMes >= 0 ? 'purple' : 'red' },
-              { label: 'Inadimplência', value: fmtBRL(finance.inadimplencia), color: finance.inadimplencia > 0 ? 'text-red-700 dark:text-red-300' : 'text-foreground', nc: finance.inadimplencia > 0 ? 'red' : 'gray', bell: true },
-            ].map(({ label, value, color, bell, nc }) => (
-              <Card
-                key={label}
-                className="p-5 cursor-pointer hover:brightness-[0.98] transition-[filter]"
-                style={ncGlass(nc)}
-                onClick={() => navigate('/financeiro')}
-              >
-                <div className="flex items-center gap-2">
-                  <p className="text-xs text-muted-foreground">{label}</p>
-                  {bell && <Bell className="h-3 w-3 text-muted-foreground" />}
-                </div>
-                <p className={`font-display text-2xl text-glow mt-2 ${color}`}><Sensitive>{value}</Sensitive></p>
-                <p className="text-[11px] text-muted-foreground mt-1">Ver financeiro →</p>
-              </Card>
-            ))}
-          </div>
+          {can('financeiro') && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                { label: 'Receitas (mês)', value: fmtBRL(finance.receitas), color: 'text-green-700 dark:text-green-300', nc: 'green' },
+                { label: 'Despesas (mês)', value: fmtBRL(finance.despesas), color: 'text-red-700 dark:text-red-300', nc: 'red' },
+                { label: 'Saldo do mês', value: fmtBRL(finance.saldoMes), color: finance.saldoMes >= 0 ? 'text-purple-700 dark:text-purple-300' : 'text-red-700 dark:text-red-300', nc: finance.saldoMes >= 0 ? 'purple' : 'red' },
+                { label: 'Inadimplência', value: fmtBRL(finance.inadimplencia), color: finance.inadimplencia > 0 ? 'text-red-700 dark:text-red-300' : 'text-foreground', nc: finance.inadimplencia > 0 ? 'red' : 'gray', bell: true },
+              ].map(({ label, value, color, bell, nc }) => (
+                <Card
+                  key={label}
+                  className="p-5 cursor-pointer hover:brightness-[0.98] transition-[filter]"
+                  style={ncGlass(nc)}
+                  onClick={() => navigate('/financeiro')}
+                >
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    {bell && <Bell className="h-3 w-3 text-muted-foreground" />}
+                  </div>
+                  <p className={`font-display text-2xl text-glow mt-2 ${color}`}><Sensitive>{value}</Sensitive></p>
+                  <p className="text-[11px] text-muted-foreground mt-1">Ver financeiro →</p>
+                </Card>
+              ))}
+            </div>
+          )}
 
           {/* Chart + Next tasks */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="p-5 cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/financeiro')}>
-              <div className="flex items-center gap-2 mb-4">
-                <DollarSign className="h-4 w-4 text-primary" />
-                <h3 className="font-semibold text-sm">Receitas vs Despesas (6 meses)</h3>
-              </div>
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData}>
-                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <RTooltip
-                      formatter={(value) => fmtBRL(Number(value))}
-                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                    />
-                    <Bar dataKey="receitas" fill="#8FC7A2" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="despesas" fill="#EDB3C0" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
+            {can('financeiro') && (
+              <Card className="p-5 cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/financeiro')}>
+                <div className="flex items-center gap-2 mb-4">
+                  <DollarSign className="h-4 w-4 text-primary" />
+                  <h3 className="font-semibold text-sm">Receitas vs Despesas (6 meses)</h3>
+                </div>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData}>
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <RTooltip
+                        formatter={(value) => fmtBRL(Number(value))}
+                        contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                      />
+                      <Bar dataKey="receitas" fill="#8FC7A2" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="despesas" fill="#EDB3C0" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            )}
 
             <Card className="p-5">
               <div className="flex items-center justify-between gap-2 mb-4">
@@ -1216,9 +1238,9 @@ export default function Dashboard() {
 
         {/* Right sidebar */}
         <div className="space-y-4 hidden xl:block">
-          <BirthdaysWidget />
-          <AuthenticatorWidget />
-          <PortalActivityCard />
+          {can('clientes') && <BirthdaysWidget />}
+          {can('autenticador') && <AuthenticatorWidget />}
+          {can('portal-admin') && <PortalActivityCard />}
 
           <Card className="p-4">
             <div className="flex items-center justify-between gap-2 mb-3">
