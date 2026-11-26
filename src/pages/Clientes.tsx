@@ -27,6 +27,7 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown, Copy,
 } from 'lucide-react'
 import { fmtBRL, fmtDate, parseBRL } from '@/lib/format'
+import { useModuleAccess } from '@/lib/modules'
 import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ClientFormDialog, emptyClientForm, type ClientFormData, GENDERS, MARITAL_STATUSES, REP_ROLES, REP_DOCUMENT_TYPES, STATES } from '@/components/ClientForm'
@@ -475,6 +476,8 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
   onNewTask: () => void
   onNewProcess: () => void
 }) {
+  const { can } = useModuleAccess()
+  const canFinanceiro = can('financeiro')
   const [detail, setDetail] = useState<ClientDetail | null>(null)
   const [qualification, setQualification] = useState<string | null>(null)
   const [activityExtras, setActivityExtras] = useState<ExternalEntry[]>([])
@@ -604,7 +607,7 @@ function ClientViewDialog({ client, open, onClose, onEdit, onDelete, onNewTask, 
 
         <div className="px-6 py-4 space-y-5 min-w-0">
           {/* Cards financeiros */}
-          {financeiro && (
+          {financeiro && canFinanceiro && (
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-xl border p-3 text-center">
                 <p className="text-[10px] text-muted-foreground mb-1">Pago</p>
