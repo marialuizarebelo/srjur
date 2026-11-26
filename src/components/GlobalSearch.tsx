@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
+import { useModuleAccess } from '@/lib/modules'
 import {
   Dialog, DialogContent,
 } from '@/components/ui/dialog'
@@ -32,21 +33,23 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; co
   marketing: { label: 'Marketing',  icon: Megaphone,    color: 'text-pink-600' },
 }
 
-async function runSearch(q: string): Promise<SearchResult[]> {
+async function runSearch(q: string, can: (key: string) => boolean): Promise<SearchResult[]> {
   if (q.length < 2) return []
   const term = `%${q}%`
   const results: SearchResult[] = []
 
+    // só busca nos módulos que a pessoa pode ver
+  const none = Promise.resolve({ data: [] as any[] }) as Promise<any>
   const [clients, processes, tasks, deadlines, finance, marketing] = await Promise.all([
-    supabase.from('clients').select('id, name, cpf_cnpj, email').or(`name.ilike.${term},cpf_cnpj.ilike.${term},email.ilike.${term}`).limit(5),
-    supabase.from('processes').select('id, title, number, area').or(`title.ilike.${term},number.ilike.${term}`).limit(5),
-    supabase.from('tasks').select('id, title, type, status').ilike('title', term).limit(5),
-    supabase.from('deadlines').select('id, title, type').ilike('title', term).limit(5),
-    supabase.from('finance').select('id, description, type, value').ilike('description', term).limit(5),
-    supabase.from('marketing_content').select('id, title, platform, status').ilike('title', term).limit(5),
+    can('clientes') ? supabase.from('clients').select('id, name, cpf_cnpj, email').or(`name.ilike.${term},cpf_cnpj.ilike.${term},email.ilike.${term}`).limit(5) : none,
+    can('processos') ? supabase.from('processes').select('id, title, number, area').or(`title.ilike.${term},number.ilike.${term}`).limit(5) : none,
+    can('tarefas') ? supabase.from('tasks').select('id, title, type, status').ilike('title', term).limit(5) : none,
+    can('prazos') ? supabase.from('deadlines').select('id, title, type').ilike('title', term).limit(5) : none,
+    can('financeiro') ? supabase.from('finance').select('id, description, type, value').ilike('description', term).limit(5) : none,
+    can('marketing') ? supabase.from('marketing_content').select('id, title, platform, status').ilike('title', term).limit(5) : none,
   ])
 
-  clients.data?.forEach(c => results.push({
+  clients.data?.forEach((c: any) => results.push({
     id: c.id, category: 'cliente',
     title: c.name,
     subtitle: c.email ?? c.cpf_cnpj ?? undefined,
@@ -54,7 +57,7 @@ async function runSearch(q: string): Promise<SearchResult[]> {
     href: '/clientes',
   }))
 
-  processes.data?.forEach(p => results.push({
+  processes.data?.forEach((p: any) => results.push({
     id: p.id, category: 'processo',
     title: p.title,
     subtitle: [p.number, p.area].filter(Boolean).join(' · ') || undefined,
@@ -62,7 +65,7 @@ async function runSearch(q: string): Promise<SearchResult[]> {
     href: '/processos',
   }))
 
-  tasks.data?.forEach(t => results.push({
+  tasks.data?.forEach((t: any) => results.push({
     id: t.id, category: 'tarefa',
     title: t.title,
     subtitle: [t.type, t.status].filter(Boolean).join(' · ') || undefined,
@@ -70,7 +73,7 @@ async function runSearch(q: string): Promise<SearchResult[]> {
     href: '/tarefas',
   }))
 
-  deadlines.data?.forEach(d => results.push({
+  deadlines.data?.forEach((d: any) => results.push({
     id: d.id, category: 'prazo',
     title: d.title,
     subtitle: d.type ?? undefined,
@@ -78,7 +81,7 @@ async function runSearch(q: string): Promise<SearchResult[]> {
     href: '/prazos',
   }))
 
-  finance.data?.forEach(f => results.push({
+  finance.data?.forEach((f: any) => results.push({
     id: f.id, category: 'financeiro',
     title: f.description,
     subtitle: `${f.type === 'receita' ? 'Entrada' : 'Saída'} · R$ ${Number(f.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
@@ -86,7 +89,7 @@ async function runSearch(q: string): Promise<SearchResult[]> {
     href: '/financeiro',
   }))
 
-  marketing.data?.forEach(m => results.push({
+  marketing.data?.forEach((m: any) => results.push({
     id: m.id, category: 'marketing',
     title: m.title,
     subtitle: [m.platform, m.status].filter(Boolean).join(' · ') || undefined,
@@ -104,13 +107,14 @@ interface Props {
 
 export function GlobalSearch({ open, onOpenChange }: Props) {
   const navigate = useNavigate()
+  const { can } = useModuleAccess()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
 
   const search = useCallback(async (q: string) => {
     setLoading(true)
-    const res = await runSearch(q)
+    const res = await runSearch(q, can)
     setResults(res)
     setLoading(false)
   }, [])

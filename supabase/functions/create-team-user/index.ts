@@ -19,6 +19,11 @@ const corsHeaders = {
 
 const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 
+// Acesso LIMITADO (módulos marcados em Configurações) vale também aqui no servidor.
+// allowed_modules vazio/nulo = acesso total; o suporte do SRJUR também.
+const hasModule = (p: any, keys: string[]) => !!p && (p.is_support || !p.allowed_modules || p.allowed_modules.length === 0 || keys.some((k: string) => p.allowed_modules.includes(k)))
+const isFullAccess = (p: any) => !!p && (p.is_support || !p.allowed_modules || p.allowed_modules.length === 0)
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 }
@@ -37,10 +42,11 @@ Deno.serve(async (req) => {
     if (!caller) return json({ error: 'Token inválido' }, 401)
 
     const { data: callerProfile } = await adminClient
-      .from('profiles').select('role').eq('user_id', caller.id).maybeSingle()
+      .from('profiles').select('role, allowed_modules').eq('user_id', caller.id).maybeSingle()
     if (callerProfile?.role !== 'admin') {
       return json({ error: 'Apenas administradoras podem criar usuárias' }, 403)
     }
+    if (!isFullAccess(callerProfile)) return json({ error: 'Seu acesso é limitado: só quem tem acesso total cria usuárias.' }, 403)
 
     const { email, password, display_name, role_title, allowed_modules } = await req.json()
     if (!email || !password) {

@@ -22,6 +22,11 @@ const corsHeaders = {
 
 const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 
+// Acesso LIMITADO (módulos marcados em Configurações) vale também aqui no servidor.
+// allowed_modules vazio/nulo = acesso total; o suporte do SRJUR também.
+const hasModule = (p: any, keys: string[]) => !!p && (p.is_support || !p.allowed_modules || p.allowed_modules.length === 0 || keys.some((k: string) => p.allowed_modules.includes(k)))
+const isFullAccess = (p: any) => !!p && (p.is_support || !p.allowed_modules || p.allowed_modules.length === 0)
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 }
@@ -48,8 +53,9 @@ async function requireAdmin(req: Request) {
   const callerClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { global: { headers: { Authorization: authHeader } } })
   const { data: { user } } = await callerClient.auth.getUser()
   if (!user) throw new Error('Não autenticado')
-  const { data: profile } = await adminClient.from('profiles').select('role').eq('user_id', user.id).maybeSingle()
+  const { data: profile } = await adminClient.from('profiles').select('role, allowed_modules').eq('user_id', user.id).maybeSingle()
   if (profile?.role !== 'admin') throw new Error('Apenas administradoras')
+  if (!hasModule(profile, ['financeiro'])) throw new Error('Seu acesso é limitado: sem permissão para o Financeiro.')
 }
 
 // ── Garante que o cliente existe no Asaas, criando se necessário ─────────
