@@ -41,6 +41,8 @@ import { exportExcel, exportPDF, fmtDateBR, fmtBRLStr } from '@/lib/exportData'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ImportExtrato } from '@/components/ImportExtrato'
 import { createAsaasCharge, syncAsaasCharges, isAsaasEnabled } from '@/lib/asaas'
+import { DataGrid, type GridColumn } from '@/components/DataGrid'
+import { Table2, List as ListIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePrivacy } from '@/contexts/PrivacyContext'
 
@@ -72,7 +74,7 @@ interface FinanceRow {
   series_id: string | null
 }
 
-interface ClientOption { id: string; name: string }
+interface ClientOption { id: string; name: string; state?: string | null }
 
 interface FinancePayment {
   id: string
@@ -626,6 +628,7 @@ export default function Financeiro() {
   const [viewMonth, setViewMonth] = useState(now.getMonth())
   const [viewYear, setViewYear] = useState(now.getFullYear())
   const [viewMode, setViewMode] = useState<'mes' | 'ano' | 'custom'>('mes')
+  const [gridMode, setGridMode] = useState(false)
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
   const [activeCard, setActiveCard] = useState<string | null>(null)
@@ -751,7 +754,7 @@ export default function Financeiro() {
     setLoading(true)
     const { data } = await supabase.from('finance').select('*').order('date', { ascending: false })
     setRows((data as FinanceRow[]) ?? [])
-    const { data: cl } = await supabase.from('clients').select('id, name').eq('status', 'ativo').order('name')
+    const { data: cl } = await supabase.from('clients').select('id, name, state').eq('status', 'ativo').order('name')
     setClients((cl as ClientOption[]) ?? [])
     const { data: pays } = await supabase.from('finance_payments').select('*').order('payment_date', { ascending: true })
     const map: Record<string, FinancePayment[]> = {}
@@ -1993,6 +1996,14 @@ export default function Financeiro() {
 
       {/* ── Filtros da tabela (estilo planilha, logo acima da lista) ── */}
       <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/20">
+        <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
+          <Button variant={!gridMode ? 'secondary' : 'ghost'} size="icon" className="h-7 w-7" title="Lista" onClick={() => setGridMode(false)}>
+            <ListIcon className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant={gridMode ? 'secondary' : 'ghost'} size="icon" className="h-7 w-7" title="Planilha" onClick={() => setGridMode(true)}>
+            <Table2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
         <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
           {(['mes', 'ano', 'custom'] as const).map(m => (
             <Button
@@ -2090,8 +2101,37 @@ export default function Financeiro() {
         </div>
       )}
 
+      {/* ── Planilha ── */}
+      {gridMode && (
+        <DataGrid<FinanceRow>
+          id="financeiro"
+          rows={sortedFiltered}
+          getId={r => r.id}
+          onRowClick={r => setViewRow(r)}
+          columns={[
+            { key: 'date', label: 'Data', value: r => r.date, kind: 'date', width: 140 },
+            { key: 'desc', label: 'Descrição', value: r => r.description, width: 260 },
+            { key: 'type', label: 'Tipo', value: r => (r.type === 'receita' ? 'Receita' : 'Despesa'), kind: 'select', width: 100 },
+            { key: 'category', label: 'Categoria', value: r => r.category, kind: 'select', width: 150 },
+            { key: 'client', label: 'Cliente', value: r => clients.find(c => c.id === r.client_id)?.name ?? '', width: 200 },
+            { key: 'uf', label: 'UF do cliente', value: r => clients.find(c => c.id === r.client_id)?.state ?? '', kind: 'select', width: 110 },
+            { key: 'receita', label: 'Receita', value: r => (r.type === 'receita' ? Number(r.value) : null), kind: 'money', sum: true, width: 140 },
+            { key: 'despesa', label: 'Despesa', value: r => (r.type === 'despesa' ? Number(r.value) : null), kind: 'money', sum: true, width: 140 },
+            { key: 'status', label: 'Situação', value: r => ({ pago: 'Pago', parcial: 'Parcial', atrasado: 'Atrasado', pendente: 'Pendente' } as Record<string, string>)[rowStatus(r, paymentsMap)] ?? '', kind: 'select', width: 110 },
+            { key: 'due', label: 'Vencimento', value: r => r.due_date, kind: 'date', width: 140 },
+            { key: 'paid_on', label: 'Pago em', value: r => r.payment_date, kind: 'date', width: 140, hidden: true },
+            { key: 'method', label: 'Forma de pagamento', value: r => r.payment_method, kind: 'select', width: 160, hidden: true },
+            { key: 'installment', label: 'Parcela', value: r => (r.installments && r.installments > 1 ? `${r.current_installment ?? ''}/${r.installments}` : ''), width: 90, hidden: true },
+            { key: 'recurrence', label: 'Recorrência', value: r => r.recurrence, kind: 'select', width: 120, hidden: true },
+            { key: 'responsible', label: 'Responsável', value: r => r.responsible, kind: 'select', width: 140, hidden: true },
+            { key: 'origin', label: 'Origem', value: r => r.origin, kind: 'select', width: 120, hidden: true },
+            { key: 'notes', label: 'Observações', value: r => r.notes, width: 240, hidden: true },
+          ] as GridColumn<FinanceRow>[]}
+        />
+      )}
+
       {/* ── Lista mobile (cards) ── */}
-      <div className="md:hidden space-y-2">
+      <div className={`${gridMode ? 'hidden' : 'md:hidden'} space-y-2`}>
         {loading ? (
           <p className="text-center py-8 text-sm text-muted-foreground">Carregando...</p>
         ) : sortedFiltered.length === 0 ? (
@@ -2149,7 +2189,7 @@ export default function Financeiro() {
       </div>
 
       {/* ── Table (desktop/tablet) ── */}
-      <div className="hidden md:block rounded-lg border overflow-x-auto">
+      <div className={`${gridMode ? 'hidden' : 'hidden md:block'} rounded-lg border overflow-x-auto`}>
         <Table className="w-full table-auto">
           <TableHeader>
             <TableRow>
