@@ -258,6 +258,7 @@ export default function Configuracoes() {
 
   async function createUser() {
     if (!uf.email.trim() || !uf.password.trim()) { toast.error('Preencha e-mail e senha'); return }
+    if (uf.password.length < 6) { toast.error('A senha precisa ter ao menos 6 caracteres'); return }
     if (users.filter(u => u.role === 'admin').length >= MAX_ADMIN_USERS) {
       toast.error(`Limite de ${MAX_ADMIN_USERS} usuárias administradoras atingido`); return
     }
@@ -274,7 +275,12 @@ export default function Configuracoes() {
         },
         headers: s ? { Authorization: `Bearer ${s.access_token}` } : undefined,
       })
-      if (error || data?.error) throw new Error(data?.error ?? error?.message ?? 'Falha ao criar usuária')
+      if (error || data?.error) {
+        // quando o servidor recusa (400/403...), a mensagem real vem no corpo da resposta
+        let msg: string | undefined = data?.error
+        if (!msg && error) { try { msg = (await (error as any).context?.json?.())?.error } catch { /* corpo ilegível */ } }
+        throw new Error(msg ?? error?.message ?? 'Falha ao criar usuária')
+      }
       toast.success('Usuária criada com sucesso!')
       setUserDialogOpen(false)
       loadData()

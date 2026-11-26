@@ -178,7 +178,12 @@ function ManageAccessDialog({ client, open, onClose }: { client: ClientLite; ope
         body: { email: normalizedEmail, password, display_name: client.name, client_id: client.id },
         headers: session ? { Authorization: `Bearer ${session.access_token}` } : undefined,
       })
-      if (error || data?.error) throw new Error(data?.error ?? error?.message ?? 'Falha ao criar acesso')
+      if (error || data?.error) {
+        // quando o servidor recusa (400/403...), a mensagem real vem no corpo da resposta
+        let msg: string | undefined = data?.error
+        if (!msg && error) { try { msg = (await (error as any).context?.json?.())?.error } catch { /* corpo ilegível */ } }
+        throw new Error(msg ?? error?.message ?? 'Falha ao criar acesso')
+      }
       toast.success('Acesso ao portal criado/atualizado com sucesso!')
       setPassword('')
       onClose()
